@@ -1,5 +1,5 @@
 # 📋 PRODUCT REQUIREMENT DOCUMENT (PRD)
-## Aplikasi Absensi Digital — "HadirIn"
+## Aplikasi Absensi Digital — "AbsenIn"
 
 ---
 
@@ -210,7 +210,7 @@ function validateLocation(
 
 ```mermaid
 graph TD
-    subgraph "AttenGo System"
+    subgraph "AbsenIn System"
         A[Google OAuth Login]
     end
 
@@ -351,17 +351,17 @@ graph LR
 ```
 ┌──────────────────────────────────────┐
 │                                      │
-│          █████╗ ████████╗            │
-│         ██╔══██╗╚══██╔══╝            │
-│         ███████║   ██║               │
-│         ██╔══██║   ██║               │
-│         ██║  ██║   ██║               │
-│         ╚═╝  ╚═╝   ╚═╝              │
 │                                      │
-│         A T T E N G O                │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│              AbsenIn                 │
 │    Smart Attendance System           │
 │                                      │
-│  ┌────────────────────────────────┐  │
+│  ┌────────────────────────────────┐  |
 │  │  🔵  Sign in with Google       │  │
 │  └────────────────────────────────┘  │
 │                                      │
@@ -375,7 +375,7 @@ graph LR
 
 ```
 ┌──────────────────────────────────────┐
-│  AttenGo    🔔  👤 [Nama]            │
+│  AbsenIn   🔔  👤 [Nama]            │
 ├──────────────────────────────────────┤
 │                                      │
 │  📍 Mode: WFO | Grup: Engineering    │
@@ -527,7 +527,7 @@ graph LR
 
 ```
 ┌──────────────────────────────────────┐
-│  AttenGo    🔔  👤 [Manager]         │
+│  AbsenIn    🔔  👤 [Manager]         │
 ├──────────────────────────────────────┤
 │                                      │
 │  📊 Ringkasan Hari Ini               │
