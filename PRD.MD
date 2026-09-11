@@ -57,34 +57,83 @@ Membangun aplikasi absensi digital berbasis cloud yang **terintegrasi Google OAu
 
 ## 3. KONSEP DAN ARSITEKTUR
 
-### 🏗️ Tech Stack (Rekomendasi)
+### 🏗️ Tech Stack
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     FRONTEND (PWA)                          │
-│    Next.js 14 + React 18 + TailwindCSS + PWA Plugin        │
-│    Geolocation API + Camera API + Service Worker            │
-└────────────────────────┬────────────────────────────────────┘
-                         │ REST API / WebSocket
-┌────────────────────────▼────────────────────────────────────┐
-│                     BACKEND (API)                           │
-│    Golang (Echo/Fiber) atau Node.js (Hono/Fastify)         │
-│    JWT Auth Middleware + RBAC                               │
-│    Multer/Foto Upload → Cloud Storage (S3/R2)               │
-│    Email Service → Resend / SendGrid / SES                  │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│                     DATABASE                                │
-│    PostgreSQL (utama) + Redis (cache/session)               │
-│    Tables: users, groups, schedules, attendances,           │
-│            permissions, todolists, notifications            │
-└─────────────────────────────────────────────────────────────┘
-```
+┌──────────────────────────────────────────────────────────────┐
+│                    FRONTEND (PWA)                            │
+│                                                              │
+│  Next.js + TailwindCSS + shadcn/ui                           │
+│  @ducanh2912/next-pwa                                       │
+│  Geolocation API + Camera API + Service Worker               │
+│                                                              │
+│  Mobile-first • Responsive • Installable PWA                │
+└───────────────────────────┬──────────────────────────────────┘
+                            │
+                       REST API / HTTPS
+                            │
+┌───────────────────────────▼──────────────────────────────────┐
+│                     BACKEND API                              │
+│                                                              │
+│  Express.js + TypeScript + Zod                               │
+│  REST API • Business Logic • RBAC                            │
+│  GPS Radius Calculation (Haversine)                          │
+│  Request / Response Validation                               │
+└───────────────────────────┬──────────────────────────────────┘
+                            │
+                       Drizzle ORM
+                            │
+┌───────────────────────────▼──────────────────────────────────┐
+│                  DATABASE & STORAGE                          │
+│                                                              │
+│  PostgreSQL (Supabase)                                      │
+│  Drizzle ORM + Type-safe Schema                              │
+│                                                              │
+│  Tables: users, groups, schedules, attendances,              │
+│          permissions, todolists, notifications               │
+│                                                              │
+│  Supabase Storage                                           │
+│  → Foto selfie check-in / check-out                         │
+│  → Lampiran surat izin                                      │
+└───────────────────────────┬──────────────────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+              │                           │
+┌─────────────▼──────────────┐  ┌─────────▼────────────────┐
+│      AUTHENTICATION        │  │     EMAIL SERVICE        │
+│                            │  │                           │
+│      Google OAuth          │  │       Resend API         │
+│      Login & Identity      │  │   Approval Notification  │
+│                            │  │      & Email Blast       │
+└────────────────────────────┘  └───────────────────────────┘
 
 ### 🧱 Arsitektur Sistem
-
 ```
+### Runtime / model aplikasi (Modular Monolith)
+
+                HADIRIN
+                   │
+        ┌──────────┴──────────┐
+        │                     │
+   PWA Frontend          Backend API
+   Next.js               Express.js
+   Tailwind              TypeScript
+   shadcn/ui              Zod
+        │                     │
+        └──────────┬──────────┘
+                   │
+             Drizzle ORM
+                   │
+        ┌──────────┼──────────┐
+        │          │          │
+   PostgreSQL   Storage    External
+   Supabase    Supabase    Services
+                          ┌───────┐
+                          │ Google│
+                          │ OAuth │
+                          ├───────┤
+                          │Resend │
+                          └───────┘
+
 ┌──────────┐    ┌──────────────┐    ┌─────────────┐
 │  Google  │    │   Frontend   │    │  Email Svc  │
 │  OAuth   │◄──►│   (PWA)      │    │ (Resend)    │
@@ -103,6 +152,57 @@ Membangun aplikasi absensi digital berbasis cloud yang **terintegrasi Google OAu
     └──────────┘ └──────────┘ └──────────┘
 ```
 
+### Repository Monorepo
+
+hadirin/
+│
+├── apps/
+│   ├── web/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── lib/
+│   │   ├── public/
+│   │   ├── styles/
+│   │   └── ...
+│   │
+│   └── api/
+│       ├── src/
+│       │   ├── modules/
+│       │   │   ├── auth/
+│       │   │   ├── attendance/
+│       │   │   ├── permissions/
+│       │   │   ├── todos/
+│       │   │   ├── groups/
+│       │   │   └── notifications/
+│       │   ├── middleware/
+│       │   ├── utils/
+│       │   ├── app.ts
+│       │   └── server.ts
+│       └── ...
+│
+├── packages/
+│   ├── db/
+│   │   ├── schema/
+│   │   ├── relations/
+│   │   └── client.ts
+│   │
+│   ├── shared/
+│   │   ├── types/
+│   │   ├── constants/
+│   │   └── validators/
+│   │
+│   └── config/
+│
+├── docs/
+│   ├── PRD.md
+│   ├── API.md
+│   └── architecture/
+│
+├── .env.example
+├── package.json
+├── pnpm-workspace.yaml
+└── README.md
+
 ### 🔐 Authentication Flow
 
 ```
@@ -118,9 +218,18 @@ User → Klik "Login with Google" → Google OAuth Consent Screen
 
 ### Tech Stack (Sesuaikan)
 
-| Layer | Teknologi | Alasan |
-|-------|-----------|--------|
-
+| Layer              | Teknologi                           | Peran                                             |
+| ------------------ | ----------------------------------- | ------------------------------------------------- |
+| **Frontend**       | Next.js + Tailwind CSS + shadcn/ui  | UI PWA mobile-first dan responsive                |
+| **PWA Engine**     | `@ducanh2912/next-pwa`              | Service worker, installable app, caching          |
+| **Backend API**    | Express.js + TypeScript + Zod       | REST API, business logic, validasi, GPS/Haversine |
+| **Database**       | PostgreSQL via Supabase             | Data users, attendance, groups, permissions, todo |
+| **ORM**            | Drizzle ORM                         | Query database + type-safe schema                 |
+| **Storage**        | Supabase Storage                    | Foto check-in/out dan lampiran izin               |
+| **Authentication** | Google OAuth                        | Login dan identitas pengguna                      |
+| **Email**          | Resend API                          | Approval email dan blast notification             |
+| **Validation**     | Zod                                 | Validasi request/response API                     |
+| **Deployment**     | Vercel + Supabase + backend hosting | Frontend, database/storage, dan API               |
 
 
 ---
@@ -205,6 +314,40 @@ function validateLocation(
 
 
 ## 5. DESIGN / MOCKUP
+### Design Style
+Design Style
+Color Pallete
+PRIMARY
+Matcha Green      #7FAF8B
+Dark Matcha      #527A5B
+Soft Matcha      #E8F1E9
+
+BACKGROUND
+Warm White       #FAFCF9
+Card             #FFFFFF
+
+TEXT
+Primary          #1F2937
+Secondary        #6B7280
+
+STATUS
+Success          #5C9A6F
+Warning          #D9A441
+Danger           #D96C6C
+Info             #6B8FD6
+
+Font
+Heading: Plus Jakarta Sans
+Body: Inter
+
+UI Style
+
+Style keseluruhan:
+
+Minimal • Modern • Professional • Soft • Clean
+
+Responsive behaviour
+
 
 ### 📊 Use Case Diagram (Mermaid)
 
