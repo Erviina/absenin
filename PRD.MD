@@ -22,7 +22,7 @@ Banyak perusahaan masih menghadapi kendala dalam manajemen kehadiran karyawan, t
 
 ### 🎯 Goal
 
-Membangun aplikasi absensi digital berbasis cloud yang **terintegrasi Google OAuth**, mendukung **verifikasi lokasi GPS real-time**, **multi-mode kerja (WFO/WFH/WFA)**, **manajemen grup & perizinan terstruktur**, **daily To-Do List**, dan **notifikasi blast email** — untuk menggantikan absensi manual secara menyeluruh dengan audit trail yang transparan.
+Membangun aplikasi absensi digital yang **terintegrasi Google OAuth**, mendukung **verifikasi lokasi GPS real-time**, **multi-mode kerja (WFO/WFH/WFA)**, **manajemen grup & perizinan terstruktur**, **daily To-Do List**, dan **notifikasi blast email** — untuk menggantikan absensi manual secara menyeluruh dengan audit trail yang transparan.
 
 ---
 
