@@ -1,0 +1,21 @@
+{
+  "name": "AbsenIn",
+  "short_name": "AbsenIn",
+  "description": "Smart Attendance System",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#FAFCF9",
+  "theme_color": "#7FAF8B",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
