@@ -128,11 +128,32 @@ export default function RegisterPage() {
 
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
+                <label className="text-sm font-semibold text-foreground">No. WhatsApp</label>
+              </div>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                <Input type="tel" placeholder="0812..." className="pl-9 h-12 bg-transparent" required />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
                 <label className="text-sm font-semibold text-foreground">Kata Sandi</label>
               </div>
               <div className="relative">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 <Input type="password" placeholder="Minimal 8 karakter" className="pl-9 pr-9 h-12 bg-transparent" required />
+                <Eye className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 cursor-pointer" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-semibold text-foreground">Konfirmasi Kata Sandi</label>
+              </div>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <Input type="password" placeholder="Ulangi kata sandi" className="pl-9 pr-9 h-12 bg-transparent" required />
                 <Eye className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 cursor-pointer" />
               </div>
             </div>

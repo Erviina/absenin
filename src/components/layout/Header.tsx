@@ -138,6 +138,10 @@ export function Header({
               <Label htmlFor="phone">No. Handphone</Label>
               <Input id="phone" defaultValue="081234567890" className="h-10" />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="alamat">Alamat</Label>
+              <Input id="alamat" defaultValue="Jl. Sudirman No. 123, Jakarta" className="h-10" />
+            </div>
           </div>
           <DialogFooter>
             <Button onClick={() => setIsProfileOpen(false)} className="w-full rounded-xl bg-primary hover:bg-primary-dark">

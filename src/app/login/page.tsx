@@ -102,18 +102,18 @@ export default function LoginPage() {
               <div className="w-full border-t border-border"></div>
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-card px-2 text-muted-foreground font-semibold tracking-wider">ATAU GUNAKAN EMAIL</span>
+              <span className="bg-card px-2 text-muted-foreground font-semibold tracking-wider">ATAU GUNAKAN EMAIL / NO HP</span>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
-                <label className="text-sm font-semibold text-foreground">Email</label>
+                <label className="text-sm font-semibold text-foreground">Email / No. HP</label>
               </div>
               <div className="relative">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-                <Input type="email" placeholder="nama@kantor.co.id" className="pl-9 h-12 bg-transparent" />
+                <Input type="text" placeholder="nama@kantor.co.id / 0812..." className="pl-9 h-12 bg-transparent" />
               </div>
             </div>
 

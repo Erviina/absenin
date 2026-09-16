@@ -13,22 +13,8 @@ import {
 export default function SettingsPage() {
   return (
     <>
-      <Header userName="Manager" avatarUrl="https://i.pravatar.cc/150?u=manager" showNotification={true} />
+      <Header showNotification={true} />
 
-      {/* Top Segment Control (Same as Dashboard) */}
-      <div className="bg-card border-b border-border p-3 flex gap-2 overflow-x-auto scrollbar-hide">
-        <Badge className="bg-primary/20 text-primary border-none whitespace-nowrap rounded-full px-3 py-1 font-bold">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary mr-1.5" />
-          Divisi Tech & Product
-        </Badge>
-        <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-none whitespace-nowrap rounded-full px-3 py-1 font-medium hover:bg-muted">
-          Karyawan
-        </Badge>
-        <Badge className="bg-primary-dark text-white border-none whitespace-nowrap rounded-full px-3 py-1 font-bold flex items-center gap-1.5">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
-          Approval
-        </Badge>
-      </div>
 
       <div className="p-4 pb-24 space-y-6">
         

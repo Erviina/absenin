@@ -16,7 +16,7 @@ import Link from "next/link";
 export default function ApprovalDashboard() {
   return (
     <>
-      <Header userName="Manager" avatarUrl="https://i.pravatar.cc/150?u=manager" showNotification={true} />
+      <Header showNotification={true} />
 
 
       <div className="p-4 pb-24 space-y-6">
@@ -126,9 +126,11 @@ export default function ApprovalDashboard() {
             <Button variant="outline" className="flex-1 h-12 rounded-full border-border bg-card shadow-sm text-xs font-bold text-foreground">
               <Mail size={16} className="mr-2 text-primary" /> Blast Email
             </Button>
-            <Button variant="outline" className="flex-1 h-12 rounded-full border-border bg-card shadow-sm text-xs font-bold text-foreground">
-              <Download size={16} className="mr-2 text-primary" /> Ekspor Rekap
-            </Button>
+            <Link href="/approval/laporan" className="flex-1 flex">
+              <Button variant="outline" className="w-full h-12 rounded-full border-border bg-card shadow-sm text-xs font-bold text-foreground">
+                <FileText size={16} className="mr-2 text-primary" /> Laporan
+              </Button>
+            </Link>
           </div>
         </div>
 
