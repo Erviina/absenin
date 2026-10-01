@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
+import { TopBar } from '@/components/TopBar';
 const LeafletMap = dynamic(() => import('@/components/MapLocation'), { 
   ssr: false,
   loading: () => <div className="w-full h-full bg-[#e6eedc] animate-pulse" />
@@ -70,15 +71,10 @@ export default function CheckinPage() {
       
       {/* Header (Hidden in Step 2 because it's full screen camera) */}
       {step !== 2 && (
-        <div className="bg-[#356E3B] pt-12 pb-4 px-4 flex items-center justify-center relative shrink-0">
-          <button 
-            onClick={handleBack}
-            className="absolute left-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-          >
-            <ChevronLeft className="w-6 h-6 text-white" />
-          </button>
-          <h1 className="text-white text-[16px] font-bold tracking-wide">Rekam Kehadiran</h1>
-        </div>
+        <TopBar 
+          title="Rekam Kehadiran" 
+          onBack={handleBack} 
+        />
       )}
 
       {/* Stepper (Standard) */}

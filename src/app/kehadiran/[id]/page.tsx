@@ -4,6 +4,7 @@ import { use } from "react";
 import { ChevronLeft, ShieldCheck, MapPin, ExternalLink, Info, Plus, Minus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import { TopBar } from "@/components/TopBar";
 
 // Dynamically import MapLocation to prevent SSR issues
 const MapLocation = dynamic(() => import("@/components/MapLocation"), { 
@@ -57,18 +58,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-white relative">
       {/* Header */}
-      <div className="bg-[#356E3B] pt-12 pb-4 px-6 flex items-center justify-between sticky top-0 z-20">
-        <button 
-          onClick={() => router.back()}
-          className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white"
-        >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-white text-[18px] font-bold absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
-          Detail Kehadiran
-        </h1>
-        <div className="w-10" /> {/* Spacer for centering */}
-      </div>
+      <TopBar title="Detail Kehadiran" />
 
       <div className="px-6 pt-6 pb-12 flex flex-col gap-6">
         {/* Title Section */}

@@ -5,6 +5,7 @@ import { ChevronLeft, Plus, User, Users, Calendar, Clock, CheckCircle2 } from "l
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { SwipeableTaskItem } from "@/components/SwipeableTaskItem";
+import { TopBar } from "@/components/TopBar";
 
 export default function TugasPage() {
   const router = useRouter();
@@ -90,27 +91,20 @@ export default function TugasPage() {
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
       {/* Header */}
-      <div className="bg-[#356E3B] pt-12 pb-4 px-6 flex items-center justify-between sticky top-0 z-20">
-        <button 
-          onClick={() => isAddingTask ? setIsAddingTask(false) : router.back()}
-          className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30"
-        >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-white text-[18px] font-bold absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
-          {isAddingTask && editingTaskId ? "Ubah Tugas" : "Daftar Tugas"}
-        </h1>
-        {!isAddingTask ? (
-          <button 
-            onClick={handleOpenAdd}
-            className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30"
-          >
-            <Plus className="w-6 h-6" />
-          </button>
-        ) : (
-          <div className="w-10" />
-        )}
-      </div>
+      <TopBar 
+        title={isAddingTask && editingTaskId ? "Ubah Tugas" : "Daftar Tugas"}
+        onBack={() => isAddingTask ? setIsAddingTask(false) : router.back()}
+        rightAction={
+          !isAddingTask ? (
+            <button 
+              onClick={handleOpenAdd}
+              className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
+          ) : null
+        }
+      />
 
       <div className="px-6 pt-6 flex flex-col gap-6">
         

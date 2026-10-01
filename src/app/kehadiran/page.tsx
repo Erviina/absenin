@@ -5,6 +5,7 @@ import { ChevronLeft, Search, ListFilter, Download, CheckCircle2, XCircle, X, Ca
 import { BottomNav } from "@/components/bottom-nav";
 import { useRouter } from "next/navigation";
 import { CustomCalendar } from "@/components/CustomCalendar";
+import { TopBar } from "@/components/TopBar";
 
 export default function KehadiranPage() {
   const router = useRouter();
@@ -89,18 +90,10 @@ export default function KehadiranPage() {
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
       {/* Header */}
-      <div className="bg-[#2D5A3F] pt-12 pb-4 px-6 flex items-center justify-between sticky top-0 z-20">
-        <button 
-          onClick={() => router.push("/dashboard")}
-          className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white"
-        >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-white text-[18px] font-bold absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
-          Kehadiran
-        </h1>
-        <div className="w-10" /> {/* Spacer for centering */}
-      </div>
+      <TopBar 
+        title="Kehadiran" 
+        onBack={() => router.push("/dashboard")} 
+      />
 
       <div className="px-6 pt-6 flex flex-col gap-5">
         {/* Search and Filter */}
