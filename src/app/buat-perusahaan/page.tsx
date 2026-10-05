@@ -4,6 +4,7 @@ import { ChevronLeft, Check, QrCode, Copy, Share, Image as ImageIcon } from "luc
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { TopBar } from "@/components/TopBar";
+import { CustomSelect } from "@/components/CustomSelect";
 
 export default function BuatPerusahaanPage() {
   const router = useRouter();
@@ -134,20 +135,15 @@ export default function BuatPerusahaanPage() {
               Jenis <span className="text-[#e11d48]">*</span>
             </label>
             <div className="relative">
-              <select 
+              <CustomSelect
                 value={jenis}
-                onChange={(e) => setJenis(e.target.value)}
-                className="w-full border border-gray-200 rounded-[12px] px-4 py-3 text-[14px] text-[#334155] font-medium appearance-none outline-none focus:border-[#356E3B] bg-white transition-colors"
-              >
-                <option value="Perusahaan">Perusahaan</option>
-                <option value="Organisasi">Organisasi</option>
-                <option value="Komunitas">Komunitas</option>
-              </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                  <polyline points="3 4.5 6 7.5 9 4.5"></polyline>
-                </svg>
-              </div>
+                onChange={setJenis}
+                options={[
+                  { value: "Perusahaan", label: "Perusahaan" },
+                  { value: "Organisasi", label: "Organisasi" },
+                  { value: "Komunitas", label: "Komunitas" }
+                ]}
+              />
             </div>
           </div>
 

@@ -4,10 +4,12 @@ import { ChevronLeft, ChevronDown, PlusCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { TopBar } from "@/components/TopBar";
+import { CustomSelect } from "@/components/CustomSelect";
 
 export default function BuatBeritaPage() {
   const router = useRouter();
   const [content, setContent] = useState("");
+  const [jenisBerita, setJenisBerita] = useState("pengumuman");
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#f4f9f6] relative">
@@ -37,12 +39,15 @@ export default function BuatBeritaPage() {
               Jenis Berita <span className="text-red-500">*</span>
             </label>
             <div className="relative">
-              <select className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-[14px] text-[#1E4738] appearance-none outline-none focus:border-[#356E3B] transition-colors bg-white">
-                <option value="pengumuman">Pengumuman</option>
-                <option value="berita">Berita</option>
-                <option value="artikel">Artikel</option>
-              </select>
-              <ChevronDown className="w-5 h-5 text-gray-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <CustomSelect
+                value={jenisBerita}
+                onChange={setJenisBerita}
+                options={[
+                  { value: "pengumuman", label: "Pengumuman" },
+                  { value: "berita", label: "Berita" },
+                  { value: "artikel", label: "Artikel" }
+                ]}
+              />
             </div>
           </div>
 

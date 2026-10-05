@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ChevronLeft, Plus, Calendar, ChevronDown, Clock, Trash2, FileText, Send, UploadCloud, Paperclip, ExternalLink, XCircle, CheckCircle2, CircleDot, Circle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/bottom-nav";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
+import { CustomSelect } from "@/components/CustomSelect";
 
 // Tipe Data untuk Pengajuan Izin
 type IzinRequest = {
@@ -77,8 +78,23 @@ export default function IzinPage() {
     setAttachment(null);
   };
 
-  const handleUpload = () => {
-    setAttachment({ name: "Surat_Dokter_Klinik.pdf", size: "1.2 MB" });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      let sizeStr = "";
+      if (file.size < 1024 * 1024) {
+        sizeStr = (file.size / 1024).toFixed(0) + " KB";
+      } else {
+        sizeStr = (file.size / (1024 * 1024)).toFixed(2) + " MB";
+      }
+      setAttachment({ name: file.name, size: sizeStr });
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
   const handleBack = () => {
@@ -146,16 +162,15 @@ export default function IzinPage() {
                 Kategori Izin <span className="text-[#EF4444]">*</span>
               </label>
               <div className="relative mt-1">
-                <select 
+                <CustomSelect 
                   value={kategori}
-                  onChange={(e) => setKategori(e.target.value)}
-                  className="w-full border border-[#E5E7EB] rounded-[14px] pl-4 pr-10 py-3.5 text-[14px] text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all appearance-none bg-white font-medium"
-                >
-                  <option>Izin Sakit</option>
-                  <option>Cuti</option>
-                  <option>Izin Keperluan Pribadi</option>
-                </select>
-                <ChevronDown className="w-4 h-4 text-[#4B5563] absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
+                  onChange={setKategori}
+                  options={[
+                    { value: "Izin Sakit", label: "Izin Sakit" },
+                    { value: "Cuti", label: "Cuti" },
+                    { value: "Izin Keperluan Pribadi", label: "Izin Keperluan Pribadi" }
+                  ]}
+                />
               </div>
             </div>
 
@@ -224,6 +239,14 @@ export default function IzinPage() {
                   Wajib menyertakan surat dokter untuk Izin Sakit
                 </p>
               </div>
+
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileChange} 
+                className="hidden" 
+                accept=".pdf,image/jpeg,image/png"
+              />
               
               {attachment ? (
                 <div className="border border-[#E5E7EB] rounded-[14px] p-3 flex items-center justify-between">
@@ -242,7 +265,7 @@ export default function IzinPage() {
                 </div>
               ) : (
                 <button 
-                  onClick={handleUpload}
+                  onClick={handleUploadClick}
                   className="w-full border-2 border-dashed border-[#E5E7EB] rounded-[14px] p-6 flex flex-col items-center justify-center gap-2 hover:bg-[#F9FAFB] hover:border-[#356E3B] transition-colors"
                 >
                   <div className="w-10 h-10 rounded-full bg-[#F3F4F6] flex items-center justify-center">
@@ -495,16 +518,15 @@ export default function IzinPage() {
             {/* Filters */}
             <div className="flex gap-3">
               <div className="flex-1 relative">
-                <select 
+                <CustomSelect 
                   value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-full border border-[#E5E7EB] rounded-[16px] pl-4 pr-10 py-3 text-[14px] text-[#374151] font-medium focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all appearance-none bg-white cursor-pointer"
-                >
-                  <option value="Semua Kategori">Semua Kategori</option>
-                  <option value="Izin Sakit">Izin Sakit</option>
-                  <option value="Cuti">Cuti</option>
-                </select>
-                <ChevronDown className="w-4 h-4 text-[#6B7280] absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
+                  onChange={setFilterCategory}
+                  options={[
+                    { value: "Semua Kategori", label: "Semua Kategori" },
+                    { value: "Izin Sakit", label: "Izin Sakit" },
+                    { value: "Cuti", label: "Cuti" }
+                  ]}
+                />
               </div>
               
               <div className="flex-1 flex">

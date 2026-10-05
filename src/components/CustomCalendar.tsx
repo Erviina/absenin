@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CustomSelect } from "./CustomSelect";
 
 interface CustomCalendarProps {
   selectedDate: string;
@@ -53,22 +54,18 @@ export function CustomCalendar({ selectedDate, onSelect, minDate }: CustomCalend
         </button>
         
         <div className="flex items-center justify-center gap-1 flex-1">
-          <select 
-            value={currentMonth.getMonth()} 
-            onChange={(e) => setCurrentMonth(new Date(currentMonth.getFullYear(), parseInt(e.target.value), 1))}
-            className="font-bold text-[#111827] text-[15px] bg-transparent focus:outline-none cursor-pointer text-center hover:bg-gray-100 rounded-lg px-2 py-1 appearance-none"
-          >
-            {monthNames.map((m, i) => <option key={m} value={i}>{m}</option>)}
-          </select>
-          <select
-            value={currentMonth.getFullYear()}
-            onChange={(e) => setCurrentMonth(new Date(parseInt(e.target.value), currentMonth.getMonth(), 1))}
-            className="font-bold text-[#111827] text-[15px] bg-transparent focus:outline-none cursor-pointer text-center hover:bg-gray-100 rounded-lg px-2 py-1 appearance-none"
-          >
-            {Array.from({length: 20}, (_, i) => new Date().getFullYear() - 10 + i).map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+          <CustomSelect 
+            variant="inline"
+            value={currentMonth.getMonth().toString()}
+            onChange={(val: string) => setCurrentMonth(new Date(currentMonth.getFullYear(), parseInt(val), 1))}
+            options={monthNames.map((m, i) => ({ value: i.toString(), label: m }))}
+          />
+          <CustomSelect 
+            variant="inline"
+            value={currentMonth.getFullYear().toString()}
+            onChange={(val: string) => setCurrentMonth(new Date(parseInt(val), currentMonth.getMonth(), 1))}
+            options={Array.from({length: 20}, (_, i) => new Date().getFullYear() - 10 + i).map(y => ({ value: y.toString(), label: y.toString() }))}
+          />
         </div>
 
         <button 

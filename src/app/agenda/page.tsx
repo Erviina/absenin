@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { TopBar } from "@/components/TopBar";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
+import { CustomSelect } from "@/components/CustomSelect";
+import { CustomTimePicker } from "@/components/CustomTimePicker";
 
 // Tipe Data untuk Agenda
 type AgendaItem = {
@@ -221,18 +223,17 @@ export default function AgendaPage() {
                   Kategori <span className="text-[#EF4444]">*</span>
                 </label>
                 <div className="relative">
-                  <select 
+                  <CustomSelect 
                     value={formKategori}
-                    onChange={(e) => setFormKategori(e.target.value as AgendaItem["type"])}
-                    className="w-full border border-[#E5E7EB] rounded-[14px] pl-4 pr-10 py-3.5 text-[14px] text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all appearance-none bg-white font-medium cursor-pointer"
-                  >
-                    <option value="Rapat">Rapat</option>
-                    <option value="Acara">Acara</option>
-                    <option value="Review">Review</option>
-                    <option value="Tenggat">Tenggat (Deadline)</option>
-                    <option value="Lainnya">Lainnya</option>
-                  </select>
-                  <ChevronDown className="w-5 h-5 text-[#4B5563] absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    onChange={(val) => setFormKategori(val as AgendaItem["type"])}
+                    options={[
+                      { value: "Rapat", label: "Rapat" },
+                      { value: "Acara", label: "Acara" },
+                      { value: "Review", label: "Review" },
+                      { value: "Tenggat", label: "Tenggat (Deadline)" },
+                      { value: "Lainnya", label: "Lainnya" }
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -256,23 +257,17 @@ export default function AgendaPage() {
                 </label>
                 <div className="flex gap-3">
                   <div className="flex-1 relative">
-                    <Clock className="w-[18px] h-[18px] text-[#356E3B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
-                    <input 
-                      type="time" 
+                    <CustomTimePicker 
                       value={formWaktuMulai}
-                      onChange={(e) => setFormWaktuMulai(e.target.value)}
-                      onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
-                      className="w-full border border-[#E5E7EB] rounded-[14px] pl-10 pr-4 py-3.5 text-[14px] font-medium text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white [&::-webkit-calendar-picker-indicator]:hidden cursor-pointer"
+                      onChange={setFormWaktuMulai}
+                      placeholder="Mulai"
                     />
                   </div>
                   <div className="flex-1 relative">
-                    <Clock className="w-[18px] h-[18px] text-[#356E3B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
-                    <input 
-                      type="time" 
+                    <CustomTimePicker 
                       value={formWaktuSelesai}
-                      onChange={(e) => setFormWaktuSelesai(e.target.value)}
-                      onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
-                      className="w-full border border-[#E5E7EB] rounded-[14px] pl-10 pr-4 py-3.5 text-[14px] font-medium text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white [&::-webkit-calendar-picker-indicator]:hidden cursor-pointer"
+                      onChange={setFormWaktuSelesai}
+                      placeholder="Selesai"
                     />
                   </div>
                 </div>
@@ -327,16 +322,16 @@ export default function AgendaPage() {
           /* MAIN CONTENT (KALENDER & LIST) */
           <>
             {/* Kalender Card */}
-            <div className="bg-white rounded-[24px] p-6 shadow-sm mb-6">
-              <div className="flex justify-between items-center mb-6">
+            <div className="mb-6 px-1">
+              <div className="flex justify-between items-center mb-4">
                 <h2 className="text-[16px] font-bold text-[#111827]">
                   {currentDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}
                 </h2>
                 <div className="flex gap-2">
-                  <button onClick={handlePrevMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#F3F4F6] text-[#4B5563] hover:bg-[#E5E7EB]">
+                  <button onClick={handlePrevMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-[#4B5563] shadow-sm hover:bg-gray-50 border border-[#E5E7EB]">
                     <ChevronLeft className="w-5 h-5" />
                   </button>
-                  <button onClick={handleNextMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#F3F4F6] text-[#4B5563] hover:bg-[#E5E7EB] rotate-180">
+                  <button onClick={handleNextMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-[#4B5563] shadow-sm hover:bg-gray-50 border border-[#E5E7EB] rotate-180">
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                 </div>

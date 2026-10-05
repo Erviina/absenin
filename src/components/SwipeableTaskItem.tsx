@@ -20,9 +20,11 @@ interface SwipeableTaskItemProps {
 
 export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: SwipeableTaskItemProps) {
   const [translateX, setTranslateX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+    setIsDragging(true);
     if ('touches' in e) {
       touchStartX.current = e.touches[0].clientX;
     } else {
@@ -52,6 +54,7 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: Swipeabl
   };
 
   const handleTouchEnd = () => {
+    setIsDragging(false);
     if (translateX < -50) {
       setTranslateX(-140); // Snap open
     } else {
@@ -61,9 +64,12 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: Swipeabl
   };
 
   return (
-    <div className="relative w-full h-[88px] overflow-hidden rounded-[20px] mb-3">
+    <div className="relative w-full h-[88px] mb-3">
       {/* Background Actions */}
-      <div className="absolute inset-y-0 right-0 flex">
+      <div 
+        className="absolute inset-y-0 right-0 flex rounded-r-[20px] overflow-hidden"
+        style={{ visibility: translateX === 0 && !isDragging ? 'hidden' : 'visible' }}
+      >
         <button 
           onClick={() => {
             onEdit(task.id);
@@ -88,8 +94,8 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: Swipeabl
 
       {/* Foreground Task Card */}
       <div 
-        className="absolute inset-0 bg-white border border-[#E8F3EB] rounded-[20px] shadow-sm flex justify-between items-center px-4 transition-transform ease-out duration-200"
-        style={{ transform: `translateX(${translateX}px)` }}
+        className={`absolute inset-0 bg-white border border-[#E8F3EB] rounded-[20px] shadow-sm flex justify-between items-center px-4 ${isDragging ? "" : "transition-transform ease-out duration-300"}`}
+        style={{ transform: `translateX(${translateX}px)`, zIndex: 10 }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}

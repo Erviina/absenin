@@ -4,6 +4,8 @@ import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, T
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { TopBar } from "@/components/TopBar";
+import { CustomSelect } from "@/components/CustomSelect";
+import { CustomTimePicker } from "@/components/CustomTimePicker";
 
 interface Schedule {
   id: string;
@@ -552,28 +554,20 @@ export default function KelolaPerusahaanPage() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[#1E4738] text-[12px] font-bold">Hari</label>
                   <div className="relative">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                    </div>
-                    <select 
+                    <CustomSelect
                       value={jadwalForm.hari}
-                      onChange={(e) => setJadwalForm({ ...jadwalForm, hari: e.target.value })}
-                      className="w-full border border-gray-200 rounded-xl pl-11 pr-10 py-3.5 text-[14px] text-[#1E4738] font-semibold appearance-none outline-none focus:border-[#356E3B] bg-white transition-colors"
-                    >
-                      <option value="Senin">Senin</option>
-                      <option value="Selasa">Selasa</option>
-                      <option value="Rabu">Rabu</option>
-                      <option value="Kamis">Kamis</option>
-                      <option value="Jumat">Jumat</option>
-                      <option value="Sabtu">Sabtu</option>
-                      <option value="Minggu">Minggu</option>
-                      <option value="Senin – Jumat">Senin – Jumat</option>
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
-                        <polyline points="3 4.5 6 7.5 9 4.5"></polyline>
-                      </svg>
-                    </div>
+                      onChange={(val) => setJadwalForm({ ...jadwalForm, hari: val })}
+                      options={[
+                        { value: "Senin", label: "Senin" },
+                        { value: "Selasa", label: "Selasa" },
+                        { value: "Rabu", label: "Rabu" },
+                        { value: "Kamis", label: "Kamis" },
+                        { value: "Jumat", label: "Jumat" },
+                        { value: "Sabtu", label: "Sabtu" },
+                        { value: "Minggu", label: "Minggu" },
+                        { value: "Senin – Jumat", label: "Senin – Jumat" }
+                      ]}
+                    />
                   </div>
                 </div>
 
@@ -581,15 +575,11 @@ export default function KelolaPerusahaanPage() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[#1E4738] text-[12px] font-bold">Jam Mulai</label>
                   <div className="relative">
-                    <input 
-                      type="text" 
+                    <CustomTimePicker
                       value={jadwalForm.jamMulai}
-                      onChange={(e) => setJadwalForm({ ...jadwalForm, jamMulai: e.target.value })}
-                      className="w-full border border-gray-200 rounded-xl pl-4 pr-11 py-3.5 text-[14px] text-[#1E4738] font-semibold outline-none focus:border-[#356E3B] transition-colors"
+                      onChange={(val) => setJadwalForm({ ...jadwalForm, jamMulai: val })}
+                      placeholder="08:00"
                     />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Clock className="w-4 h-4" />
-                    </div>
                   </div>
                 </div>
 
@@ -597,15 +587,11 @@ export default function KelolaPerusahaanPage() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[#1E4738] text-[12px] font-bold">Jam Selesai</label>
                   <div className="relative">
-                    <input 
-                      type="text" 
+                    <CustomTimePicker
                       value={jadwalForm.jamSelesai}
-                      onChange={(e) => setJadwalForm({ ...jadwalForm, jamSelesai: e.target.value })}
-                      className="w-full border border-gray-200 rounded-xl pl-4 pr-11 py-3.5 text-[14px] text-[#1E4738] font-semibold outline-none focus:border-[#356E3B] transition-colors"
+                      onChange={(val) => setJadwalForm({ ...jadwalForm, jamSelesai: val })}
+                      placeholder="17:00"
                     />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Clock className="w-4 h-4" />
-                    </div>
                   </div>
                 </div>
 
@@ -689,24 +675,16 @@ export default function KelolaPerusahaanPage() {
                   Pilih Jabatan <span className="text-[#e11d48]">*</span>
                 </label>
                 <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                    <AlignLeft className="w-4 h-4 text-[#356E3B]" />
-                  </div>
-                  <select 
+                  <CustomSelect
                     value={undangForm.jabatan}
-                    onChange={(e) => setUndangForm({ ...undangForm, jabatan: e.target.value })}
-                    className={`w-full border border-gray-200 rounded-[12px] pl-11 pr-10 py-3.5 text-[14px] font-medium appearance-none outline-none focus:border-[#356E3B] bg-white transition-colors ${undangForm.jabatan ? 'text-[#1E4738]' : 'text-gray-400'}`}
-                  >
-                    <option value="" disabled hidden>Pilih jabatan</option>
-                    <option value="Manager">Manager</option>
-                    <option value="Staff">Staff</option>
-                    <option value="Intern">Intern</option>
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
-                      <polyline points="3 4.5 6 7.5 9 4.5"></polyline>
-                    </svg>
-                  </div>
+                    onChange={(val) => setUndangForm({ ...undangForm, jabatan: val })}
+                    placeholder="Pilih jabatan"
+                    options={[
+                      { value: "Manager", label: "Manager" },
+                      { value: "Staff", label: "Staff" },
+                      { value: "Intern", label: "Intern" }
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -716,24 +694,16 @@ export default function KelolaPerusahaanPage() {
                   Pilih Divisi <span className="text-[#e11d48]">*</span>
                 </label>
                 <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                    <AlignLeft className="w-4 h-4 text-[#356E3B]" />
-                  </div>
-                  <select 
+                  <CustomSelect
                     value={undangForm.divisi}
-                    onChange={(e) => setUndangForm({ ...undangForm, divisi: e.target.value })}
-                    className={`w-full border border-gray-200 rounded-[12px] pl-11 pr-10 py-3.5 text-[14px] font-medium appearance-none outline-none focus:border-[#356E3B] bg-white transition-colors ${undangForm.divisi ? 'text-[#1E4738]' : 'text-gray-400'}`}
-                  >
-                    <option value="" disabled hidden>Pilih divisi</option>
-                    <option value="IT">IT</option>
-                    <option value="HRD">HRD</option>
-                    <option value="Finance">Finance</option>
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
-                      <polyline points="3 4.5 6 7.5 9 4.5"></polyline>
-                    </svg>
-                  </div>
+                    onChange={(val) => setUndangForm({ ...undangForm, divisi: val })}
+                    placeholder="Pilih divisi"
+                    options={[
+                      { value: "IT", label: "IT" },
+                      { value: "HRD", label: "HRD" },
+                      { value: "Finance", label: "Finance" }
+                    ]}
+                  />
                 </div>
               </div>
 
