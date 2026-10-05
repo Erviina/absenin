@@ -44,19 +44,36 @@ export function CustomCalendar({ selectedDate, onSelect, minDate }: CustomCalend
 
   return (
     <div className="bg-white rounded-[24px] border border-[#E5E7EB] p-4 mt-4 shadow-sm">
-      <div className="flex justify-between items-center mb-4 px-2">
+      <div className="flex justify-between items-center mb-4 px-1">
         <button 
           onClick={prevMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-[#4B5563]"
+          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-[#4B5563] shrink-0"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <div className="font-bold text-[#111827] text-[15px]">
-          {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+        
+        <div className="flex items-center justify-center gap-1 flex-1">
+          <select 
+            value={currentMonth.getMonth()} 
+            onChange={(e) => setCurrentMonth(new Date(currentMonth.getFullYear(), parseInt(e.target.value), 1))}
+            className="font-bold text-[#111827] text-[15px] bg-transparent focus:outline-none cursor-pointer text-center hover:bg-gray-100 rounded-lg px-2 py-1 appearance-none"
+          >
+            {monthNames.map((m, i) => <option key={m} value={i}>{m}</option>)}
+          </select>
+          <select
+            value={currentMonth.getFullYear()}
+            onChange={(e) => setCurrentMonth(new Date(parseInt(e.target.value), currentMonth.getMonth(), 1))}
+            className="font-bold text-[#111827] text-[15px] bg-transparent focus:outline-none cursor-pointer text-center hover:bg-gray-100 rounded-lg px-2 py-1 appearance-none"
+          >
+            {Array.from({length: 20}, (_, i) => new Date().getFullYear() - 10 + i).map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
         </div>
+
         <button 
           onClick={nextMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-[#4B5563]"
+          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-[#4B5563] shrink-0"
         >
           <ChevronRight className="w-5 h-5" />
         </button>
@@ -103,6 +120,22 @@ export function CustomCalendar({ selectedDate, onSelect, minDate }: CustomCalend
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-[#F3F4F6] flex justify-center">
+        <button 
+          onClick={() => {
+            const today = new Date();
+            setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+            const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            if (!minDate || dateStr >= minDate) {
+              onSelect(dateStr);
+            }
+          }}
+          className="text-[13px] font-bold text-[#356E3B] hover:text-[#2A582F] transition-colors px-4 py-1.5 rounded-full hover:bg-[#E8F3EB]"
+        >
+          Pilih Hari Ini
+        </button>
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ export function TopBar({ title, onBack, rightAction, bgColor = "bg-[#356E3B]" }:
   };
 
   return (
-    <div className={`${bgColor} pt-12 pb-4 px-6 flex items-center justify-between sticky top-0 z-20 shrink-0`}>
+    <div className={`${bgColor} py-4 px-6 flex items-center justify-between sticky top-0 z-20 shrink-0`}>
       <button 
         onClick={handleBack}
         className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors z-10"

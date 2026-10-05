@@ -5,6 +5,7 @@ import { ChevronLeft, Plus, Calendar, ChevronDown, Clock, Trash2, FileText, Send
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/bottom-nav";
+import { CustomDatePicker } from "@/components/CustomDatePicker";
 
 // Tipe Data untuk Pengajuan Izin
 type IzinRequest = {
@@ -27,6 +28,8 @@ export default function IzinPage() {
   const [endDate, setEndDate] = useState("");
   const [noteText, setNoteText] = useState("");
   const [attachment, setAttachment] = useState<{name: string, size: string} | null>(null);
+  const [filterDate, setFilterDate] = useState("");
+  const [filterCategory, setFilterCategory] = useState("Semua Kategori");
 
   // State untuk list pengajuan
   const [pengajuanList, setPengajuanList] = useState<IzinRequest[]>([
@@ -90,6 +93,29 @@ export default function IzinPage() {
 
   const selectedIzin = pengajuanList.find(req => req.id === selectedIzinId);
 
+  const filteredList = pengajuanList.filter(req => {
+    let matchCat = true;
+    if (filterCategory !== "Semua Kategori") {
+      matchCat = req.type.toLowerCase().includes(filterCategory.toLowerCase());
+    }
+    
+    let matchDate = true;
+    if (filterDate) {
+      const fd = new Date(filterDate);
+      if (!isNaN(fd.getTime())) {
+        const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+        const formattedFilterDate = `${fd.getDate()} ${months[fd.getMonth()]} ${fd.getFullYear()}`;
+        const formattedFilterDateWithZero = `${String(fd.getDate()).padStart(2, '0')} ${months[fd.getMonth()]} ${fd.getFullYear()}`;
+        
+        matchDate = req.dateStr.includes(filterDate) || 
+                    req.dateStr.includes(formattedFilterDate) || 
+                    req.dateStr.includes(formattedFilterDateWithZero);
+      }
+    }
+    
+    return matchCat && matchDate;
+  });
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
       {/* Header */}
@@ -140,14 +166,10 @@ export default function IzinPage() {
                   <label className="text-[13px] font-bold text-[#374151]">
                     Mulai <span className="text-[#EF4444]">*</span>
                   </label>
-                  <div className="relative">
-                    <Calendar className="w-[18px] h-[18px] text-[#6EA874] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
-                    <input 
-                      type="date"
+                  <div className="flex w-full">
+                    <CustomDatePicker 
                       value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
-                      className="w-full border border-[#E5E7EB] rounded-[14px] pl-4 pr-10 py-3.5 text-[14px] font-medium text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white [&::-webkit-calendar-picker-indicator]:hidden cursor-pointer"
+                      onChange={setStartDate}
                     />
                   </div>
                 </div>
@@ -155,14 +177,10 @@ export default function IzinPage() {
                   <label className="text-[13px] font-bold text-[#374151]">
                     Sampai <span className="text-[#EF4444]">*</span>
                   </label>
-                  <div className="relative">
-                    <Calendar className="w-[18px] h-[18px] text-[#6EA874] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
-                    <input 
-                      type="date"
+                  <div className="flex w-full">
+                    <CustomDatePicker 
                       value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
-                      className="w-full border border-[#E5E7EB] rounded-[14px] pl-4 pr-10 py-3.5 text-[14px] font-medium text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white [&::-webkit-calendar-picker-indicator]:hidden cursor-pointer"
+                      onChange={setEndDate}
                     />
                   </div>
                 </div>
@@ -477,20 +495,22 @@ export default function IzinPage() {
             {/* Filters */}
             <div className="flex gap-3">
               <div className="flex-1 relative">
-                <select className="w-full border border-[#E5E7EB] rounded-[16px] pl-4 pr-10 py-3 text-[14px] text-[#374151] font-medium focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all appearance-none bg-white cursor-pointer">
-                  <option>Semua Kategori</option>
-                  <option>Izin Sakit</option>
-                  <option>Cuti</option>
+                <select 
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="w-full border border-[#E5E7EB] rounded-[16px] pl-4 pr-10 py-3 text-[14px] text-[#374151] font-medium focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all appearance-none bg-white cursor-pointer"
+                >
+                  <option value="Semua Kategori">Semua Kategori</option>
+                  <option value="Izin Sakit">Izin Sakit</option>
+                  <option value="Cuti">Cuti</option>
                 </select>
                 <ChevronDown className="w-4 h-4 text-[#6B7280] absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
               </div>
               
-              <div className="flex-1 relative">
-                <Calendar className="w-4 h-4 text-[#356E3B] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
-                <input 
-                  type="date"
-                  onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
-                  className="w-full border border-[#E5E7EB] rounded-[16px] pl-10 pr-4 py-3 text-[14px] text-[#374151] font-medium focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white [&::-webkit-calendar-picker-indicator]:hidden cursor-pointer"
+              <div className="flex-1 flex">
+                <CustomDatePicker 
+                  value={filterDate}
+                  onChange={setFilterDate}
                 />
               </div>
             </div>
@@ -503,13 +523,13 @@ export default function IzinPage() {
                   Daftar Pengajuan
                 </h2>
                 <div className="bg-[#E8F3EB] px-3 py-1.5 rounded-full border border-[#D1E5D5]">
-                  <span className="text-[#356E3B] text-[11px] font-bold">{pengajuanList.length} Pengajuan</span>
+                  <span className="text-[#356E3B] text-[11px] font-bold">{filteredList.length} Pengajuan</span>
                 </div>
               </div>
 
               <div className="flex flex-col gap-4">
                 
-                {pengajuanList.map((req) => (
+                {filteredList.map((req) => (
                   <div 
                     key={req.id} 
                     onClick={() => setSelectedIzinId(req.id)}

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { SwipeableTaskItem } from "@/components/SwipeableTaskItem";
 import { TopBar } from "@/components/TopBar";
+import { CustomDatePicker } from "@/components/CustomDatePicker";
 
 export default function TugasPage() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export default function TugasPage() {
 
   // Form states
   const [taskTitle, setTaskTitle] = useState("");
-  const [taskDate, setTaskDate] = useState("18 Sep 2026");
+  const [taskDate, setTaskDate] = useState("2026-09-18");
   const [taskTime, setTaskTime] = useState("10:00 WIB");
   const [noteText, setNoteText] = useState("");
 
@@ -23,8 +24,8 @@ export default function TugasPage() {
   const [tasks, setTasks] = useState([
     { id: "1", title: "Review sprint backlog dengan Tim Dev", time: "10:00 WIB", completed: true, section: "today", note: "" },
     { id: "2", title: "Kirim draft laporan absensi mingguan", time: "15:30 WIB", completed: false, section: "today", note: "" },
-    { id: "3", title: "Belanja perlengkapan pantry kantor", time: "14:00 WIB", date: "25 Sep", completed: false, section: "upcoming", note: "" },
-    { id: "4", title: "Meeting mingguan bersama Klien", time: "09:00 WIB", date: "26 Sep", completed: false, section: "upcoming", note: "" },
+    { id: "3", title: "Belanja perlengkapan pantry kantor", time: "14:00 WIB", date: "2026-09-25", completed: false, section: "upcoming", note: "" },
+    { id: "4", title: "Meeting mingguan bersama Klien", time: "09:00 WIB", date: "2026-09-26", completed: false, section: "upcoming", note: "" },
   ]);
 
   const toggleTask = (id: string) => {
@@ -44,7 +45,7 @@ export default function TugasPage() {
     const t = tasks.find(x => x.id === id);
     if (t) {
       setTaskTitle(t.title);
-      setTaskDate(t.date || "18 Sep 2026");
+      setTaskDate(t.date || "2026-09-18");
       setTaskTime(t.time);
       setNoteText(t.note || "");
       setEditingTaskId(t.id);
@@ -152,16 +153,10 @@ export default function TugasPage() {
                   Batas Waktu (Deadline) <span className="text-[#EF4444]">*</span>
                 </label>
                 <div className="flex gap-3">
-                  <div className="flex-1 relative">
-                    <Calendar className="w-[18px] h-[18px] text-[#356E3B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
-                    <input 
-                      type="date" 
-                      value={taskDate}
-                      onChange={(e) => setTaskDate(e.target.value)}
-                      onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
-                      className="w-full border border-[#E5E7EB] rounded-[14px] pl-10 pr-4 py-3.5 text-[14px] font-medium text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white [&::-webkit-calendar-picker-indicator]:hidden cursor-pointer"
-                    />
-                  </div>
+                  <CustomDatePicker 
+                    value={taskDate}
+                    onChange={setTaskDate}
+                  />
                   <div className="flex-1 relative">
                     <Clock className="w-[18px] h-[18px] text-[#356E3B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
                     <input 

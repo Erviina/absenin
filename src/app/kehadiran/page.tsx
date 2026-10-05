@@ -93,6 +93,11 @@ export default function KehadiranPage() {
       <TopBar 
         title="Kehadiran" 
         onBack={() => router.push("/dashboard")} 
+        rightAction={
+          <button className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors">
+            <Download className="w-5 h-5 text-white" />
+          </button>
+        }
       />
 
       <div className="px-6 pt-6 flex flex-col gap-5">
@@ -197,13 +202,7 @@ export default function KehadiranPage() {
 
       </div>
 
-      {/* Floating Action Button */}
-      <div className="fixed bottom-[96px] left-0 right-0 px-6 max-w-md mx-auto z-30">
-        <button className="w-full bg-[#2D5A3F] hover:bg-[#22442f] text-white rounded-full py-4 flex items-center justify-center gap-2 font-semibold text-[15px] shadow-lg transition-colors active:scale-[0.98]">
-          <Download className="w-5 h-5" strokeWidth={2.5} />
-          Unduh Rekap Kehadiran
-        </button>
-      </div>
+
 
       {/* Bottom Navigation */}
       <BottomNav activeTab="kehadiran" />
