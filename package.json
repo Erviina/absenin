@@ -11,6 +11,7 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@ducanh2912/next-pwa": "^10.2.9",
+    "@react-oauth/google": "^0.13.5",
     "@types/leaflet": "^1.9.22",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.3.0",

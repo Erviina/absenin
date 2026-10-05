@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   viewport: "minimum-scale=1, initial-scale=1, width=device-width, shrink-to-fit=no, user-scalable=no, viewport-fit=cover",
 };
 
+import { GoogleAuthProvider } from "@/components/GoogleAuthProvider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -26,7 +28,9 @@ export default function RootLayout({
       className={`${plusJakartaSans.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground max-w-md mx-auto shadow-sm border-x border-border/40 relative font-sans">
-        {children}
+        <GoogleAuthProvider>
+          {children}
+        </GoogleAuthProvider>
       </body>
     </html>
   );

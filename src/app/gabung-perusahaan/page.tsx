@@ -10,20 +10,71 @@ export default function GabungPerusahaanPage() {
   const [kode, setKode] = useState("");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [status, setStatus] = useState<'idle' | 'pending' | 'accepted'>('idle');
+  const [companyName, setCompanyName] = useState("Perusahaan");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (status === 'pending') {
-      // Simulate admin accepting the request after 3 seconds
-      const timer = setTimeout(() => {
-        setStatus('accepted');
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [status]);
+    const fetchStatus = async () => {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      try {
+        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setCompanyName(data.data.company_name || "Perusahaan");
+          if (data.data.status === 'pending') setStatus('pending');
+          if (data.data.status === 'approved') setStatus('accepted');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchStatus();
+  }, []);
 
-  const handleGabung = () => {
+  const handleGabung = async () => {
     if (!kode) return;
-    setStatus('pending');
+    setErrorMsg("");
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      setErrorMsg("Anda belum login");
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ join_code: kode })
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        // Re-fetch to get company name properly
+        const resMe = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const dataMe = await resMe.json();
+        if (dataMe.success && dataMe.data) {
+          setCompanyName(dataMe.data.company_name);
+        }
+        setStatus('pending');
+      } else {
+        setErrorMsg(data.errors?.[0] || data.message || "Gagal bergabung");
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Terjadi kesalahan jaringan");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (status === 'pending') {
@@ -43,7 +94,7 @@ export default function GabungPerusahaanPage() {
         <h1 className="text-[17px] font-bold text-[#1E293B] mb-1">Permintaan Terkirim!</h1>
         <div className="flex items-center justify-center gap-1.5 text-[#1E293B] font-bold text-[14px] mb-4">
           <Building2 className="w-4 h-4 text-[#1E293B]" strokeWidth={2} />
-          <span>PT Contoh Indonesia</span>
+          <span>{companyName}</span>
         </div>
         
         <p className="text-gray-500 text-[14px] max-w-[260px] leading-relaxed">
@@ -66,7 +117,7 @@ export default function GabungPerusahaanPage() {
         {/* Text Content */}
         <h1 className="text-[20px] font-bold text-[#1E293B] mb-1.5">Berhasil Bergabung!</h1>
         <h2 className="text-[#356E3B] font-bold text-[15px] mb-4">
-          PT Contoh Indonesia
+          {companyName}
         </h2>
         
         <p className="text-gray-500 text-[13px] px-6 leading-relaxed max-w-[280px]">
@@ -205,12 +256,22 @@ export default function GabungPerusahaanPage() {
             />
           </div>
 
+          {errorMsg && (
+            <p className="text-red-500 text-sm font-medium px-1">{errorMsg}</p>
+          )}
+
           <button 
             onClick={handleGabung}
-            disabled={!kode}
-            className={`w-full py-4 rounded-[20px] text-[15px] font-bold transition-all shadow-[0_4px_16px_rgba(53,110,59,0.15)] ${kode ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' : 'bg-gray-300 text-gray-100 shadow-none'}`}
+            disabled={!kode || isLoading}
+            className={`w-full py-4 rounded-[20px] text-[15px] font-bold transition-all shadow-[0_4px_16px_rgba(53,110,59,0.15)] flex items-center justify-center gap-2 ${kode && !isLoading ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' : 'bg-gray-300 text-gray-100 shadow-none'}`}
           >
-            Gabung Sekarang
+            {isLoading ? (
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : null}
+            {isLoading ? "Memproses..." : "Gabung Sekarang"}
           </button>
         </div>
 
