@@ -2,7 +2,7 @@
 
 import { ChevronLeft, Search, Check, ChevronRight, ListFilter } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AdminBottomNav } from "@/components/admin-bottom-nav";
 import { TopBar } from "@/components/TopBar";
 
@@ -13,19 +13,14 @@ interface Employee {
   role?: string;
 }
 
-const initialEmployees: Employee[] = [
-  { id: "1", name: "Ayu Lestari", email: "ayu@perusahaan.com" },
-  { id: "2", name: "Budi Santoso", email: "budi@perusahaan.com" },
-  { id: "3", name: "Citra Dewi", email: "citra@perusahaan.com", role: "Manajemen" },
-  { id: "4", name: "Dika Pratama", email: "dika@perusahaan.com" },
-  { id: "5", name: "Eka Rahma", email: "eka@perusahaan.com" },
-];
-
 export default function KelolaKaryawanPage() {
   const router = useRouter();
   
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // Selection state
   const [selectedItems, setSelectedItems] = useState<string[]>([]); // Initially empty
@@ -43,6 +38,39 @@ export default function KelolaKaryawanPage() {
       return matchesSearch && matchesRole;
     });
   }, [employees, searchQuery, roleFilter]);
+
+  const fetchRequests = async () => {
+    setIsLoading(true);
+    setErrorMsg("");
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        const mapped = data.data.map((r: any) => ({
+          id: r.id,
+          name: r.full_name || "Tanpa Nama",
+          email: r.email || "",
+          // role omitted for pending request
+        }));
+        setEmployees(mapped);
+      } else {
+        setErrorMsg(data.errors?.[0] || data.message || "Gagal mengambil data");
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Terjadi kesalahan jaringan");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRequests();
+  }, []);
 
   const toggleSelectAll = () => {
     if (selectAll || (selectedItems.length > 0 && selectedItems.length === filteredEmployees.length)) {
@@ -67,12 +95,34 @@ export default function KelolaKaryawanPage() {
     }
   };
 
-  const handleTerima = () => {
-    if (selectedItems.length === 0) return;
-    // Remove accepted employees from this view
-    setEmployees(employees.filter(emp => !selectedItems.includes(emp.id)));
-    setSelectedItems([]);
-    setSelectAll(false);
+  const handleTerima = async () => {
+    if (selectedItems.length === 0 || isProcessing) return;
+    setIsProcessing(true);
+    setErrorMsg("");
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      for (const reqId of selectedItems) {
+        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/company/join-requests/${reqId}/approve`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) {
+          console.error(`Gagal menyetujui ${reqId}:`, data.message);
+        }
+      }
+      
+      await fetchRequests();
+      setSelectedItems([]);
+      setSelectAll(false);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Terjadi kesalahan saat memproses");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const toggleFilter = () => {
@@ -118,6 +168,12 @@ export default function KelolaKaryawanPage() {
           </div>
         )}
 
+        {errorMsg && (
+          <div className="bg-red-50 text-red-500 text-[13px] p-3 rounded-[12px] border border-red-100 -mt-2">
+            {errorMsg}
+          </div>
+        )}
+
         {/* Select All & Action */}
         <div className="flex justify-between items-center -mt-1">
           <div 
@@ -134,18 +190,22 @@ export default function KelolaKaryawanPage() {
 
           <button 
             onClick={handleTerima}
-            disabled={selectedItems.length === 0}
-            className={`px-5 py-1.5 rounded-full text-[13px] font-semibold transition-all ${selectedItems.length > 0 ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-95 shadow-sm' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+            disabled={selectedItems.length === 0 || isProcessing}
+            className={`px-5 py-1.5 rounded-full text-[13px] font-semibold transition-all ${(selectedItems.length > 0 && !isProcessing) ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-95 shadow-sm' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
           >
-            Terima
+            {isProcessing ? "Memproses..." : "Terima"}
           </button>
         </div>
 
         {/* List of Employees */}
         <div className="flex flex-col gap-3.5">
-          {filteredEmployees.length === 0 ? (
+          {isLoading ? (
             <div className="text-center text-gray-400 py-10 text-[14px]">
-              Tidak ada data ditemukan
+              Memuat data...
+            </div>
+          ) : filteredEmployees.length === 0 ? (
+            <div className="text-center text-gray-400 py-10 text-[14px]">
+              Tidak ada data pengajuan pending
             </div>
           ) : (
             filteredEmployees.map((emp) => (

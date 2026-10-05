@@ -1,0 +1,32 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "npx tsx src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "drizzle-orm": "^0.45.3",
+    "express": "^5.2.1",
+    "google-auth-library": "^11.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11"
+  }
+}

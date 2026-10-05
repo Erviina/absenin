@@ -12,13 +12,46 @@ export default function BuatPerusahaanPage() {
   const [nama, setNama] = useState("");
   const [alamat, setAlamat] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
 
   const maxAlamat = 300;
 
-  const handleLanjutkan = () => {
+  const handleLanjutkan = async () => {
     // Basic validation
     if (!nama || !alamat) return;
-    setIsSuccess(true);
+    
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        alert("Sesi telah habis, silakan login kembali.");
+        setIsLoading(false);
+        return;
+      }
+
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: nama, address: alamat }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setJoinCode(data.data.join_code);
+        setIsSuccess(true);
+      } else {
+        alert(data.message || "Gagal membuat perusahaan");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Terjadi kesalahan jaringan");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isSuccess) {
@@ -51,7 +84,7 @@ export default function BuatPerusahaanPage() {
           <div className="flex flex-col justify-center gap-1 flex-1">
             <p className="text-[#64748B] text-[12px] font-medium">Kode Bergabung</p>
             <div className="flex items-center justify-between">
-              <span className="text-[#1E293B] text-[24px] font-bold tracking-wider">ABC123</span>
+              <span className="text-[#1E293B] text-[24px] font-bold tracking-wider">{joinCode || "ABC123"}</span>
               <button className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
                 <Copy className="w-5 h-5" />
               </button>
@@ -158,10 +191,10 @@ export default function BuatPerusahaanPage() {
       <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#f7fbf8] via-[#f7fbf8] to-transparent z-10 pointer-events-none">
         <button 
           onClick={handleLanjutkan}
-          disabled={!nama || !alamat}
-          className={`w-full max-w-md mx-auto pointer-events-auto py-4 rounded-[20px] text-[15px] font-bold flex items-center justify-center transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] ${nama && alamat ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' : 'bg-gray-300 text-gray-100 shadow-none'}`}
+          disabled={!nama || !alamat || isLoading}
+          className={`w-full max-w-md mx-auto pointer-events-auto py-4 rounded-[20px] text-[15px] font-bold flex items-center justify-center transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] ${nama && alamat && !isLoading ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' : 'bg-gray-300 text-gray-100 shadow-none'}`}
         >
-          Lanjutkan
+          {isLoading ? "Memproses..." : "Lanjutkan"}
         </button>
       </div>
 
