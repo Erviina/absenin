@@ -63,10 +63,12 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex justify-between items-center px-6 pt-6 pb-4 bg-[#fbfdfc] sticky top-0 z-20">
         <div 
-          className="flex items-center gap-3 cursor-pointer relative"
-          ref={profileDropdownRef}
+          className="flex items-center gap-3 relative"
           onClick={() => {
-            const isManagement = user?.roles?.includes("Admin") || user?.roles?.includes("Manager");
+            const isManagement =
+              user?.roles?.includes("Admin") ||
+              user?.roles?.includes("Manager");
+
             if (isManagement) {
               setIsProfileDropdownOpen(!isProfileDropdownOpen);
             } else {
@@ -75,16 +77,39 @@ export default function DashboardPage() {
           }}
         >
           {user?.avatarUrl && !avatarError ? (
-            <img 
-              src={user.avatarUrl} 
-              alt="Avatar" 
-              className="w-[46px] h-[46px] rounded-full shrink-0 object-cover" 
+            <img
+              src={user.avatarUrl}
+              alt="Avatar"
+              className="w-[46px] h-[46px] rounded-full shrink-0 object-cover"
               onError={() => setAvatarError(true)}
             />
           ) : (
             <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full shrink-0"></div>
           )}
-          <div className="flex flex-col">
+
+          <div className="flex flex-col cursor-pointer select-none">
+            <span className="text-[#5C786C] text-[12px] font-medium leading-tight">
+              Selamat datang,
+            </span>
+
+            <span className="text-[#1E4738] text-[17px] font-bold leading-tight flex items-center gap-1">
+              {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
+
+              {(user?.roles?.includes("Admin") ||
+                user?.roles?.includes("Manager")) &&
+                (isProfileDropdownOpen ? (
+                  <ChevronUp
+                    className="w-4 h-4 text-[#1E4738]"
+                    strokeWidth={2.5}
+                  />
+                ) : (
+                  <ChevronDown
+                    className="w-4 h-4 text-[#1E4738]"
+                    strokeWidth={2.5}
+                  />
+                ))}
+            </span>
+          </div>
             <span className="text-[#5C786C] text-[12px] font-medium leading-tight">Selamat datang,</span>
             <span className="text-[#1E4738] text-[17px] font-bold leading-tight flex items-center gap-1">
               {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
@@ -140,10 +165,13 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-        <div className="relative">
+        <button 
+          className="relative active:scale-95 transition-transform"
+          onClick={() => router.push("/notifikasi")}
+        >
           <Bell className="w-6 h-6 text-[#1E4738]" strokeWidth={1.5} />
           <div className="absolute top-[2px] right-[2px] w-2.5 h-2.5 bg-[#00a859] border-[2px] border-[#fbfdfc] rounded-full"></div>
-        </div>
+        </button>
       </div>
 
       {/* Main Content */}
