@@ -10,6 +10,11 @@ export default function DashboardPage() {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
+  const [user, setUser] = useState<any>(null);
+  const [news, setNews] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [avatarError, setAvatarError] = useState(false);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
@@ -20,6 +25,38 @@ export default function DashboardPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = localStorage.getItem("accessToken");
+        if (!token) {
+          router.push("/login");
+          return;
+        }
+
+        const [authRes, newsRes] = await Promise.all([
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/news", { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+
+        const authData = await authRes.json();
+        if (authData.success) {
+          setUser(authData.data.user);
+        }
+
+        const newsData = await newsRes.json();
+        if (newsData.success) {
+          setNews(newsData.data.slice(0, 2));
+        }
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, [router]);
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       
@@ -28,23 +65,41 @@ export default function DashboardPage() {
         <div 
           className="flex items-center gap-3 cursor-pointer relative"
           ref={profileDropdownRef}
-          onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+          onClick={() => {
+            const isManagement = user?.roles?.includes("Admin") || user?.roles?.includes("Manager");
+            if (isManagement) {
+              setIsProfileDropdownOpen(!isProfileDropdownOpen);
+            } else {
+              router.push("/profil");
+            }
+          }}
         >
-          <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full shrink-0"></div>
+          {user?.avatarUrl && !avatarError ? (
+            <img 
+              src={user.avatarUrl} 
+              alt="Avatar" 
+              className="w-[46px] h-[46px] rounded-full shrink-0 object-cover" 
+              onError={() => setAvatarError(true)}
+            />
+          ) : (
+            <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full shrink-0"></div>
+          )}
           <div className="flex flex-col">
             <span className="text-[#5C786C] text-[12px] font-medium leading-tight">Selamat datang,</span>
             <span className="text-[#1E4738] text-[17px] font-bold leading-tight flex items-center gap-1">
-              Shakila Aulia
-              {isProfileDropdownOpen ? (
-                <ChevronUp className="w-4 h-4 text-[#1E4738]" strokeWidth={2.5} />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-[#1E4738]" strokeWidth={2.5} />
+              {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
+              {(user?.roles?.includes("Admin") || user?.roles?.includes("Manager")) && (
+                isProfileDropdownOpen ? (
+                  <ChevronUp className="w-4 h-4 text-[#1E4738]" strokeWidth={2.5} />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-[#1E4738]" strokeWidth={2.5} />
+                )
               )}
             </span>
           </div>
 
           {/* Dropdown Profile */}
-          {isProfileDropdownOpen && (
+          {(user?.roles?.includes("Admin") || user?.roles?.includes("Manager")) && isProfileDropdownOpen && (
             <div className="absolute top-[calc(100%+8px)] left-0 w-[270px] bg-white rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-2 z-50 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
               <div className="px-3 pt-2 pb-1.5">
                 <span className="text-[10px] font-bold text-[#9CA3AF] tracking-[0.05em] uppercase">Pilih Mode Akun</span>
@@ -138,53 +193,34 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-col gap-4">
-            {/* Card 1 */}
-            <div className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-              <div className="w-[72px] h-[72px] bg-[#d9e8df] rounded-2xl shrink-0"></div>
-              <div className="flex flex-col justify-center">
-                <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
-                  Pengumuman
-                </span>
-                <h3 className="text-[#1E4738] text-[13px] font-bold leading-snug mb-1 line-clamp-1">
-                  Jadwal Kerja dan Absensi Bulan
-                </h3>
-                <p className="text-[#7d998c] text-[11px] line-clamp-1">
-                  Mohon untuk memperhatikan...
-                </p>
+            {isLoading ? (
+              <div className="text-center text-[#7d998c] text-[13px] font-medium py-4 animate-pulse">Memuat berita...</div>
+            ) : news.length === 0 ? (
+              <div className="bg-white rounded-[20px] p-6 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                <p className="text-[#7d998c] text-[13px] font-medium">Belum ada berita terbaru saat ini.</p>
               </div>
-            </div>
-
-            {/* Card 2 */}
-            <div className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-              <div className="w-[72px] h-[72px] bg-[#d9e8df] rounded-2xl shrink-0"></div>
-              <div className="flex flex-col justify-center">
-                <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
-                  Tips & Info
-                </span>
-                <h3 className="text-[#1E4738] text-[13px] font-bold leading-snug mb-1 line-clamp-1">
-                  Tips Meningkatkan Produktivitas
-                </h3>
-                <p className="text-[#7d998c] text-[11px] line-clamp-1">
-                  Simak beberapa tips sederhana...
-                </p>
-              </div>
-            </div>
-
-            {/* Card 3 */}
-            <div className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-              <div className="w-[72px] h-[72px] bg-[#d9e8df] rounded-2xl shrink-0"></div>
-              <div className="flex flex-col justify-center">
-                <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
-                  Tips & Info
-                </span>
-                <h3 className="text-[#1E4738] text-[13px] font-bold leading-snug mb-1 line-clamp-1">
-                  Tips Meningkatkan Produktivitas
-                </h3>
-                <p className="text-[#7d998c] text-[11px] line-clamp-1">
-                  Simak beberapa tips sederhana...
-                </p>
-              </div>
-            </div>
+            ) : (
+              news.map((item, idx) => (
+                <div key={item.id || idx} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                  {item.cover_image_url ? (
+                    <img src={item.cover_image_url} alt={item.title} className="w-[72px] h-[72px] rounded-2xl shrink-0 object-cover" />
+                  ) : (
+                    <div className="w-[72px] h-[72px] bg-[#d9e8df] rounded-2xl shrink-0"></div>
+                  )}
+                  <div className="flex flex-col justify-center">
+                    <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
+                      {item.category?.name || "Pengumuman"}
+                    </span>
+                    <h3 className="text-[#1E4738] text-[13px] font-bold leading-snug mb-1 line-clamp-1">
+                      {item.title}
+                    </h3>
+                    <p className="text-[#7d998c] text-[11px] line-clamp-1">
+                      {item.content}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
 
           </div>
         </div>
