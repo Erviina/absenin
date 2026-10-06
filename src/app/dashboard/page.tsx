@@ -26,12 +26,17 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex justify-between items-center px-6 pt-6 pb-4 bg-[#fbfdfc] sticky top-0 z-20">
         <div 
-          className="flex items-center gap-3 cursor-pointer relative"
+          className="flex items-center gap-3 relative"
           ref={profileDropdownRef}
-          onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
         >
-          <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full shrink-0"></div>
-          <div className="flex flex-col">
+          <div 
+            className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full shrink-0 cursor-pointer active:scale-95 transition-transform"
+            onClick={() => router.push('/profil')}
+          ></div>
+          <div 
+            className="flex flex-col cursor-pointer select-none"
+            onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+          >
             <span className="text-[#5C786C] text-[12px] font-medium leading-tight">Selamat datang,</span>
             <span className="text-[#1E4738] text-[17px] font-bold leading-tight flex items-center gap-1">
               Shakila Aulia
@@ -85,10 +90,13 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-        <div className="relative">
+        <button 
+          className="relative active:scale-95 transition-transform"
+          onClick={() => router.push("/notifikasi")}
+        >
           <Bell className="w-6 h-6 text-[#1E4738]" strokeWidth={1.5} />
           <div className="absolute top-[2px] right-[2px] w-2.5 h-2.5 bg-[#00a859] border-[2px] border-[#fbfdfc] rounded-full"></div>
-        </div>
+        </button>
       </div>
 
       {/* Main Content */}
