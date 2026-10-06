@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, Target, Calendar, UserPlus, QrCode, AlignLeft, Send, Copy } from "lucide-react";
+import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, Target, Calendar, UserPlus, QrCode, AlignLeft, Send, Copy, Camera, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import React, { useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { CustomSelect } from "@/components/CustomSelect";
 import { CustomTimePicker } from "@/components/CustomTimePicker";
@@ -26,6 +26,18 @@ export default function KelolaPerusahaanPage() {
 
   // State for the modal and data
   const [isUbahLokasiOpen, setIsUbahLokasiOpen] = useState(false);
+  
+  // Image Upload State
+  const [companyImage, setCompanyImage] = useState("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop");
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const imageUrl = URL.createObjectURL(file);
+      setCompanyImage(imageUrl);
+    }
+  };
   
   // Data state
   const [lat, setLat] = useState("-6.9175");
@@ -60,14 +72,8 @@ export default function KelolaPerusahaanPage() {
     keterangan: ""
   });
 
-  // Undang / Tambah Karyawan State
-  const [isUndangKaryawanOpen, setIsUndangKaryawanOpen] = useState(false);
+  // Tambah Karyawan State
   const [isTambahKaryawanOpen, setIsTambahKaryawanOpen] = useState(false);
-  const [undangForm, setUndangForm] = useState({
-    emails: "",
-    jabatan: "",
-    divisi: ""
-  });
 
   const handleAddSchedule = () => {
     setJadwalForm({ id: "", type: "kerja", hari: "Senin", jamMulai: "08:00", jamSelesai: "17:00", keterangan: "" });
@@ -122,25 +128,52 @@ export default function KelolaPerusahaanPage() {
       {/* Main Content */}
       <div className="flex-1 px-5 py-5 flex flex-col gap-4 z-10">
         
-        {/* Ringkasan Lokasi Card */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col">
-          <div className="flex justify-between items-start">
-            <div className="flex gap-3">
-              <div className="w-10 h-10 bg-[#e6f0ea] rounded-[12px] flex items-center justify-center shrink-0">
-                <Building2 className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
-              </div>
-              <div className="flex flex-col justify-center">
-                <h2 className="text-[#1E4738] text-[15px] font-bold leading-tight mb-1">Ringkasan Lokasi</h2>
-                <p className="text-[#7d998c] text-[11px] font-medium">Lat/Long: {lat}, {lng}</p>
-              </div>
+        {/* Profile Header */}
+        <div className="flex items-center gap-4 mb-2">
+          <div className="relative cursor-pointer active:scale-95 transition-transform" onClick={() => fileInputRef.current?.click()}>
+            <div className="w-[84px] h-[84px] rounded-full overflow-hidden border-2 border-white shadow-sm bg-gray-100">
+              <img src={companyImage} alt="Company" className="w-full h-full object-cover" />
             </div>
-            <span className="bg-[#e6f0ea] text-[#356E3B] text-[11px] font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">
-              Radius {radius}m
-            </span>
+            <div className="absolute bottom-0 right-0 w-7 h-7 bg-[#1E4738] rounded-full border-[3px] border-white flex items-center justify-center">
+              <Camera className="w-3.5 h-3.5 text-white" />
+            </div>
+            <input 
+              type="file" 
+              accept="image/*"
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleImageChange}
+            />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <h1 className="text-[#111827] text-[17px] font-bold leading-tight">PT Teknologi Nusantara</h1>
+            <div className="flex items-center gap-1.5 text-[#356E3B] mt-1">
+              <Users className="w-4 h-4" />
+              <span className="text-[12px] font-bold">24 Anggota</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Lokasi Perusahaan Card */}
+        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
+              <Building2 className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
+            </div>
+            <h2 className="text-[#111827] text-[15px] font-bold">Lokasi Perusahaan</h2>
           </div>
 
+          <div className="bg-[#f4f6f5] rounded-[12px] p-3 flex items-center gap-2 mb-4">
+            <MapPin className="w-4 h-4 text-[#7d998c]" />
+            <span className="text-[#7d998c] text-[12px] font-mono">Lat/Long: <span className="font-bold text-[#111827]">{lat}, {lng}</span></span>
+          </div>
+
+          <p className="text-[#4B5563] text-[13px] leading-relaxed mb-4">
+            Jl. Asia Afrika No. 142, Kebon Pisang, Sumur, Bandung, Kota Bandung, Jawa Barat 40112
+          </p>
+
           {/* Mock Map */}
-          <div className="relative w-full h-[140px] bg-[#eef5f0] rounded-[16px] overflow-hidden my-5 border border-[#dce9df]">
+          <div className="relative w-full h-[120px] bg-[#eef5f0] rounded-[16px] overflow-hidden mb-4 border border-[#dce9df]">
             {/* SVG Roads / Paths */}
             <svg className="absolute inset-0 w-full h-full text-[#cce0d4]" preserveAspectRatio="none" viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg">
               <path d="M-20,70 Q100,40 180,90 T320,60" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="6,6" />
@@ -148,7 +181,7 @@ export default function KelolaPerusahaanPage() {
               <path d="M100,-20 Q120,60 80,160" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="6,6" />
             </svg>
             {/* Center Radius */}
-            <div className="absolute top-[55%] left-[55%] -translate-x-1/2 -translate-y-1/2 bg-[#356E3B]/15 rounded-full border border-[#356E3B]/30 flex items-center justify-center transition-all duration-300" style={{ width: `${Math.max(40, radius * 0.72)}px`, height: `${Math.max(40, radius * 0.72)}px` }}>
+            <div className="absolute top-[55%] left-[55%] -translate-x-1/2 -translate-y-1/2 bg-[#356E3B]/15 rounded-full border border-[#356E3B]/30 flex items-center justify-center transition-all duration-300" style={{ width: `80px`, height: `80px` }}>
               {/* Pin */}
               <div className="w-[14px] h-[14px] bg-[#1E4738] rounded-full border-2 border-white shadow-sm ring-4 ring-[#1E4738]/20 relative">
                 <div className="absolute top-[12px] left-1/2 -translate-x-1/2 w-1 h-2 bg-[#1E4738]/40 blur-sm rounded-full"></div>
@@ -158,21 +191,21 @@ export default function KelolaPerusahaanPage() {
 
           <button 
             onClick={openModal}
-            className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-[0_4px_12px_rgba(53,110,59,0.15)]"
+            className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-sm"
           >
             <Pencil className="w-4 h-4" strokeWidth={2} />
             Ubah Lokasi
           </button>
         </div>
 
-        {/* Jam Kerja, Divisi & Jabatan Card */}
+        {/* Jam Kerja Card */}
         <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col">
           <div className="flex justify-between items-center pb-4 border-b border-gray-100">
             <div className="flex gap-3 items-center">
-              <div className="w-9 h-9 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
-                <Clock className="w-4 h-4 text-[#356E3B]" strokeWidth={2} />
+              <div className="w-10 h-10 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
               </div>
-              <h2 className="text-[#1E4738] text-[15px] font-bold">Jam Kerja, Divisi & Jabatan</h2>
+              <h2 className="text-[#111827] text-[15px] font-bold">Jam Kerja</h2>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
           </div>
@@ -184,11 +217,11 @@ export default function KelolaPerusahaanPage() {
             </div>
             
             <div className="flex flex-col gap-2.5 ml-5">
-              <div className="flex justify-between items-center text-[13px] text-[#1E4738] font-bold">
+              <div className="flex justify-between items-center text-[13px] text-[#111827] font-bold">
                 <span>Sen – Jum</span>
                 <span>08:00 – 17:00</span>
               </div>
-              <div className="flex justify-between items-center text-[13px] text-[#1E4738] font-bold">
+              <div className="flex justify-between items-center text-[13px] text-[#111827] font-bold">
                 <span>Sab</span>
                 <span>08:00 – 12:00</span>
               </div>
@@ -197,64 +230,37 @@ export default function KelolaPerusahaanPage() {
 
           <button 
             onClick={() => setIsKelolaJadwalOpen(true)}
-            className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 mt-2 transition-transform active:scale-[0.98] shadow-[0_4px_12px_rgba(53,110,59,0.15)]"
+            className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 mt-2 transition-transform active:scale-[0.98] shadow-sm"
           >
             <Pencil className="w-4 h-4" strokeWidth={2} />
             Kelola
           </button>
         </div>
 
-
-        {/* Undang Karyawan Card */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col">
-          <div className="flex justify-between items-center pb-4 border-b border-gray-100">
-            <div className="flex gap-3 items-center">
-              <div className="w-9 h-9 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
-                <UserPlus className="w-4 h-4 text-[#356E3B]" strokeWidth={2} />
-              </div>
-              <h2 className="text-[#1E4738] text-[15px] font-bold">Undang Karyawan</h2>
+        {/* Kode Perusahaan Card */}
+        <div 
+          onClick={() => setIsTambahKaryawanOpen(true)}
+          className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex items-center gap-4 cursor-pointer hover:bg-gray-50 active:scale-[0.98] transition-all"
+        >
+          <div className="w-[84px] h-[84px] bg-[#f4f6f5] rounded-[16px] flex items-center justify-center shrink-0 border border-gray-100">
+             <QrCode className="w-14 h-14 text-[#111827]" />
+          </div>
+          <div className="flex flex-col justify-center flex-1">
+            <span className="text-[#7d998c] text-[11px] font-medium mb-1">Kode Perusahaan</span>
+            <div className="flex items-center justify-between">
+              <span className="text-[#111827] text-[20px] font-bold tracking-wider">ABC123</span>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText("ABC123");
+                  alert("Kode berhasil disalin!");
+                }}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-[#356E3B] transition-colors"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
             </div>
-            <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
           </div>
-
-          <div className="flex flex-col gap-1 py-4">
-            <p className="text-[#7d998c] text-[12px] font-medium leading-relaxed">
-              Undang karyawan bergabung ke dalam perusahaan Anda via Email massal.
-            </p>
-          </div>
-
-          <button 
-            onClick={() => setIsUndangKaryawanOpen(true)}
-            className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 mt-1 transition-transform active:scale-[0.98] shadow-[0_4px_12px_rgba(53,110,59,0.15)]"
-          >
-            Undang via Email
-          </button>
-        </div>
-
-        {/* Tambah Karyawan Card */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col">
-          <div className="flex justify-between items-center pb-4 border-b border-gray-100">
-            <div className="flex gap-3 items-center">
-              <div className="w-9 h-9 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
-                <QrCode className="w-4 h-4 text-[#356E3B]" strokeWidth={2} />
-              </div>
-              <h2 className="text-[#1E4738] text-[15px] font-bold">Tambah Karyawan</h2>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
-          </div>
-
-          <div className="flex flex-col gap-1 py-4">
-            <p className="text-[#7d998c] text-[12px] font-medium leading-relaxed">
-              Bagikan kode QR atau salin kode unik untuk dibagikan secara instan.
-            </p>
-          </div>
-
-          <button 
-            onClick={() => setIsTambahKaryawanOpen(true)}
-            className="w-full bg-white border border-[#356E3B] text-[#356E3B] hover:bg-[#f4f9f6] font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 mt-1 transition-colors active:scale-[0.98]"
-          >
-            Tampilkan QR/Kode
-          </button>
         </div>
 
       </div>
@@ -623,109 +629,7 @@ export default function KelolaPerusahaanPage() {
           </div>
         </div>
       )}
-      {/* Modal Undang Karyawan (Email) */}
-      {isUndangKaryawanOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/40 transition-opacity"
-            onClick={() => setIsUndangKaryawanOpen(false)}
-          />
-          
-          {/* Bottom Sheet */}
-          <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300">
-            {/* Drag handle */}
-            <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1"></div>
-            
-            {/* Modal Header */}
-            <div className="flex justify-between items-center px-6 py-4">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-[#e6f0ea] rounded-full flex items-center justify-center">
-                  <UserPlus className="w-4 h-4 text-[#356E3B]" strokeWidth={2} />
-                </div>
-                <h2 className="text-[#1E4738] text-[17px] font-bold">Undang Karyawan</h2>
-              </div>
-              <button 
-                onClick={() => setIsUndangKaryawanOpen(false)}
-                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="flex-1 overflow-y-auto px-6 pb-8 flex flex-col gap-6 mt-2">
-              
-              {/* Email Massal */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[#1E4738] text-[13px] font-bold">
-                  Email Massal <span className="text-[#e11d48]">*</span>
-                </label>
-                <textarea 
-                  placeholder="Pisahkan dengan koma (,)"
-                  value={undangForm.emails}
-                  onChange={(e) => setUndangForm({ ...undangForm, emails: e.target.value })}
-                  className="w-full border border-gray-200 rounded-[12px] px-4 py-3.5 text-[14px] text-[#1E4738] placeholder-gray-400 outline-none focus:border-[#356E3B] transition-colors resize-none h-[100px]"
-                />
-                <span className="text-[11px] text-gray-400 font-medium">contoh: user1@email.com, user2@email.com</span>
-              </div>
-
-              {/* Pilih Jabatan */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[#1E4738] text-[13px] font-bold">
-                  Pilih Jabatan <span className="text-[#e11d48]">*</span>
-                </label>
-                <div className="relative">
-                  <CustomSelect
-                    value={undangForm.jabatan}
-                    onChange={(val) => setUndangForm({ ...undangForm, jabatan: val })}
-                    placeholder="Pilih jabatan"
-                    options={[
-                      { value: "Manager", label: "Manager" },
-                      { value: "Staff", label: "Staff" },
-                      { value: "Intern", label: "Intern" }
-                    ]}
-                  />
-                </div>
-              </div>
-
-              {/* Pilih Divisi */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[#1E4738] text-[13px] font-bold">
-                  Pilih Divisi <span className="text-[#e11d48]">*</span>
-                </label>
-                <div className="relative">
-                  <CustomSelect
-                    value={undangForm.divisi}
-                    onChange={(val) => setUndangForm({ ...undangForm, divisi: val })}
-                    placeholder="Pilih divisi"
-                    options={[
-                      { value: "IT", label: "IT" },
-                      { value: "HRD", label: "HRD" },
-                      { value: "Finance", label: "Finance" }
-                    ]}
-                  />
-                </div>
-              </div>
-
-              {/* Kirim Button */}
-              <button 
-                onClick={() => {
-                  if (undangForm.emails && undangForm.jabatan && undangForm.divisi) {
-                    setIsUndangKaryawanOpen(false);
-                    setUndangForm({ emails: "", jabatan: "", divisi: "" });
-                  }
-                }}
-                disabled={!undangForm.emails || !undangForm.jabatan || !undangForm.divisi}
-                className={`w-full py-4 rounded-[16px] text-[14px] font-bold flex items-center justify-center gap-2 mt-2 transition-all shadow-[0_4px_12px_rgba(53,110,59,0.15)] ${undangForm.emails && undangForm.jabatan && undangForm.divisi ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' : 'bg-gray-200 text-gray-400 shadow-none'}`}
-              >
-                <Send className="w-4 h-4" strokeWidth={2} />
-                Kirim Undangan
-              </button>
-
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal Tambah Karyawan (QR/Kode) */}
       {isTambahKaryawanOpen && (
