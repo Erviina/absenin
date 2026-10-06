@@ -247,22 +247,23 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex justify-between mt-1">
+        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex justify-between items-start mt-1">
           {[
-            { icon: Calendar, label: "Jadwal\nAgenda", path: "/admin/agenda" },
-            { icon: FileCheck, label: "Kelola\nPerizinan", path: "/admin/izin" },
-            { icon: Users2, label: "Kelola\nKaryawan", path: "/admin/karyawan" },
-            { icon: Megaphone, label: "Buat\nBerita", path: "/admin/buat-berita" }
+            { icon: Calendar, label: "Jadwal", path: "/admin/agenda" },
+            { icon: FileCheck, label: "Perizinan", path: "/admin/izin" },
+            { icon: Users2, label: "Karyawan", path: "/admin/karyawan" },
+            { icon: FileText, label: "Laporan", path: "/admin/laporan-kehadiran" },
+            { icon: Megaphone, label: "Berita", path: "/admin/buat-berita" }
           ].map((item, i) => (
             <button 
               key={i} 
               onClick={() => router.push(item.path)}
-              className="flex flex-col items-center gap-2.5 text-center w-[60px] active:scale-95 transition-transform"
+              className="flex flex-col items-center gap-2 text-center w-[55px] active:scale-95 transition-transform group"
             >
-              <div className="w-[52px] h-[52px] bg-[#f0f6f2] rounded-[16px] flex items-center justify-center">
-                <item.icon className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />
+              <div className="w-[48px] h-[48px] bg-[#f4f9f6] border border-[#eef5f0] rounded-[16px] flex items-center justify-center group-hover:bg-[#e6f0ea] transition-colors">
+                <item.icon className="w-[20px] h-[20px] text-[#356E3B]" strokeWidth={1.5} />
               </div>
-              <span className="text-[11px] font-semibold text-[#1E4738] leading-[1.2] whitespace-pre-line">{item.label}</span>
+              <span className="text-[10px] font-bold text-[#1E4738] leading-[1.2]">{item.label}</span>
             </button>
           ))}
         </div>
