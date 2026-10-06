@@ -110,18 +110,6 @@ export default function DashboardPage() {
                 ))}
             </span>
           </div>
-            <span className="text-[#5C786C] text-[12px] font-medium leading-tight">Selamat datang,</span>
-            <span className="text-[#1E4738] text-[17px] font-bold leading-tight flex items-center gap-1">
-              {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
-              {(user?.roles?.includes("Admin") || user?.roles?.includes("Manager")) && (
-                isProfileDropdownOpen ? (
-                  <ChevronUp className="w-4 h-4 text-[#1E4738]" strokeWidth={2.5} />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-[#1E4738]" strokeWidth={2.5} />
-                )
-              )}
-            </span>
-          </div>
 
           {/* Dropdown Profile */}
           {(user?.roles?.includes("Admin") || user?.roles?.includes("Manager")) && isProfileDropdownOpen && (

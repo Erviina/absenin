@@ -242,8 +242,6 @@ Tabel `attendances` menyimpan data check-in pada `check_in_time`, `check_in_lati
 
 - satu user hanya boleh mempunyai satu record absensi aktif per hari;
 - check-in tidak boleh dilakukan apabila masih ada record hari itu yang sudah check-in dan belum check-out;
-- WFO harus melewati validasi radius lokasi kantor;
-- WFH tetap mencatat koordinat dan alamat, tetapi tidak perlu membatasi radius kantor;
 - waktu absensi berasal dari server/database, bukan dari waktu yang diketik user;
 - foto wajib berhasil diproses sebelum attendance disimpan;
 - check-out hanya dapat dilakukan terhadap attendance milik user yang belum mempunyai `check_out_time`;
