@@ -50,7 +50,19 @@ export default function AdminDashboardPage() {
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) {
-          router.push("/login");
+          // Gunakan mock data jika tidak ada token agar tidak perlu login
+          setCompany({ name: "PT Teknologi Nusantara", address: "Jakarta Selatan", memberCount: 15 });
+          setAttendanceStats({ hadir: 12, terlambat: 2, izin: 1, belum: 0, total: 15 });
+          setLeaveStats({ total: 1, sakit: 0, cuti: 1, izin: 0 });
+          setActivities([
+            { type: 'leave', author: 'Budi Santoso', start_date: '2025-10-10', end_date: '2025-10-12', created_at: new Date().toISOString() },
+            { type: 'join', author: 'Siti Aminah', created_at: new Date(Date.now() - 3600000).toISOString() },
+            { type: 'news', title: 'Rapat Evaluasi Bulanan', created_at: new Date(Date.now() - 86400000).toISOString() }
+          ]);
+          setIsLoading(false);
+          setIsStatsLoading(false);
+          setIsLeaveStatsLoading(false);
+          setIsActivitiesLoading(false);
           return;
         }
 
@@ -106,13 +118,13 @@ export default function AdminDashboardPage() {
       }
     };
     fetchDashboardData();
-  }, [router]);
+  }, []);
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       
       {/* Header */}
-      <TopBar title="Kelola Perusahaan" />
+      <TopBar title="Kelola Perusahaan" onBack={() => router.push("/dashboard")} />
 
       {/* Main Content */}
       <div className="flex-1 px-5 py-5 flex flex-col gap-4 z-10 relative">
