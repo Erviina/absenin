@@ -87,7 +87,7 @@ Role disimpan di tabel `profile_roles`, sehingga satu profile dapat memiliki beb
 | Lihat data absensi karyawan | ❌ | ✅ | ✅ |
 | Ajukan izin | ✅ | ✅ | ✅ |
 | Approve/reject izin | ❌ | ✅ | ✅ |
-| Kelola agenda | ❌* | ✅ | ✅ |
+| Kelola agenda | ✅ | ✅ | ✅ |
 | Buat/edit berita | ❌ | ✅ | ✅ |
 | Lihat berita | ✅ | ✅ | ✅ |
 | Ubah setting perusahaan | ❌ | ❌ | ✅ |

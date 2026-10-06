@@ -18,3 +18,32 @@ export const profileRoles = pgTable("profile_roles", {
   profile_id: uuid("profile_id"),
   role: text("role"),
 });
+
+export const newsCategories = pgTable("news_categories", {
+  id: uuid("id").primaryKey(),
+  name: text("name").unique(),
+  description: text("description"),
+  created_at: timestamp("created_at", { withTimezone: true }),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+  deleted_at: timestamp("deleted_at", { withTimezone: true }),
+  created_by: uuid("created_by"),
+  updated_by: uuid("updated_by"),
+  deleted_by: uuid("deleted_by"),
+});
+
+export const news = pgTable("news", {
+  id: uuid("id").primaryKey(),
+  company_id: uuid("company_id").references(() => companies.id),
+  author_id: uuid("author_id").references(() => profiles.id),
+  title: varchar("title"),
+  content: text("content"),
+  cover_image_url: text("cover_image_url"),
+  news_category_id: uuid("news_category_id").references(() => newsCategories.id),
+  created_at: timestamp("created_at", { withTimezone: true }),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+  deleted_at: timestamp("deleted_at", { withTimezone: true }),
+  created_by: uuid("created_by"),
+  updated_by: uuid("updated_by"),
+  deleted_by: uuid("deleted_by"),
+  profile_id: uuid("profile_id").references(() => profiles.id),
+});
