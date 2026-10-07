@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, date as pgDate } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, text, timestamp, date as pgDate, boolean } from "drizzle-orm/pg-core";
 
 export const companies = pgTable("companies", {
   id: uuid("id").primaryKey(),
@@ -80,4 +80,20 @@ export const leaveRequests = pgTable("leave_requests", {
   deleted_by: uuid("deleted_by"),
 });
 
-
+export const tasks = pgTable("tasks", {
+  id: uuid("id").primaryKey(),
+  profile_id: uuid("profile_id").references(() => profiles.id),
+  company_id: uuid("company_id").references(() => companies.id),
+  title: varchar("title"),
+  date: pgDate("date"),
+  time: varchar("time"),
+  note: text("note"),
+  completed: boolean("completed").default(false),
+  type: varchar("type"), // 'personal' or 'group'
+  created_at: timestamp("created_at", { withTimezone: true }),
+  updated_at: timestamp("updated_at", { withTimezone: true }),
+  deleted_at: timestamp("deleted_at", { withTimezone: true }),
+  created_by: uuid("created_by"),
+  updated_by: uuid("updated_by"),
+  deleted_by: uuid("deleted_by"),
+});

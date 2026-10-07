@@ -16,6 +16,7 @@ import joinRequestsRoutes from "./routes/join-requests";
 import profileRoutes from "./routes/profile";
 import newsRoutes from "./routes/news";
 import leavesRoutes from "./routes/leaves";
+import tasksRoutes from "./routes/tasks";
 
 app.use(cors());
 app.use(express.json());
@@ -27,6 +28,7 @@ app.use("/api/company/join-requests", joinRequestsRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/leaves", leavesRoutes);
+app.use("/api/tasks", tasksRoutes);
 
 app.get("/api/health", async (req: Request, res: Response) => {
   try {
