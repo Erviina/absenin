@@ -62,21 +62,14 @@ export default function DashboardPage() {
       
       {/* Header */}
       <div className="flex justify-between items-center px-6 pt-6 pb-4 bg-[#fbfdfc] sticky top-0 z-20">
-        <div 
-          className="flex items-center gap-3 relative"
-          onClick={() => {
-            const isManagement =
-              user?.roles?.includes("Admin") ||
-              user?.roles?.includes("Manager");
-
-            if (isManagement) {
-              setIsProfileDropdownOpen(!isProfileDropdownOpen);
-            } else {
-              router.push("/profil");
-            }
-          }}
-        >
-          {user?.avatarUrl && !avatarError ? (
+        <div className="flex items-center gap-3 relative">
+          
+          {/* Avatar (Click to Profile) */}
+          <div 
+            onClick={() => router.push("/profil")}
+            className="cursor-pointer shrink-0"
+          >
+            {user?.avatarUrl && !avatarError ? (
             <img
               src={user.avatarUrl}
               alt="Avatar"
@@ -84,10 +77,25 @@ export default function DashboardPage() {
               onError={() => setAvatarError(true)}
             />
           ) : (
-            <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full shrink-0"></div>
+            <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full"></div>
           )}
+          </div>
 
-          <div className="flex flex-col cursor-pointer select-none">
+          {/* Name & Dropdown Toggle */}
+          <div 
+            className="flex flex-col cursor-pointer select-none"
+            onClick={() => {
+              const isManagement =
+                user?.roles?.includes("Admin") ||
+                user?.roles?.includes("Manager");
+
+              if (isManagement) {
+                setIsProfileDropdownOpen(!isProfileDropdownOpen);
+              } else {
+                router.push("/profil");
+              }
+            }}
+          >
             <span className="text-[#5C786C] text-[12px] font-medium leading-tight">
               Selamat datang,
             </span>
