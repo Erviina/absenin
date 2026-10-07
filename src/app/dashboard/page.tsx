@@ -208,7 +208,10 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center">
             <h2 className="text-[18px] font-bold text-[#1E4738]">Berita Terbaru</h2>
-            <button className="text-[#356E3B] text-[13px] font-medium flex items-center gap-1 hover:underline">
+            <button 
+              onClick={() => router.push("/berita")}
+              className="text-[#356E3B] text-[13px] font-medium flex items-center gap-1 hover:underline active:scale-95 transition-transform"
+            >
               Lihat Semua
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

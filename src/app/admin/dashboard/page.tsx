@@ -253,7 +253,7 @@ export default function AdminDashboardPage() {
             { icon: FileCheck, label: "Perizinan", path: "/admin/izin" },
             { icon: Users2, label: "Karyawan", path: "/admin/karyawan" },
             { icon: FileText, label: "Laporan", path: "/admin/laporan-kehadiran" },
-            { icon: Megaphone, label: "Berita", path: "/admin/buat-berita" }
+            { icon: Megaphone, label: "Berita", path: "/admin/berita" }
           ].map((item, i) => (
             <button 
               key={i} 
