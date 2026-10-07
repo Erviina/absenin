@@ -2,57 +2,70 @@
 
 import { ChevronLeft, Search, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminBottomNav } from "@/components/admin-bottom-nav";
 import { TopBar } from "@/components/TopBar";
 
-type IzinStatus = "Menunggu" | "Disetujui" | "Ditolak";
-type IzinType = "Cuti" | "Izin Sakit";
-
-interface IzinRequest {
+// Types mapped from backend
+type IzinRequest = {
   id: string;
   name: string;
-  type: IzinType;
-  status: IzinStatus;
-  date: string;
-  duration: string;
+  type: string;
+  status: string;
+  start_date: string;
+  end_date: string;
   reason: string;
-}
-
-const initialData: IzinRequest[] = [
-  {
-    id: "1",
-    name: "Ayu Lestari",
-    type: "Cuti",
-    status: "Menunggu",
-    date: "12 – 16 Sep 2025",
-    duration: "5 Hari Kerja",
-    reason: "Libur tahunan bersama keluarga keluar kota."
-  },
-  {
-    id: "2",
-    name: "Citra Dewi",
-    type: "Izin Sakit",
-    status: "Disetujui",
-    date: "8 – 12 Sep 2025",
-    duration: "5 Hari",
-    reason: "Sakit demam"
-  }
-];
+  attachment_url?: string;
+};
 
 export default function KelolaIzinPage() {
   const router = useRouter();
   
-  const [data, setData] = useState<IzinRequest[]>(initialData);
+  const [data, setData] = useState<IzinRequest[]>([]);
   const [selectAll, setSelectAll] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]); 
-  const [activeFilter, setActiveFilter] = useState<string>("Semua");
+  const [activeFilter, setFilter] = useState<string>("Semua");
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch Leaves
+  const fetchLeaves = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/admin", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const resData = await res.json();
+      if (resData.success) {
+        const mappedData = resData.data.map((item: any) => ({
+          id: item.id,
+          name: item.employee_name || "Unknown",
+          type: item.category_name || "Lainnya",
+          status: item.status,
+          start_date: item.start_date,
+          end_date: item.end_date,
+          reason: item.description || "-",
+          attachment_url: item.attachment_url || undefined
+        }));
+        setData(mappedData);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeaves();
+  }, []);
 
   const filteredData = data.filter(item => {
     if (activeFilter === "Semua") return true;
     if (activeFilter === "Menunggu") return item.status === "Menunggu";
-    if (activeFilter === "Cuti Tahunan") return item.type === "Cuti";
-    if (activeFilter === "Izin Sakit") return item.type === "Izin Sakit";
+    if (activeFilter === "Cuti Tahunan") return item.type.toLowerCase().includes("cuti");
+    if (activeFilter === "Izin Sakit") return item.type.toLowerCase().includes("sakit");
     return true;
   });
 
@@ -78,21 +91,67 @@ export default function KelolaIzinPage() {
     }
   };
 
-  const handleApprove = (id: string) => {
-    setData(data.map(item => item.id === id ? { ...item, status: "Disetujui" } : item));
-    setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+  const updateStatus = async (id: string, status: string) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/leaves/${id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status })
+      });
+      
+      if (res.ok) {
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error updating status:", error);
+      return false;
+    }
   };
 
-  const handleReject = (id: string) => {
-    setData(data.map(item => item.id === id ? { ...item, status: "Ditolak" } : item));
-    setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+  const handleApprove = async (id: string) => {
+    const success = await updateStatus(id, "Disetujui");
+    if (success) {
+      setData(data.map(item => item.id === id ? { ...item, status: "Disetujui" } : item));
+      setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+    } else {
+      alert("Gagal memperbarui status.");
+    }
   };
 
-  const handleApproveSelected = () => {
+  const handleReject = async (id: string) => {
+    const success = await updateStatus(id, "Ditolak");
+    if (success) {
+      setData(data.map(item => item.id === id ? { ...item, status: "Ditolak" } : item));
+      setSelectedItems(selectedItems.filter(itemId => itemId !== id));
+    } else {
+      alert("Gagal memperbarui status.");
+    }
+  };
+
+  const handleApproveSelected = async () => {
     if (selectedItems.length === 0) return;
-    setData(data.map(item => selectedItems.includes(item.id) ? { ...item, status: "Disetujui" } : item));
-    setSelectedItems([]);
-    setSelectAll(false);
+    
+    let successCount = 0;
+    for (const id of selectedItems) {
+      const success = await updateStatus(id, "Disetujui");
+      if (success) successCount++;
+    }
+    
+    if (successCount > 0) {
+      setData(data.map(item => selectedItems.includes(item.id) ? { ...item, status: "Disetujui" } : item));
+      setSelectedItems([]);
+      setSelectAll(false);
+      alert(`${successCount} pengajuan berhasil disetujui.`);
+    } else {
+      alert("Gagal menyetujui pengajuan.");
+    }
   };
 
   return (
@@ -120,7 +179,7 @@ export default function KelolaIzinPage() {
             <button 
               key={filter}
               onClick={() => {
-                setActiveFilter(filter);
+                setFilter(filter);
                 setSelectAll(false);
                 setSelectedItems([]);
               }}
@@ -175,10 +234,12 @@ export default function KelolaIzinPage() {
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <h3 className="text-[#1E4738] text-[15px] font-bold leading-none">{item.name}</h3>
-                    {item.type === "Cuti" ? (
+                    {item.type.toLowerCase().includes("cuti") ? (
                       <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2 py-0.5 rounded-md w-fit">Cuti</span>
-                    ) : (
+                    ) : item.type.toLowerCase().includes("sakit") ? (
                       <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2 py-0.5 rounded-md w-fit border border-[#ffedd5]">Izin Sakit</span>
+                    ) : (
+                      <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2 py-0.5 rounded-md w-fit">{item.type}</span>
                     )}
                   </div>
                 </div>
@@ -196,11 +257,54 @@ export default function KelolaIzinPage() {
 
               <div className="bg-[#f8faf9] rounded-xl p-3.5 flex flex-col gap-1.5 mt-1 ml-7">
                 <div className="text-[13px] text-[#1E4738] font-semibold">
-                  {item.date} <span className="text-[#94a3b8] font-medium">({item.duration})</span>
+                  {(() => {
+                    const start = new Date(item.start_date);
+                    const end = new Date(item.end_date);
+                    const diffTime = Math.abs(end.getTime() - start.getTime());
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                    
+                    const sDate = start.getDate();
+                    const sMonth = start.toLocaleDateString('id-ID', { month: 'short' });
+                    const sYear = start.getFullYear();
+                    
+                    const eDate = end.getDate();
+                    const eMonth = end.toLocaleDateString('id-ID', { month: 'short' });
+                    const eYear = end.getFullYear();
+                    
+                    let dateDisplay = "";
+                    if (sYear !== eYear) {
+                      dateDisplay = `${sDate} ${sMonth} ${sYear} - ${eDate} ${eMonth} ${eYear}`;
+                    } else if (sMonth !== eMonth) {
+                      dateDisplay = `${sDate} ${sMonth} - ${eDate} ${eMonth} ${eYear}`;
+                    } else if (sDate !== eDate) {
+                      dateDisplay = `${sDate} - ${eDate} ${eMonth} ${eYear}`;
+                    } else {
+                      dateDisplay = `${sDate} ${sMonth} ${eYear}`;
+                    }
+                    
+                    return (
+                      <>
+                        {dateDisplay} <span className="text-[#94a3b8] font-medium">({diffDays} Hari)</span>
+                      </>
+                    )
+                  })()}
                 </div>
                 <div className="text-[12px] text-[#64748b] leading-snug">
                   <span className="font-semibold text-[#1E4738]">Alasan:</span> {item.reason}
                 </div>
+                {item.attachment_url && (
+                  <div className="mt-1 pt-2 border-t border-[#dce9df]">
+                    <a 
+                      href={item.attachment_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#356E3B] hover:underline"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                      Lihat Lampiran Dokumen
+                    </a>
+                  </div>
+                )}
               </div>
 
               {item.status === "Menunggu" && (

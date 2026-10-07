@@ -33,12 +33,41 @@ function AdminKaryawanView() {
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
   const [selectedEmployeeForRole, setSelectedEmployeeForRole] = useState<any>(null);
 
-  // State untuk Permintaan Bergabung
-  const [joinRequests, setJoinRequests] = useState([
-    { id: '1', name: 'Rina Aprilia', email: 'rina@perusahaan.com' },
-    { id: '2', name: 'Fajar Nugroho', email: 'fajar@perusahaan.com' },
-    { id: '3', name: 'Siti Aisyah', email: 'siti@perusahaan.com' }
-  ]);
+  // State untuk Permintaan Bergabung & Karyawan
+  const [joinRequests, setJoinRequests] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const [reqRes, empRes] = await Promise.all([
+        fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", { headers }),
+        fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/employees", { headers })
+      ]);
+
+      const reqData = await reqRes.json();
+      if (reqData.success) {
+        setJoinRequests(reqData.data);
+      }
+
+      const empData = await empRes.json();
+      if (empData.success) {
+        setEmployees(empData.data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
 
   const toggleSelectAllReq = () => {
@@ -57,11 +86,29 @@ function AdminKaryawanView() {
     }
   };
 
-  const handleTerimaReq = () => {
+  const handleTerimaReq = async () => {
     if (selectedRequests.length === 0) return;
-    alert(`${selectedRequests.length} karyawan berhasil diterima!`);
-    setJoinRequests(joinRequests.filter(req => !selectedRequests.includes(req.id)));
-    setSelectedRequests([]);
+    
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      
+      const promises = selectedRequests.map(reqId => 
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests/${reqId}/approve`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      );
+      
+      await Promise.all(promises);
+      
+      alert(`${selectedRequests.length} karyawan berhasil diterima!`);
+      setSelectedRequests([]);
+      fetchData(); // refresh list
+    } catch (error) {
+      console.error(error);
+      alert("Terjadi kesalahan saat menyetujui permintaan.");
+    }
   };
 
   return (
@@ -102,7 +149,7 @@ function AdminKaryawanView() {
               <Users className="w-6 h-6 text-[#356E3B]" strokeWidth={1.5} />
             </div>
             <div className="flex flex-col">
-              <span className="text-[#111827] text-[20px] font-bold leading-none mb-1">24</span>
+              <span className="text-[#111827] text-[20px] font-bold leading-none mb-1">{employees.length}</span>
               <span className="text-gray-400 text-[11px] font-medium leading-tight">Total Karyawan</span>
             </div>
           </div>
@@ -113,7 +160,7 @@ function AdminKaryawanView() {
                 <Clock className="w-5 h-5 text-[#f59e0b]" strokeWidth={2} />
               </div>
               <div className="flex flex-col">
-                <span className="text-[#111827] text-[20px] font-bold leading-none mb-1">3</span>
+                <span className="text-[#111827] text-[20px] font-bold leading-none mb-1">{joinRequests.length}</span>
                 <span className="text-gray-400 text-[11px] font-medium leading-tight">Persetujuan</span>
               </div>
             </div>
@@ -163,7 +210,7 @@ function AdminKaryawanView() {
                    <User className="w-5 h-5" strokeWidth={2.5} />
                  </div>
                  <div className="flex flex-col flex-1 overflow-hidden">
-                   <span className="text-[#111827] text-[13px] font-bold truncate">{item.name}</span>
+                   <span className="text-[#111827] text-[13px] font-bold truncate">{item.full_name || "User"}</span>
                    <span className="text-gray-400 text-[11px] truncate">{item.email}</span>
                  </div>
                  <span className="text-[#f59e0b] border border-[#f59e0b]/30 bg-[#fff8ef] text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
@@ -191,12 +238,7 @@ function AdminKaryawanView() {
           </div>
 
           <div className="flex flex-col gap-2">
-            {[
-              { name: 'Ayu Lestari', email: 'ayu@perusahaan.com', role: 'Manajemen', attend: '18/20' },
-              { name: 'Budi Santoso', email: 'budi@perusahaan.com', role: 'Karyawan', attend: '16/20' },
-              { name: 'Citra Dewi', email: 'citra@perusahaan.com', role: 'Karyawan', attend: '17/20' },
-              { name: 'Dika Pratama', email: 'dika@perusahaan.com', role: 'Karyawan', attend: '15/20' }
-            ].map((item, i) => (
+            {employees.map((item, i) => (
                <div 
                  key={i} 
                  className="flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] cursor-pointer hover:border-[#dce9df] transition-colors"

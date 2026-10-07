@@ -146,4 +146,56 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
   }
 });
 
+// GET /api/company/employees
+router.get("/employees", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+
+    // 1. Get user profile and company_id
+    const profileRes = await db.execute(sql`
+      SELECT company_id FROM profiles WHERE id = ${user.id}
+    `);
+
+    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden",
+        errors: ["Anda tidak terhubung ke perusahaan manapun"],
+      });
+    }
+
+    const companyId = profileRes.rows[0].company_id;
+
+    // 2. Fetch employees for this company
+    const employeesRes = await db.execute(sql`
+      SELECT 
+        p.id, 
+        p.full_name as name, 
+        p.email, 
+        p.avatar_url,
+        COALESCE(
+          (SELECT role FROM profile_roles WHERE profile_id = p.id ORDER BY role ASC LIMIT 1),
+          'Karyawan'
+        ) as role
+      FROM profiles p
+      WHERE p.company_id = ${companyId} AND p.deleted_at IS NULL
+      ORDER BY p.full_name ASC
+    `);
+
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil daftar karyawan",
+      data: employeesRes.rows,
+    });
+
+  } catch (error: any) {
+    console.error("Get company employees error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      errors: [error.message],
+    });
+  }
+});
+
 export default router;
