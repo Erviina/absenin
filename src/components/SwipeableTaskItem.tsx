@@ -16,15 +16,18 @@ interface SwipeableTaskItemProps {
   onToggle: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onClick?: (id: string) => void;
 }
 
-export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: SwipeableTaskItemProps) {
+export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }: SwipeableTaskItemProps) {
   const [translateX, setTranslateX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const startDragTime = useRef<number>(0);
 
   const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
     setIsDragging(true);
+    startDragTime.current = Date.now();
     if ('touches' in e) {
       touchStartX.current = e.touches[0].clientX;
     } else {
@@ -53,8 +56,26 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: Swipeabl
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent | React.MouseEvent) => {
     setIsDragging(false);
+    
+    // Check if it's a tap/click
+    if (touchStartX.current !== null && onClick) {
+      let currentX = 0;
+      if ('changedTouches' in e) {
+        currentX = e.changedTouches[0].clientX;
+      } else {
+        currentX = (e as React.MouseEvent).clientX;
+      }
+      const diff = Math.abs(currentX - touchStartX.current);
+      const timeDiff = Date.now() - startDragTime.current;
+      
+      // If moved less than 10px and took less than 500ms, it's a click
+      if (diff < 10 && timeDiff < 500 && translateX === 0) {
+        onClick(task.id);
+      }
+    }
+
     if (translateX < -50) {
       setTranslateX(-140); // Snap open
     } else {
@@ -71,7 +92,8 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: Swipeabl
         style={{ visibility: translateX === 0 && !isDragging ? 'hidden' : 'visible' }}
       >
         <button 
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             onEdit(task.id);
             setTranslateX(0);
           }}
@@ -81,7 +103,8 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: Swipeabl
           <span className="text-[11px] font-bold">Ubah</span>
         </button>
         <button 
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             onDelete(task.id);
             setTranslateX(0);
           }}
@@ -94,7 +117,7 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: Swipeabl
 
       {/* Foreground Task Card */}
       <div 
-        className={`absolute inset-0 bg-white border border-[#E8F3EB] rounded-[20px] shadow-sm flex justify-between items-center px-4 ${isDragging ? "" : "transition-transform ease-out duration-300"}`}
+        className={`absolute inset-0 bg-white border border-[#E8F3EB] rounded-[20px] shadow-sm flex justify-between items-center px-4 ${isDragging ? "" : "transition-transform ease-out duration-300"} ${onClick && translateX === 0 ? "cursor-pointer" : ""}`}
         style={{ transform: `translateX(${translateX}px)`, zIndex: 10 }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -102,7 +125,7 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete }: Swipeabl
         onMouseDown={handleTouchStart}
         onMouseMove={(e) => touchStartX.current !== null && handleTouchMove(e)}
         onMouseUp={handleTouchEnd}
-        onMouseLeave={() => touchStartX.current !== null && handleTouchEnd()}
+        onMouseLeave={(e) => touchStartX.current !== null && handleTouchEnd(e)}
       >
         <div className="flex flex-col flex-1 pr-4">
           <span className={`text-[14px] font-bold leading-tight mb-1 ${task.completed ? "text-[#9CA3AF] line-through" : "text-[#111827]"}`}>

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { tasks, profiles } from "../db/schema";
-import { eq, desc, or, and } from "drizzle-orm";
+import { eq, desc, or, and, isNull } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import crypto from "crypto";
 
@@ -20,15 +20,29 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
     const companyId = profileRes[0]?.company_id;
 
     const conditions = [];
-    conditions.push(and(eq(tasks.profile_id, profileId), eq(tasks.type, "personal")));
+    conditions.push(and(eq(tasks.profile_id, profileId), isNull(tasks.company_id)));
     
     if (companyId) {
-      conditions.push(and(eq(tasks.company_id, companyId), eq(tasks.type, "group")));
+      conditions.push(eq(tasks.company_id, companyId));
     }
 
     const userTasks = await db.select().from(tasks).where(or(...conditions)).orderBy(desc(tasks.created_at));
 
-    res.json(userTasks);
+    const formattedTasks = userTasks.map(t => {
+      const d = t.deadline ? new Date(t.deadline) : null;
+      return {
+        id: t.id,
+        title: t.title,
+        date: d ? d.toISOString().split("T")[0] : null,
+        time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
+        note: t.notes || "",
+        completed: t.is_completed,
+        type: t.company_id ? "group" : "personal",
+        created_at: t.created_at
+      };
+    });
+
+    res.json(formattedTasks);
   } catch (error: any) {
     console.error("Error fetching tasks:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -61,6 +75,9 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
       }
     }
 
+    const deadlineStr = `${date || new Date().toISOString().split("T")[0]}T${time || "00:00"}:00Z`;
+    const deadline = new Date(deadlineStr);
+
     const [newTask] = await db
       .insert(tasks)
       .values({
@@ -68,17 +85,26 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
         profile_id: profileId,
         company_id: companyId,
         title,
-        date,
-        time,
-        note: note || null,
-        type: type || "personal",
-        completed: false,
+        deadline,
+        notes: note || null,
+        is_completed: false,
         created_at: new Date(),
         updated_at: new Date(),
+        created_by: profileId
       })
       .returning();
 
-    res.status(201).json(newTask);
+    const d = newTask.deadline ? new Date(newTask.deadline) : null;
+    res.status(201).json({
+      id: newTask.id,
+      title: newTask.title,
+      date: d ? d.toISOString().split("T")[0] : null,
+      time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
+      note: newTask.notes || "",
+      completed: newTask.is_completed,
+      type: newTask.company_id ? "group" : "personal",
+      created_at: newTask.created_at
+    });
   } catch (error: any) {
     console.error("Error creating task:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -104,32 +130,51 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
       return;
     }
 
-    // Only allow updating if it's the user's personal task, or if it's a group task in the user's company
     const profileRes = await db.select().from(profiles).where(eq(profiles.id, profileId));
     const companyId = profileRes[0]?.company_id;
 
-    if (existingTask[0].type === "personal" && existingTask[0].profile_id !== profileId) {
+    const isGroup = existingTask[0].company_id !== null;
+
+    if (!isGroup && existingTask[0].profile_id !== profileId) {
       res.status(403).json({ error: "Forbidden" });
       return;
-    } else if (existingTask[0].type === "group" && existingTask[0].company_id !== companyId) {
+    } else if (isGroup && existingTask[0].company_id !== companyId) {
       res.status(403).json({ error: "Forbidden" });
       return;
+    }
+
+    let updatedDeadline = existingTask[0].deadline;
+    if (date !== undefined || time !== undefined) {
+      const fallbackD = existingTask[0].deadline ? new Date(existingTask[0].deadline) : new Date();
+      const d = date !== undefined ? date : fallbackD.toISOString().split("T")[0];
+      const t = time !== undefined ? time : fallbackD.toISOString().split("T")[1].substring(0, 5);
+      updatedDeadline = new Date(`${d}T${t}:00Z`);
     }
 
     const [updatedTask] = await db
       .update(tasks)
       .set({
         title: title !== undefined ? title : existingTask[0].title,
-        date: date !== undefined ? date : existingTask[0].date,
-        time: time !== undefined ? time : existingTask[0].time,
-        note: note !== undefined ? note : existingTask[0].note,
-        completed: completed !== undefined ? completed : existingTask[0].completed,
+        deadline: updatedDeadline,
+        notes: note !== undefined ? note : existingTask[0].notes,
+        is_completed: completed !== undefined ? completed : existingTask[0].is_completed,
         updated_at: new Date(),
+        updated_by: profileId
       })
       .where(eq(tasks.id, taskId))
       .returning();
 
-    res.json(updatedTask);
+    const rd = updatedTask.deadline ? new Date(updatedTask.deadline) : null;
+    res.json({
+      id: updatedTask.id,
+      title: updatedTask.title,
+      date: rd ? rd.toISOString().split("T")[0] : null,
+      time: rd ? rd.toISOString().split("T")[1].substring(0, 5) : "00:00",
+      note: updatedTask.notes || "",
+      completed: updatedTask.is_completed,
+      type: updatedTask.company_id ? "group" : "personal",
+      created_at: updatedTask.created_at
+    });
   } catch (error: any) {
     console.error("Error updating task:", error);
     res.status(500).json({ error: "Internal Server Error" });
@@ -157,10 +202,12 @@ router.delete("/:id", authenticate, async (req: Request, res: Response): Promise
     const profileRes = await db.select().from(profiles).where(eq(profiles.id, profileId));
     const companyId = profileRes[0]?.company_id;
 
-    if (existingTask[0].type === "personal" && existingTask[0].profile_id !== profileId) {
+    const isGroup = existingTask[0].company_id !== null;
+
+    if (!isGroup && existingTask[0].profile_id !== profileId) {
       res.status(403).json({ error: "Forbidden" });
       return;
-    } else if (existingTask[0].type === "group" && existingTask[0].company_id !== companyId) {
+    } else if (isGroup && existingTask[0].company_id !== companyId) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }

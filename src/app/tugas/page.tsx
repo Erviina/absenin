@@ -137,8 +137,9 @@ export default function TugasPage() {
           setTasks([savedTask, ...tasks]);
         }
       } else {
-        const data = await res.json();
-        alert(data.error || "Gagal menyimpan tugas");
+        const data = await res.json().catch(() => ({}));
+        const errorMsg = data.error || data.message || data.errors?.[0] || `HTTP ${res.status}`;
+        alert(`Gagal menyimpan: ${errorMsg}`);
       }
     } catch (err) {
       console.error("Save error:", err);
@@ -303,6 +304,7 @@ export default function TugasPage() {
                 onToggle={toggleTask}
                 onEdit={handleEditTask}
                 onDelete={handleDeleteTask}
+                onClick={(id) => router.push(`/tugas/${id}`)}
               />
             ))}
           </div>
@@ -331,6 +333,7 @@ export default function TugasPage() {
                     onToggle={toggleTask}
                     onEdit={handleEditTask}
                     onDelete={handleDeleteTask}
+                    onClick={(id) => router.push(`/tugas/${id}`)}
                   />
                 ))}
               </div>
@@ -361,6 +364,7 @@ export default function TugasPage() {
                     onToggle={toggleTask}
                     onEdit={handleEditTask}
                     onDelete={handleDeleteTask}
+                    onClick={(id) => router.push(`/tugas/${id}`)}
                   />
                 ))}
               </div>
