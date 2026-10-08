@@ -168,7 +168,7 @@ export default function IzinPage() {
       }
     } catch (error) {
       console.error("Error submitting leave:", error);
-      alert(error?.message || "Network error");
+      alert((error as Error)?.message || "Network error");
     } finally {
       setIsLoading(false);
     }
