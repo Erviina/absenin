@@ -4,7 +4,7 @@ import { Home, FileText, ClipboardEdit } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface AdminBottomNavProps {
-  activeTab?: "beranda" | "absensi" | "izin" | "tugas";
+  activeTab?: "beranda" | "absensi" | "izin" | "tugas" | "berita";
 }
 
 export function AdminBottomNav({ activeTab = "beranda" }: AdminBottomNavProps) {

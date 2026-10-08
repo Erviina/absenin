@@ -171,6 +171,7 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
   }
 });
 
+
 router.get("/employees", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
@@ -253,6 +254,7 @@ router.get("/employees", authenticate, async (req: Request, res: Response): Prom
     });
   }
 });
+
 
 router.patch("/me", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
@@ -483,5 +485,6 @@ router.post("/avatar", authenticate, upload.single("avatar"), async (req: Reques
     });
   }
 });
+
 
 export default router;

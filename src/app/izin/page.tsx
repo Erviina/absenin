@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ChevronLeft, Plus, Calendar, ChevronDown, Clock, Trash2, FileText, Send, UploadCloud, Paperclip, ExternalLink, XCircle, CheckCircle2, CircleDot, Circle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/bottom-nav";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { CustomSelect } from "@/components/CustomSelect";
+import { createClient } from "@supabase/supabase-js";
 
 // Tipe Data untuk Pengajuan Izin
 type IzinRequest = {
@@ -19,25 +20,71 @@ type IzinRequest = {
 
 export default function IzinPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem("user");
+    if (!userData) {
+      router.push("/login");
+      return;
+    }
+    try {
+      setUser(JSON.parse(userData));
+    } catch (e) {
+      console.error("Failed to parse user data", e);
+    }
+  }, [router]);
   
   // State untuk form
   const [isAddingIzin, setIsAddingIzin] = useState(false);
   const [selectedIzinId, setSelectedIzinId] = useState<string | null>(null);
 
-  const [kategori, setKategori] = useState("Izin Sakit");
+  const [kategori, setKategori] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [noteText, setNoteText] = useState("");
   const [attachment, setAttachment] = useState<{name: string, size: string} | null>(null);
+  const [fileObj, setFileObj] = useState<File | null>(null);
   const [filterDate, setFilterDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("Semua Kategori");
 
-  // State untuk list pengajuan
-  const [pengajuanList, setPengajuanList] = useState<IzinRequest[]>([
-    { id: "1", type: "Izin Sakit", desc: "Pemeriksaan Dokter", dateStr: "19 Sep 2026", status: "Menunggu" },
-    { id: "2", type: "Cuti", desc: "3 Hari Kerja", dateStr: "25 - 27 Sep 2026", status: "Disetujui" },
-    { id: "3", type: "Cuti", desc: "Keperluan Bank & Dokumen", dateStr: "15 Sep 2026", status: "Ditolak" }
-  ]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [pengajuanList, setPengajuanList] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch categories and leaves
+  const fetchCategoriesAndLeaves = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      const headers = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+
+      // Fetch Categories
+      const catRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/categories", { headers });
+      const catData = await catRes.json();
+      if (catData.success) {
+        setCategories(catData.data);
+        if (catData.data.length > 0) setKategori(catData.data[0].id);
+      }
+
+      // Fetch Leaves
+      const leaveRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves", { headers });
+      const leaveData = await leaveRes.json();
+      if (leaveData.success) {
+        setPengajuanList(leaveData.data);
+      }
+    } catch (error) {
+      console.error("Error fetching leaves data:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategoriesAndLeaves();
+  }, []);
 
   // Handler hitung durasi kasaran
   const calculateDuration = () => {
@@ -51,31 +98,80 @@ export default function IzinPage() {
   };
 
   // Handler form submit
-  const handleSubmit = () => {
-    if (!startDate) return;
+  const handleSubmit = async () => {
+    if (!startDate || !kategori) return;
+    setIsLoading(true);
     
-    let dateStr = startDate;
-    if (endDate && endDate !== startDate) {
-      dateStr = `${startDate} - ${endDate}`;
+    try {
+      let finalAttachmentUrl = undefined;
+      
+      if (fileObj) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+        
+        if (!supabaseUrl || !supabaseKey) {
+          throw new Error("Supabase URL or Key is missing from environment variables.");
+        }
+        
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        const fileExt = fileObj.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `leaves/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('attachments')
+          .upload(filePath, fileObj);
+          
+        if (uploadError) {
+          throw uploadError;
+        }
+        
+        const { data: publicUrlData } = supabase.storage
+          .from('attachments')
+          .getPublicUrl(filePath);
+          
+        finalAttachmentUrl = publicUrlData.publicUrl;
+      }
+
+      const token = localStorage.getItem("accessToken");
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          leave_category_id: kategori,
+          start_date: startDate,
+          end_date: endDate || startDate,
+          description: noteText || "Tanpa Keterangan",
+          attachment_url: finalAttachmentUrl,
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        // Refresh data
+        await fetchCategoriesAndLeaves();
+        
+        // Reset Form
+        setIsAddingIzin(false);
+        if (categories.length > 0) setKategori(categories[0].id);
+        setStartDate("");
+        setEndDate("");
+        setNoteText("");
+        setAttachment(null);
+        setFileObj(null);
+      } else {
+        alert(data.message || "Gagal mengajukan izin");
+      }
+    } catch (error) {
+      console.error("Error submitting leave:", error);
+      alert(error?.message || "Network error");
+    } finally {
+      setIsLoading(false);
     }
-
-    const newReq: IzinRequest = {
-      id: Date.now().toString(),
-      type: kategori,
-      desc: noteText || "Tanpa Keterangan",
-      dateStr: dateStr,
-      status: "Menunggu"
-    };
-
-    setPengajuanList([newReq, ...pengajuanList]);
-    
-    // Reset Form
-    setIsAddingIzin(false);
-    setKategori("Izin Sakit");
-    setStartDate("");
-    setEndDate("");
-    setNoteText("");
-    setAttachment(null);
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -83,6 +179,7 @@ export default function IzinPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      setFileObj(file);
       let sizeStr = "";
       if (file.size < 1024 * 1024) {
         sizeStr = (file.size / 1024).toFixed(0) + " KB";
@@ -111,21 +208,18 @@ export default function IzinPage() {
 
   const filteredList = pengajuanList.filter(req => {
     let matchCat = true;
+    const catName = categories.find(c => c.id === req.leave_category_id)?.name || "Lainnya";
+    
     if (filterCategory !== "Semua Kategori") {
-      matchCat = req.type.toLowerCase().includes(filterCategory.toLowerCase());
+      matchCat = catName.toLowerCase().includes(filterCategory.toLowerCase());
     }
     
     let matchDate = true;
     if (filterDate) {
       const fd = new Date(filterDate);
       if (!isNaN(fd.getTime())) {
-        const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-        const formattedFilterDate = `${fd.getDate()} ${months[fd.getMonth()]} ${fd.getFullYear()}`;
-        const formattedFilterDateWithZero = `${String(fd.getDate()).padStart(2, '0')} ${months[fd.getMonth()]} ${fd.getFullYear()}`;
-        
-        matchDate = req.dateStr.includes(filterDate) || 
-                    req.dateStr.includes(formattedFilterDate) || 
-                    req.dateStr.includes(formattedFilterDateWithZero);
+        const reqDate = new Date(req.start_date);
+        matchDate = reqDate.toDateString() === fd.toDateString();
       }
     }
     
@@ -165,11 +259,7 @@ export default function IzinPage() {
                 <CustomSelect 
                   value={kategori}
                   onChange={setKategori}
-                  options={[
-                    { value: "Izin Sakit", label: "Izin Sakit" },
-                    { value: "Cuti", label: "Cuti" },
-                    { value: "Izin Keperluan Pribadi", label: "Izin Keperluan Pribadi" }
-                  ]}
+                  options={categories.map(c => ({ value: c.id, label: c.name }))}
                 />
               </div>
             </div>
@@ -289,12 +379,40 @@ export default function IzinPage() {
           </div>
         ) : selectedIzinId && selectedIzin ? (
           /* DETAIL PENGAJUAN IZIN */
+          (() => {
+            const catName = categories.find(c => c.id === selectedIzin.leave_category_id)?.name || "Lainnya";
+            
+            const start = new Date(selectedIzin.start_date);
+            const end = new Date(selectedIzin.end_date);
+            const diffTime = Math.abs(end.getTime() - start.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            
+            const sDate = start.getDate();
+            const sMonth = start.toLocaleDateString('id-ID', { month: 'short' });
+            const sYear = start.getFullYear();
+            
+            const eDate = end.getDate();
+            const eMonth = end.toLocaleDateString('id-ID', { month: 'short' });
+            const eYear = end.getFullYear();
+            
+            let dateStr = "";
+            if (sYear !== eYear) {
+              dateStr = `${sDate} ${sMonth} ${sYear} - ${eDate} ${eMonth} ${eYear}`;
+            } else if (sMonth !== eMonth) {
+              dateStr = `${sDate} ${sMonth} - ${eDate} ${eMonth} ${eYear}`;
+            } else if (sDate !== eDate) {
+              dateStr = `${sDate} - ${eDate} ${eMonth} ${eYear}`;
+            } else {
+              dateStr = `${sDate} ${sMonth} ${eYear}`;
+            }
+            
+            return (
           <div className="flex flex-col gap-5">
             {/* Top Card */}
             <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Jenis Pengajuan</span>
-                <h2 className="text-[#111827] text-[18px] font-bold">{selectedIzin.type}</h2>
+                <h2 className="text-[#111827] text-[18px] font-bold">{catName}</h2>
               </div>
               
               <div className="w-full h-[1px] bg-[#F3F4F6]" />
@@ -306,8 +424,8 @@ export default function IzinPage() {
                 <div className="flex flex-col justify-center">
                   <span className="text-[11px] font-bold text-[#6B7280] mb-0.5">Periode Izin</span>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-[#111827] text-[14px] font-bold">{selectedIzin.dateStr}</span>
-                    <span className="text-[#6B7280] text-[11px]">(1 Hari Kerja)</span>
+                    <span className="text-[#111827] text-[14px] font-bold">{dateStr}</span>
+                    <span className="text-[#6B7280] text-[11px]">({diffDays} Hari)</span>
                   </div>
                 </div>
               </div>
@@ -318,22 +436,27 @@ export default function IzinPage() {
                 </div>
                 <div className="flex flex-col justify-center pr-2">
                   <span className="text-[11px] font-bold text-[#6B7280] mb-0.5">Keterangan</span>
-                  <span className="text-[#374151] text-[13px] leading-relaxed">{selectedIzin.desc}</span>
+                  <span className="text-[#374151] text-[13px] leading-relaxed">{selectedIzin.description}</span>
                 </div>
               </div>
 
-              {selectedIzin.type.toLowerCase().includes("sakit") && (
+              {selectedIzin.attachment_url && (
                 <div className="bg-[#F8FAFC] rounded-[16px] p-3 flex items-center justify-between mt-1 border border-[#F1F5F9]">
                   <div className="flex items-center gap-3">
                     <Paperclip className="w-5 h-5 text-[#356E3B]" strokeWidth={2.5} />
                     <div className="flex flex-col">
-                      <span className="text-[13px] font-bold text-[#111827]">Surat_Klinik_Medika.pdf</span>
-                      <span className="text-[11px] font-medium text-[#6B7280]">248 KB • Dokumen Medis</span>
+                      <span className="text-[13px] font-bold text-[#111827]">Lampiran Dokumen</span>
+                      <span className="text-[11px] font-medium text-[#6B7280]">Telah dilampirkan</span>
                     </div>
                   </div>
-                  <button className="flex items-center gap-1 text-[#356E3B] font-bold text-[12px] hover:underline pr-1">
+                  <a 
+                    href={selectedIzin.attachment_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[#356E3B] font-bold text-[12px] hover:underline pr-1 cursor-pointer"
+                  >
                     Lihat <ExternalLink className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  </button>
+                  </a>
                 </div>
               )}
             </div>
@@ -483,37 +606,11 @@ export default function IzinPage() {
             )}
 
           </div>
+          );
+        })()
         ) : (
           /* MAIN CONTENT */
           <div className="flex flex-col gap-6">
-            {/* Sisa Cuti Card */}
-            <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E5E7EB] flex flex-col gap-4">
-              <div className="flex justify-between items-end">
-                <h2 className="text-[#111827] text-[16px] font-bold">
-                  Sisa Cuti Tahunan
-                </h2>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-[#356E3B] text-[24px] font-bold leading-none">10</span>
-                  <span className="text-[#6B7280] text-[12px] font-bold">/ 12 Hari</span>
-                </div>
-              </div>
-              
-              {/* Progress Bar */}
-              <div className="h-2 w-full bg-[#E5E7EB] rounded-full overflow-hidden">
-                <div className="h-full bg-[#356E3B] rounded-full" style={{ width: "83.33%" }} />
-              </div>
-
-              <div className="flex gap-10 mt-1">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[#6B7280] text-[12px] font-bold">Tersisa</span>
-                  <span className="text-[#356E3B] text-[14px] font-bold">10 Hari</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[#6B7280] text-[12px] font-bold">Izin Terpakai</span>
-                  <span className="text-[#111827] text-[14px] font-bold">2 Hari</span>
-                </div>
-              </div>
-            </div>
 
             {/* Filters */}
             <div className="flex gap-3">
@@ -523,8 +620,7 @@ export default function IzinPage() {
                   onChange={setFilterCategory}
                   options={[
                     { value: "Semua Kategori", label: "Semua Kategori" },
-                    { value: "Izin Sakit", label: "Izin Sakit" },
-                    { value: "Cuti", label: "Cuti" }
+                    ...categories.map(c => ({ value: c.name, label: c.name }))
                   ]}
                 />
               </div>
@@ -551,7 +647,25 @@ export default function IzinPage() {
 
               <div className="flex flex-col gap-4">
                 
-                {filteredList.map((req) => (
+                {filteredList.map((req) => {
+                  const catName = categories.find(c => c.id === req.leave_category_id)?.name || "Lainnya";
+                  
+                  const start = new Date(req.start_date);
+                  const end = new Date(req.end_date);
+                  const sDate = start.getDate();
+                  const sMonth = start.toLocaleDateString('id-ID', { month: 'short' });
+                  const sYear = start.getFullYear();
+                  const eDate = end.getDate();
+                  const eMonth = end.toLocaleDateString('id-ID', { month: 'short' });
+                  const eYear = end.getFullYear();
+                  
+                  let dateStr = "";
+                  if (sYear !== eYear) dateStr = `${sDate} ${sMonth} ${sYear} - ${eDate} ${eMonth} ${eYear}`;
+                  else if (sMonth !== eMonth) dateStr = `${sDate} ${sMonth} - ${eDate} ${eMonth} ${eYear}`;
+                  else if (sDate !== eDate) dateStr = `${sDate} - ${eDate} ${eMonth} ${eYear}`;
+                  else dateStr = `${sDate} ${sMonth} ${eYear}`;
+                  
+                  return (
                   <div 
                     key={req.id} 
                     onClick={() => setSelectedIzinId(req.id)}
@@ -559,8 +673,8 @@ export default function IzinPage() {
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex flex-col gap-1">
-                        <h3 className="text-[#111827] text-[16px] font-bold">{req.type}</h3>
-                        <span className="text-[#6B7280] text-[13px]">{req.desc}</span>
+                        <h3 className="text-[#111827] text-[16px] font-bold">{catName}</h3>
+                        <span className="text-[#6B7280] text-[13px]">{req.description}</span>
                       </div>
                       <div className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 border ${
                         req.status === "Menunggu" ? "bg-[#FFFBEB] border-[#FEF3C7]" :
@@ -581,10 +695,10 @@ export default function IzinPage() {
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                       <Calendar className="w-4 h-4 text-[#6EA874]" strokeWidth={2.5} />
-                      <span className="text-[#6B7280] text-[13px] font-medium">{req.dateStr}</span>
+                      <span className="text-[#6B7280] text-[13px] font-medium">{dateStr}</span>
                     </div>
                   </div>
-                ))}
+                )})}
 
               </div>
             </div>

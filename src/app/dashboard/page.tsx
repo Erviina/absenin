@@ -96,21 +96,14 @@ export default function DashboardPage() {
       
       {/* Header */}
       <div className="flex justify-between items-center px-6 pt-6 pb-4 bg-[#fbfdfc] sticky top-0 z-20">
-        <div 
-          className="flex items-center gap-3 relative"
-          onClick={() => {
-            const isManagement =
-              user?.roles?.includes("Admin") ||
-              user?.roles?.includes("Manager");
-
-            if (isManagement) {
-              setIsProfileDropdownOpen(!isProfileDropdownOpen);
-            } else {
-              router.push("/profil");
-            }
-          }}
-        >
-          {user?.avatarUrl && !avatarError ? (
+        <div className="flex items-center gap-3 relative">
+          
+          {/* Avatar (Click to Profile) */}
+          <div 
+            onClick={() => router.push("/profil")}
+            className="cursor-pointer shrink-0"
+          >
+            {user?.avatarUrl && !avatarError ? (
             <img
               src={user.avatarUrl}
               alt="Avatar"
@@ -118,10 +111,25 @@ export default function DashboardPage() {
               onError={() => setAvatarError(true)}
             />
           ) : (
-            <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full shrink-0"></div>
+            <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full"></div>
           )}
+          </div>
 
-          <div className="flex flex-col cursor-pointer select-none">
+          {/* Name & Dropdown Toggle */}
+          <div 
+            className="flex flex-col cursor-pointer select-none"
+            onClick={() => {
+              const isManagement =
+                user?.roles?.includes("Admin") ||
+                user?.roles?.includes("Manager");
+
+              if (isManagement) {
+                setIsProfileDropdownOpen(!isProfileDropdownOpen);
+              } else {
+                router.push("/profil");
+              }
+            }}
+          >
             <span className="text-[#5C786C] text-[12px] font-medium leading-tight">
               Selamat datang,
             </span>
@@ -244,7 +252,10 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center">
             <h2 className="text-[18px] font-bold text-[#1E4738]">Berita Terbaru</h2>
-            <button className="text-[#356E3B] text-[13px] font-medium flex items-center gap-1 hover:underline">
+            <button 
+              onClick={() => router.push("/berita")}
+              className="text-[#356E3B] text-[13px] font-medium flex items-center gap-1 hover:underline active:scale-95 transition-transform"
+            >
               Lihat Semua
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

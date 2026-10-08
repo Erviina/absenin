@@ -444,6 +444,16 @@ function AdminKaryawanView() {
                         </span>
                      </div>
                    </div>
+                   </div>
+                   <div className="flex flex-col flex-1 gap-1 overflow-hidden">
+                     <span className="text-[#111827] text-[14px] font-bold leading-none truncate">{item.full_name}</span>
+                     <span className="text-gray-400 text-[11px] leading-none mb-1 truncate">{item.email}</span>
+                     <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-[6px] ${roleColorClass}`}>
+                          {roleText}
+                        </span>
+                     </div>
+                   </div>
                    <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
                  </div>
                 );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, Plus, User, Users, Calendar, Clock, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
@@ -11,32 +11,70 @@ import { CustomDatePicker } from "@/components/CustomDatePicker";
 export default function TugasPage() {
   const router = useRouter();
   
+  const [activeTab, setActiveTab] = useState<"personal" | "group">("personal");
   const [isAddingTask, setIsAddingTask] = useState(false);
+  const [isViewingUpcoming, setIsViewingUpcoming] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   // Form states
   const [taskTitle, setTaskTitle] = useState("");
-  const [taskDate, setTaskDate] = useState("2026-09-18");
-  const [taskTime, setTaskTime] = useState("10:00 WIB");
+  const [taskDate, setTaskDate] = useState(new Date().toISOString().split("T")[0]);
+  const [taskTime, setTaskTime] = useState("10:00");
   const [noteText, setNoteText] = useState("");
 
-  // Dummy data
-  const [tasks, setTasks] = useState([
-    { id: "1", title: "Review sprint backlog dengan Tim Dev", time: "10:00 WIB", completed: true, section: "today", note: "" },
-    { id: "2", title: "Kirim draft laporan absensi mingguan", time: "15:30 WIB", completed: false, section: "today", note: "" },
-    { id: "3", title: "Belanja perlengkapan pantry kantor", time: "14:00 WIB", date: "2026-09-25", completed: false, section: "upcoming", note: "" },
-    { id: "4", title: "Meeting mingguan bersama Klien", time: "09:00 WIB", date: "2026-09-26", completed: false, section: "upcoming", note: "" },
+  const [tasks, setTasks] = useState<any[]>([
+    { id: "dummy-1", title: "Review sprint backlog dengan Tim Dev", time: "10:00", completed: true, type: "personal", date: new Date().toISOString().split("T")[0], note: "" },
+    { id: "dummy-2", title: "Kirim draft laporan absensi mingguan", time: "15:30", completed: false, type: "personal", date: new Date().toISOString().split("T")[0], note: "" },
+    { id: "dummy-3", title: "Belanja perlengkapan pantry kantor", time: "14:00", completed: false, type: "personal", date: "2026-12-25", note: "" },
+    { id: "dummy-4", title: "Meeting mingguan bersama Klien", time: "09:00", completed: false, type: "group", date: "2026-12-26", note: "" },
   ]);
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const token = localStorage.getItem("accessToken");
+        if (!token) return;
+        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", {
+          headers: { "Authorization": "Bearer " + token }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            setTasks(data);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch tasks", err);
+      }
+    };
+    fetchTasks();
+  }, []);
 
-  const toggleTask = (id: string) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+  const toggleTask = async (id: string) => {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    
+    // Optimistic update
+    setTasks(tasks.map(x => x.id === id ? { ...x, completed: !x.completed } : x));
+
+    try {
+      await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + localStorage.getItem("accessToken")
+        },
+        body: JSON.stringify({ completed: !t.completed })
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleOpenAdd = () => {
     setEditingTaskId(null);
     setTaskTitle("");
-    setTaskDate("");
-    setTaskTime("");
+    setTaskDate(new Date().toISOString().split("T")[0]);
+    setTaskTime("10:00");
     setNoteText("");
     setIsAddingTask(true);
   };
@@ -45,58 +83,100 @@ export default function TugasPage() {
     const t = tasks.find(x => x.id === id);
     if (t) {
       setTaskTitle(t.title);
-      setTaskDate(t.date || "2026-09-18");
-      setTaskTime(t.time);
+      setTaskDate(t.date || new Date().toISOString().split("T")[0]);
+      setTaskTime(t.time || "10:00");
       setNoteText(t.note || "");
       setEditingTaskId(t.id);
       setIsAddingTask(true);
     }
   };
 
-  const handleDeleteTask = (id: string) => {
+  const handleDeleteTask = async (id: string) => {
     setTasks(tasks.filter(t => t.id !== id));
+    try {
+      await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
+        method: "DELETE",
+        headers: {
+          "Authorization": "Bearer " + localStorage.getItem("accessToken")
+        }
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleSaveTask = () => {
+  const handleSaveTask = async () => {
     if (!taskTitle.trim()) return;
 
-    if (editingTaskId) {
-      // Update existing task
-      setTasks(tasks.map(t => 
-        t.id === editingTaskId 
-          ? { ...t, title: taskTitle, date: taskDate, time: taskTime, note: noteText } 
-          : t
-      ));
-    } else {
-      // Create new task
-      const newTask = {
-        id: Date.now().toString(),
-        title: taskTitle,
-        date: taskDate,
-        time: taskTime,
-        note: noteText,
-        completed: false,
-        section: "upcoming" // New tasks default to upcoming
-      };
-      setTasks([...tasks, newTask]);
+    const method = editingTaskId ? "PATCH" : "POST";
+    const url = editingTaskId ? `/tasks/${editingTaskId}` : "/tasks";
+
+    const payload = {
+      title: taskTitle,
+      date: taskDate,
+      time: taskTime,
+      note: noteText,
+      type: activeTab, // Use current tab
+    };
+
+    try {
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + url, {
+        method,
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + localStorage.getItem("accessToken")
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (res.ok) {
+        const savedTask = await res.json();
+        if (editingTaskId) {
+          setTasks(tasks.map(t => t.id === editingTaskId ? savedTask : t));
+        } else {
+          setTasks([savedTask, ...tasks]);
+        }
+      } else {
+        const data = await res.json();
+        alert(data.error || "Gagal menyimpan tugas");
+      }
+    } catch (err) {
+      console.error("Save error:", err);
+      alert("Terjadi kesalahan jaringan saat menyimpan tugas.");
     }
 
     setIsAddingTask(false);
     setEditingTaskId(null);
   };
 
-  const todayTasks = tasks.filter(t => t.section === "today");
-  const upcomingTasks = tasks.filter(t => t.section === "upcoming");
+  const filteredTasks = tasks.filter(t => t.type === activeTab);
+  
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isTodayTask = (dateStr: string | null | undefined) => {
+    if (!dateStr) return true;
+    return dateStr.startsWith(todayStr);
+  };
+
+  const todayTasks = filteredTasks.filter(t => isTodayTask(t.date));
+  const upcomingTasks = filteredTasks.filter(t => !isTodayTask(t.date));
   const activeTodayCount = todayTasks.filter(t => !t.completed).length;
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
       {/* Header */}
       <TopBar 
-        title={isAddingTask && editingTaskId ? "Ubah Tugas" : "Daftar Tugas"}
-        onBack={() => isAddingTask ? setIsAddingTask(false) : router.back()}
+        title={isAddingTask ? (editingTaskId ? "Ubah Tugas" : "Tambah Tugas") : isViewingUpcoming ? "Semua Tugas Mendatang" : "Daftar Tugas"}
+        onBack={() => {
+          if (isAddingTask) {
+            setIsAddingTask(false);
+          } else if (isViewingUpcoming) {
+            setIsViewingUpcoming(false);
+          } else {
+            router.back();
+          }
+        }}
         rightAction={
-          !isAddingTask ? (
+          (!isAddingTask && !isViewingUpcoming) ? (
             <button 
               onClick={handleOpenAdd}
               className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30"
@@ -110,23 +190,31 @@ export default function TugasPage() {
       <div className="px-6 pt-6 flex flex-col gap-6">
         
         {/* Tabs */}
-        <div className="bg-white border border-[#E8F3EB] rounded-full p-1.5 flex shadow-sm">
-          <div className="flex-1 bg-[#356E3B] rounded-full py-2.5 flex items-center justify-center gap-2 shadow-sm cursor-pointer">
-            <User className="w-4 h-4 text-white" strokeWidth={2.5} />
-            <span className="text-white text-[14px] font-bold">Personal</span>
-            <div className="w-5 h-5 rounded-full bg-[#5C8966] flex items-center justify-center">
-              <span className="text-white text-[11px] font-bold">{tasks.length}</span>
+        {!isAddingTask && !isViewingUpcoming && (
+          <div className="bg-white border border-[#E8F3EB] rounded-full p-1.5 flex shadow-sm">
+            <div 
+              onClick={() => setActiveTab("personal")}
+              className={`flex-1 rounded-full py-2.5 flex items-center justify-center gap-2 cursor-pointer transition-colors ${activeTab === "personal" ? "bg-[#356E3B] shadow-sm" : "hover:bg-gray-50"}`}
+            >
+              <User className={`w-4 h-4 ${activeTab === "personal" ? "text-white" : "text-[#6B7280]"}`} strokeWidth={2.5} />
+              <span className={`text-[14px] font-bold ${activeTab === "personal" ? "text-white" : "text-[#4B5563]"}`}>Personal</span>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${activeTab === "personal" ? "bg-[#5C8966]" : "bg-[#F3F4F6]"}`}>
+                <span className={`text-[11px] font-bold ${activeTab === "personal" ? "text-white" : "text-[#6B7280]"}`}>{tasks.filter(t => t.type === "personal").length}</span>
+              </div>
+            </div>
+            
+            <div 
+              onClick={() => setActiveTab("group")}
+              className={`flex-1 rounded-full py-2.5 flex items-center justify-center gap-2 cursor-pointer transition-colors ${activeTab === "group" ? "bg-[#356E3B] shadow-sm" : "hover:bg-gray-50"}`}
+            >
+              <Users className={`w-4 h-4 ${activeTab === "group" ? "text-white" : "text-[#6B7280]"}`} strokeWidth={2.5} />
+              <span className={`text-[14px] font-bold ${activeTab === "group" ? "text-white" : "text-[#4B5563]"}`}>Grup</span>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${activeTab === "group" ? "bg-[#5C8966]" : "bg-[#F3F4F6]"}`}>
+                <span className={`text-[11px] font-bold ${activeTab === "group" ? "text-white" : "text-[#6B7280]"}`}>{tasks.filter(t => t.type === "group").length}</span>
+              </div>
             </div>
           </div>
-          
-          <div className="flex-1 rounded-full py-2.5 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-50 transition-colors">
-            <Users className="w-4 h-4 text-[#6B7280]" strokeWidth={2.5} />
-            <span className="text-[#4B5563] text-[14px] font-bold">Grup</span>
-            <div className="w-5 h-5 rounded-full bg-[#F3F4F6] flex items-center justify-center">
-              <span className="text-[#6B7280] text-[11px] font-bold">1</span>
-            </div>
-          </div>
-        </div>
+        )}
 
         {isAddingTask ? (
           /* ADD / EDIT TASK FORM */
@@ -202,6 +290,22 @@ export default function TugasPage() {
               Simpan Tugas
             </button>
           </div>
+        ) : isViewingUpcoming ? (
+          /* ALL UPCOMING TASKS VIEW */
+          <div className="flex flex-col">
+            {upcomingTasks.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas mendatang.</p>
+            )}
+            {upcomingTasks.map(task => (
+              <SwipeableTaskItem 
+                key={task.id}
+                task={task}
+                onToggle={toggleTask}
+                onEdit={handleEditTask}
+                onDelete={handleDeleteTask}
+              />
+            ))}
+          </div>
         ) : (
           /* TASK LIST */
           <>
@@ -217,6 +321,9 @@ export default function TugasPage() {
               </div>
               
               <div className="flex flex-col">
+                {todayTasks.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas untuk hari ini.</p>
+                )}
                 {todayTasks.map(task => (
                   <SwipeableTaskItem 
                     key={task.id}
@@ -235,13 +342,19 @@ export default function TugasPage() {
                 <h2 className="text-[#374151] text-[12px] font-bold uppercase tracking-widest">
                   Tugas Mendatang
                 </h2>
-                <button className="text-[#6EA874] text-[12px] font-bold hover:text-[#356E3B] transition-colors">
+                <button 
+                  onClick={() => setIsViewingUpcoming(true)}
+                  className="text-[#6EA874] text-[12px] font-bold hover:text-[#356E3B] transition-colors"
+                >
                   Lihat Semua
                 </button>
               </div>
               
               <div className="flex flex-col">
-                {upcomingTasks.map(task => (
+                {upcomingTasks.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas mendatang.</p>
+                )}
+                {upcomingTasks.slice(0, 3).map(task => ( // Hanya tampil 3 teratas di tampilan ringkas
                   <SwipeableTaskItem 
                     key={task.id}
                     task={task}
@@ -257,7 +370,7 @@ export default function TugasPage() {
 
       </div>
 
-      {!isAddingTask && <BottomNav activeTab="tugas" />}
+      <BottomNav activeTab="tugas" />
     </div>
   );
 }

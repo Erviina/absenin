@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function ProfilPage() {
   const router = useRouter();
@@ -111,9 +112,7 @@ export default function ProfilPage() {
         fileInputRef.current.value = "";
       }
     }
-  };
-
-  return (
+  };  return (
     <div className="min-h-screen bg-[#fbfdfc] pb-8">
       <TopBar title="Profil" onBack={() => router.back()} />
 

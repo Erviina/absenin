@@ -15,23 +15,38 @@ export default function CekPerusahaanPage() {
   useEffect(() => {
     const fetchStatus = async () => {
       const token = localStorage.getItem("accessToken");
-      const userStr = localStorage.getItem("user");
-      if (userStr) {
-        try {
-          const userObj = JSON.parse(userStr);
-          if (userObj.fullName) setUserName(userObj.fullName);
-        } catch (e) {}
-      }
-
       if (!token) {
         setStatus('idle');
         return;
       }
+
+      // First, fetch the latest user profile to see if they are already in a company
+      try {
+        const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const meData = await meRes.json();
+        if (meData.success && meData.data.user) {
+          localStorage.setItem("user", JSON.stringify(meData.data.user));
+          setUserName(meData.data.user.fullName || "User");
+          
+          if (meData.data.user.company) {
+            router.push("/dashboard");
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching /auth/me", e);
+      }
+
+      // If no company yet, check if there's a pending join request
       try {
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
+        
+        // Ensure we only show pending if it's literally pending
         if (data.success && data.data && data.data.status === 'pending') {
           setCompanyName(data.data.company_name || "Perusahaan");
           setStatus('pending');
@@ -43,8 +58,9 @@ export default function CekPerusahaanPage() {
         setStatus('idle');
       }
     };
+    
     fetchStatus();
-  }, []);
+  }, [router]);
 
   if (status === 'checking') {
     return (
