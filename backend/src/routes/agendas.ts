@@ -12,6 +12,10 @@ const agendaSchema = z.object({
   start_time: z.string().refine(val => !isNaN(Date.parse(val)), "Format waktu mulai tidak valid"),
   end_time: z.string().refine(val => !isNaN(Date.parse(val)), "Format waktu selesai tidak valid"),
   agenda_category_id: z.string().uuid().nullable().optional(),
+  type: z.enum(["COMPANY", "PERSONAL"], { 
+    required_error: "Type wajib diisi",
+    invalid_type_error: "Type harus berupa COMPANY atau PERSONAL"
+  })
 }).strict().refine(data => new Date(data.end_time) > new Date(data.start_time), {
   message: "Waktu selesai tidak boleh lebih awal dari waktu mulai",
   path: ["end_time"]
@@ -44,11 +48,14 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
         a.start_time, 
         a.end_time, 
         a.created_at, 
+        a.profile_id,
+        a.type,
         c.id as category_id, 
         c.name as category_name
       FROM agendas a
       LEFT JOIN agendas_categories c ON a.agenda_category_id = c.id
       WHERE a.company_id = ${profileData.companyId} 
+        AND (a.type = 'COMPANY' OR (a.type = 'PERSONAL' AND a.profile_id = ${profileData.profileId}))
         AND a.deleted_at IS NULL
       ORDER BY a.start_time ASC
     `);
@@ -59,6 +66,8 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
       notes: row.notes,
       start_time: row.start_time,
       end_time: row.end_time,
+      scope: row.type === "COMPANY" ? "company" : "personal",
+      type: row.type,
       category: row.category_id ? {
         id: row.category_id,
         name: row.category_name
@@ -84,10 +93,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
     if (!profileData) return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
 
     const roles = await getUserRoles(profileData.profileId);
-    if (!roles.includes("Admin") && !roles.includes("Manager")) {
-      return res.status(403).json({ success: false, message: "Akses ditolak" });
-    }
-
+    
     const parseResult = agendaSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ success: false, message: "Data tidak valid", errors: parseResult.error.issues });
@@ -95,11 +101,17 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
 
     const data = parseResult.data;
     
+    if (data.type === "COMPANY") {
+      if (!roles.includes("Admin") && !roles.includes("Manager")) {
+        return res.status(403).json({ success: false, message: "Akses ditolak. Hanya Admin/Manager yang dapat membuat agenda perusahaan" });
+      }
+    }
+
     const insertRes = await db.execute(sql`
       INSERT INTO agendas (
-        company_id, profile_id, title, notes, start_time, end_time, agenda_category_id, created_by
+        company_id, profile_id, type, title, notes, start_time, end_time, agenda_category_id, created_by
       ) VALUES (
-        ${profileData.companyId}, ${profileData.profileId}, ${data.title}, ${data.notes || null}, 
+        ${profileData.companyId}, ${profileData.profileId}, ${data.type}, ${data.title}, ${data.notes || null}, 
         ${data.start_time}, ${data.end_time}, ${data.agenda_category_id || null}, ${profileData.profileId}
       )
       RETURNING *
@@ -125,11 +137,11 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
     if (!profileData) return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
 
     const roles = await getUserRoles(profileData.profileId);
-    if (!roles.includes("Admin") && !roles.includes("Manager")) {
-      return res.status(403).json({ success: false, message: "Akses ditolak" });
-    }
-
-    const parseResult = agendaSchema.safeParse(req.body);
+    
+    // Type tidak boleh diubah melalui PATCH, jadi kita omit dari validasi
+    const patchSchema = agendaSchema.omit({ type: true });
+    
+    const parseResult = patchSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ success: false, message: "Data tidak valid", errors: parseResult.error.issues });
     }
@@ -137,12 +149,25 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
     const data = parseResult.data;
 
     const checkRes = await db.execute(sql`
-      SELECT id FROM agendas 
+      SELECT id, type, profile_id FROM agendas 
       WHERE id = ${agendaId} AND company_id = ${profileData.companyId} AND deleted_at IS NULL
     `);
     
     if (checkRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Agenda tidak ditemukan" });
+    }
+
+    const existingAgenda = checkRes.rows[0];
+
+    // Validasi otorisasi edit berdasarkan type
+    if (existingAgenda.type === "COMPANY") {
+      if (!roles.includes("Admin") && !roles.includes("Manager")) {
+        return res.status(403).json({ success: false, message: "Hanya Admin/Manager yang dapat mengubah agenda perusahaan" });
+      }
+    } else if (existingAgenda.type === "PERSONAL") {
+      if (existingAgenda.profile_id !== profileData.profileId) {
+        return res.status(403).json({ success: false, message: "Anda hanya dapat mengubah agenda pribadi Anda sendiri" });
+      }
     }
 
     const updateRes = await db.execute(sql`
@@ -179,17 +204,27 @@ router.delete("/:id", authenticate, async (req: Request, res: Response): Promise
     if (!profileData) return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
 
     const roles = await getUserRoles(profileData.profileId);
-    if (!roles.includes("Admin") && !roles.includes("Manager")) {
-      return res.status(403).json({ success: false, message: "Akses ditolak" });
-    }
-
+    
     const checkRes = await db.execute(sql`
-      SELECT id FROM agendas 
+      SELECT id, type, profile_id FROM agendas 
       WHERE id = ${agendaId} AND company_id = ${profileData.companyId} AND deleted_at IS NULL
     `);
     
     if (checkRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Agenda tidak ditemukan" });
+    }
+
+    const existingAgenda = checkRes.rows[0];
+
+    // Validasi otorisasi hapus berdasarkan type
+    if (existingAgenda.type === "COMPANY") {
+      if (!roles.includes("Admin") && !roles.includes("Manager")) {
+        return res.status(403).json({ success: false, message: "Hanya Admin/Manager yang dapat menghapus agenda perusahaan" });
+      }
+    } else if (existingAgenda.type === "PERSONAL") {
+      if (existingAgenda.profile_id !== profileData.profileId) {
+        return res.status(403).json({ success: false, message: "Anda hanya dapat menghapus agenda pribadi Anda sendiri" });
+      }
     }
 
     await db.execute(sql`

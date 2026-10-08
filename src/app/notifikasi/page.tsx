@@ -6,7 +6,7 @@ import {
   Search, ListFilter, Bell, Clock, Calendar, Users, 
   Megaphone, Info, ChevronRight, X, CalendarDays, Check 
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function NotifikasiPage() {
@@ -24,89 +24,98 @@ export default function NotifikasiPage() {
 
   const categories = ["Semua", "Absensi", "Izin & Cuti", "Sistem"];
 
-  const notifications = [
-    {
-      id: 1,
-      type: "izin",
-      category: "Izin & Cuti",
-      title: "Permintaan Izin Disetujui",
-      description: "Permintaan izin kamu pada 12 Sep 2025 sudah disetujui. Silakan cek detailnya.",
-      time: "2 jam yang lalu",
-      date: "2025-09-12",
-      icon: <Bell className="w-5 h-5 text-[#356E3B]" />,
-      bgIcon: "bg-[#eef5f0]",
-    },
-    {
-      id: 2,
-      type: "pengingat",
-      category: "Absensi",
-      title: "Pengingat Check Out",
-      description: "Jangan lupa untuk melakukan check out hari ini sebelum pulang kerja.",
-      time: "3 jam yang lalu",
-      date: "2025-09-12",
-      icon: <Clock className="w-5 h-5 text-[#3B82F6]" />,
-      bgIcon: "bg-[#eff6ff]",
-    },
-    {
-      id: 3,
-      type: "jadwal",
-      category: "Absensi",
-      title: "Jadwal Masuk Kerja",
-      description: "Hari ini kamu memiliki jadwal masuk kerja pada pukul 08:00 WIB.",
-      time: "5 jam yang lalu",
-      date: "2025-09-12",
-      icon: <Calendar className="w-5 h-5 text-[#F59E0B]" />,
-      bgIcon: "bg-[#fffbeb]",
-    },
-    {
-      id: 4,
-      type: "permintaan",
-      category: "Sistem",
-      title: "Permintaan Bergabung ke",
-      description: "Permintaan kamu untuk bergabung ke PT Teknologi Nusantara sedang diproses.",
-      time: "1 hari yang lalu",
-      date: "2025-09-11",
-      icon: <Users className="w-5 h-5 text-[#0D9488]" />,
-      bgIcon: "bg-[#f0fdfa]",
-    },
-    {
-      id: 5,
-      type: "pengumuman",
-      category: "Sistem",
-      title: "Pengumuman Perusahaan",
-      description: "Hari Jumat, 13 Sep 2025 akan diadakan kegiatan gathering perusahaan.",
-      time: "1 hari yang lalu",
-      date: "2025-09-11",
-      icon: <Megaphone className="w-5 h-5 text-[#8B5CF6]" />,
-      bgIcon: "bg-[#f5f3ff]",
-    },
-    {
-      id: 6,
-      type: "info",
-      category: "Sistem",
-      title: "Update Fitur Terbaru",
-      description: "Sekarang kamu bisa mengajukan cuti langsung melalui aplikasi ini dengan mudah.",
-      time: "2 hari yang lalu",
-      date: "2025-09-10",
-      icon: <Info className="w-5 h-5 text-[#0EA5E9]" />,
-      bgIcon: "bg-[#f0f9ff]",
-    },
-  ];
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const token = localStorage.getItem("accessToken");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const json = await res.json();
+        if (json.success) {
+          setNotifications(json.data);
+        } else {
+          setError(json.message);
+        }
+      } catch (err: any) {
+        setError(err.message || "Gagal mengambil data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchNotifications();
+  }, []);
+
+  const getIconAndCategory = (type: string) => {
+    switch(type) {
+      case "LEAVE_PENDING":
+      case "LEAVE_APPROVED":
+      case "LEAVE_REJECTED":
+        return { category: "Izin & Cuti", icon: <Bell className="w-5 h-5 text-[#356E3B]" />, bgIcon: "bg-[#eef5f0]" };
+      case "ATTENDANCE_REMINDER":
+        return { category: "Absensi", icon: <Clock className="w-5 h-5 text-[#3B82F6]" />, bgIcon: "bg-[#eff6ff]" };
+      case "AGENDA_UPCOMING":
+        return { category: "Absensi", icon: <Calendar className="w-5 h-5 text-[#F59E0B]" />, bgIcon: "bg-[#fffbeb]" };
+      case "JOIN_REQUEST_PENDING":
+      case "JOIN_REQUEST_APPROVED":
+      case "JOIN_REQUEST_REJECTED":
+        return { category: "Sistem", icon: <Users className="w-5 h-5 text-[#0D9488]" />, bgIcon: "bg-[#f0fdfa]" };
+      case "NEW_ANNOUNCEMENT":
+        return { category: "Sistem", icon: <Megaphone className="w-5 h-5 text-[#8B5CF6]" />, bgIcon: "bg-[#f5f3ff]" };
+      default:
+        return { category: "Sistem", icon: <Info className="w-5 h-5 text-[#0EA5E9]" />, bgIcon: "bg-[#f0f9ff]" };
+    }
+  };
+
+  const getTimeAgo = (dateString: string) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return "Baru saja";
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} menit yang lalu`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} jam yang lalu`;
+    return `${Math.floor(diffInSeconds / 86400)} hari yang lalu`;
+  };
+
+  const handleNotificationClick = async (notif: any) => {
+    if (!notif.is_read) {
+      try {
+        const token = localStorage.getItem("accessToken");
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/${notif.id}/read`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    router.push(`/notifikasi/${notif.id}`);
+  };
 
   // Filtering Logic (Category, Search, and Date)
   const filteredNotifications = notifications.filter((notif) => {
+    const { category } = getIconAndCategory(notif.type);
+    const dateOnly = notif.created_at ? notif.created_at.split('T')[0] : "";
+
     // 1. Filter Category
-    const matchCategory = activeCategory === "Semua" || notif.category === activeCategory;
+    const matchCategory = activeCategory === "Semua" || category === activeCategory;
     
     // 2. Filter Search
     const searchLower = searchQuery.toLowerCase();
     const matchSearch = notif.title.toLowerCase().includes(searchLower) || 
-                        notif.description.toLowerCase().includes(searchLower);
+                        notif.message.toLowerCase().includes(searchLower);
     
     // 3. Filter Date
     let matchDate = true;
-    if (appliedStartDate && notif.date < appliedStartDate) matchDate = false;
-    if (appliedEndDate && notif.date > appliedEndDate) matchDate = false;
+    if (appliedStartDate && dateOnly < appliedStartDate) matchDate = false;
+    if (appliedEndDate && dateOnly > appliedEndDate) matchDate = false;
 
     return matchCategory && matchSearch && matchDate;
   });
@@ -210,36 +219,46 @@ export default function NotifikasiPage() {
 
         {/* Notifications List */}
         <div className="flex flex-col gap-3">
-          {filteredNotifications.length > 0 ? (
-            filteredNotifications.map((notif) => (
+          {isLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#356E3B]"></div>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-10 opacity-60">
+              <p className="text-[14px] text-red-500">{error}</p>
+            </div>
+          ) : filteredNotifications.length > 0 ? (
+            filteredNotifications.map((notif) => {
+              const { icon, bgIcon } = getIconAndCategory(notif.type);
+              return (
               <div
                 key={notif.id}
-                onClick={() => router.push(`/notifikasi/${notif.id}`)}
-                className="bg-white border border-[#E5E7EB] rounded-[20px] p-4 flex gap-4 items-start shadow-sm active:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => handleNotificationClick(notif)}
+                className={`border rounded-[20px] p-4 flex gap-4 items-start shadow-sm active:bg-gray-50 transition-colors cursor-pointer ${notif.is_read ? 'bg-white border-[#E5E7EB]' : 'bg-[#f4f7f5] border-[#356E3B]/20'}`}
               >
                 <div
-                  className={`w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 ${notif.bgIcon}`}
+                  className={`w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 ${bgIcon}`}
                 >
-                  {notif.icon}
+                  {icon}
                 </div>
                 <div className="flex-1 flex flex-col justify-center gap-1">
                   <div className="flex justify-between items-start gap-2">
-                    <h3 className="text-[#111827] text-[14px] font-bold leading-tight">
+                    <h3 className={`text-[14px] leading-tight ${notif.is_read ? 'text-[#4B5563] font-semibold' : 'text-[#111827] font-bold'}`}>
                       {notif.title}
                     </h3>
                     <span className="text-[#9CA3AF] text-[11px] whitespace-nowrap">
-                      {notif.time}
+                      {getTimeAgo(notif.created_at)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center gap-2 mt-0.5">
-                    <p className="text-[#6B7280] text-[13px] leading-snug line-clamp-2">
-                      {notif.description}
+                    <p className={`text-[13px] leading-snug line-clamp-2 ${notif.is_read ? 'text-[#9CA3AF]' : 'text-[#6B7280]'}`}>
+                      {notif.message}
                     </p>
                     <ChevronRight className="w-5 h-5 text-[#D1D5DB] shrink-0" />
                   </div>
                 </div>
               </div>
-            ))
+            )})
           ) : (
             <div className="flex flex-col items-center justify-center py-10 opacity-60">
               <p className="text-[14px] text-[#6B7280]">Tidak ada aktivitas yang ditemukan.</p>

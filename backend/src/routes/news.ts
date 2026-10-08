@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import { news, newsCategories } from "../db/schema";
+import { news, newsCategories, notifications } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import { z } from "zod";
@@ -111,6 +111,27 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
       updated_by: user.id,
     }).returning();
     
+    const allProfilesRes = await db.execute(sql`
+      SELECT id FROM profiles 
+      WHERE company_id = ${companyId} AND deleted_at IS NULL
+    `);
+
+    if (allProfilesRes.rows.length > 0) {
+      const rawContent = validatedData.content || "";
+      const shortMessage = rawContent.length > 100 ? rawContent.substring(0, 97) + "..." : rawContent;
+
+      const notifData = allProfilesRes.rows.map((row: any) => ({
+        company_id: companyId as string,
+        recipient_id: row.id as string,
+        type: "NEW_ANNOUNCEMENT",
+        title: validatedData.title,
+        message: shortMessage,
+        reference_id: newNews[0].id as string,
+      }));
+
+      await db.insert(notifications).values(notifData);
+    }
+
     return res.status(201).json({ success: true, message: "Berita berhasil dibuat", data: newNews[0] });
   } catch (error: any) {
     console.error("Create news error:", error);

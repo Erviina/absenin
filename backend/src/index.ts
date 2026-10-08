@@ -19,6 +19,7 @@ import agendasRoutes from "./routes/agendas";
 import attendancesRoutes from "./routes/attendances";
 import leavesRoutes from "./routes/leaves";
 import tasksRoutes from "./routes/tasks";
+import notificationsRoutes from "./routes/notifications";
 
 app.use(cors());
 app.use(express.json());
@@ -33,6 +34,7 @@ app.use("/api/agendas", agendasRoutes);
 app.use("/api/attendances", attendancesRoutes);
 app.use("/api/leaves", leavesRoutes);
 app.use("/api/tasks", tasksRoutes);
+app.use("/api/notifications", notificationsRoutes);
 
 app.get("/api/health", async (req: Request, res: Response) => {
   try {

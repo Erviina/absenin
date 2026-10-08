@@ -22,7 +22,18 @@ const updateCompanySchema = z.object({
   address: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
-}).refine(data => data.name !== undefined || data.address !== undefined || data.latitude !== undefined || data.longitude !== undefined, {
+  work_days: z.array(z.string()).optional(),
+  work_start_time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/, "Format waktu harus HH:mm atau HH:mm:ss").optional(),
+  work_end_time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/, "Format waktu harus HH:mm atau HH:mm:ss").optional(),
+}).refine(data => 
+  data.name !== undefined || 
+  data.address !== undefined || 
+  data.latitude !== undefined || 
+  data.longitude !== undefined ||
+  data.work_days !== undefined ||
+  data.work_start_time !== undefined ||
+  data.work_end_time !== undefined, 
+{
   message: "Minimal satu field harus diisi"
 });
 
@@ -42,7 +53,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
       return res.status(400).json({
         success: false,
         message: "Validasi gagal",
-        errors: (parseResult.error as any).errors.map((e: any) => e.message),
+        errors: parseResult.error.issues.map((e) => e.message),
       });
     }
 
@@ -265,11 +276,19 @@ router.patch("/me", authenticate, async (req: Request, res: Response): Promise<a
       return res.status(400).json({
         success: false,
         message: "Validasi gagal",
-        errors: (parseResult.error as any).errors.map((e: any) => e.message),
+        errors: parseResult.error.issues.map((e) => e.message),
       });
     }
 
-    const { name, address, latitude, longitude } = parseResult.data;
+    const { name, address, latitude, longitude, work_days } = parseResult.data;
+    let { work_start_time, work_end_time } = parseResult.data;
+
+    if (work_start_time) {
+      work_start_time = work_start_time.split(':').slice(0, 2).join(':');
+    }
+    if (work_end_time) {
+      work_end_time = work_end_time.split(':').slice(0, 2).join(':');
+    }
 
     const profileRes = await db.execute(sql`
       SELECT company_id FROM profiles WHERE id = ${user.id}
@@ -300,6 +319,18 @@ router.patch("/me", authenticate, async (req: Request, res: Response): Promise<a
     if (address !== undefined) updates.push(sql`address = ${address}`);
     if (latitude !== undefined) updates.push(sql`latitude = ${latitude}`);
     if (longitude !== undefined) updates.push(sql`longitude = ${longitude}`);
+    if (work_days !== undefined) {
+      if (Array.isArray(work_days)) {
+        if (work_days.length > 0) {
+          const arrayElements = work_days.map((d: string) => sql`${d}`);
+          updates.push(sql`work_days = ARRAY[${sql.join(arrayElements, sql`, `)}]::text[]`);
+        } else {
+          updates.push(sql`work_days = ARRAY[]::text[]`);
+        }
+      }
+    }
+    if (work_start_time !== undefined) updates.push(sql`work_start_time = ${work_start_time}`);
+    if (work_end_time !== undefined) updates.push(sql`work_end_time = ${work_end_time}`);
 
     const updateQuery = sql`
       UPDATE companies 
@@ -325,6 +356,7 @@ router.patch("/me", authenticate, async (req: Request, res: Response): Promise<a
 
   } catch (error: any) {
     console.error("Update company error:", error);
+    console.error(error.stack);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -344,7 +376,7 @@ router.patch("/employees/:employeeId/roles", authenticate, async (req: Request, 
       return res.status(400).json({
         success: false,
         message: "Validasi gagal",
-        errors: (parseResult.error as any).errors.map((e: any) => e.message),
+        errors: parseResult.error.issues.map((e) => e.message),
       });
     }
     const { roles } = parseResult.data;

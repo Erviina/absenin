@@ -23,7 +23,7 @@ import { useState, useEffect } from "react";
 export default function AdminDashboardPage() {
   const router = useRouter();
   
-  const [company, setCompany] = useState<{ name: string; address: string; memberCount: number } | null>(null);
+  const [company, setCompany] = useState<{ name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
   const [attendanceStats, setAttendanceStats] = useState<{ hadir: number; terlambat: number; izin: number; belum: number; total: number } | null>(null);
@@ -33,6 +33,7 @@ export default function AdminDashboardPage() {
   const [activities, setActivities] = useState<any[]>([]);
   const [isLeaveStatsLoading, setIsLeaveStatsLoading] = useState(true);
   const [isActivitiesLoading, setIsActivitiesLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState("Semua");
 
   const formatRelativeTime = (dateString: string) => {
     const diff = Date.now() - new Date(dateString).getTime();
@@ -50,19 +51,7 @@ export default function AdminDashboardPage() {
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) {
-          // Gunakan mock data jika tidak ada token agar tidak perlu login
-          setCompany({ name: "PT Teknologi Nusantara", address: "Jakarta Selatan", memberCount: 15 });
-          setAttendanceStats({ hadir: 12, terlambat: 2, izin: 1, belum: 0, total: 15 });
-          setLeaveStats({ total: 1, sakit: 0, cuti: 1, izin: 0 });
-          setActivities([
-            { type: 'leave', author: 'Budi Santoso', start_date: '2025-10-10', end_date: '2025-10-12', created_at: new Date().toISOString() },
-            { type: 'join', author: 'Siti Aminah', created_at: new Date(Date.now() - 3600000).toISOString() },
-            { type: 'news', title: 'Rapat Evaluasi Bulanan', created_at: new Date(Date.now() - 86400000).toISOString() }
-          ]);
-          setIsLoading(false);
-          setIsStatsLoading(false);
-          setIsLeaveStatsLoading(false);
-          setIsActivitiesLoading(false);
+          router.push("/login");
           return;
         }
 
@@ -77,6 +66,7 @@ export default function AdminDashboardPage() {
             name: dataCompany.data.name,
             address: dataCompany.data.address,
             memberCount: dataCompany.data.memberCount,
+            avatar_company_url: dataCompany.data.avatar_company_url,
           });
         }
         setIsLoading(false);
@@ -99,7 +89,7 @@ export default function AdminDashboardPage() {
         }
         setIsLeaveStatsLoading(false);
 
-        const resAct = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/activities", {
+        const resAct = await fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications", {
           headers: { "Authorization": `Bearer ${token}` }
         });
         const dataAct = await resAct.json();
@@ -134,8 +124,12 @@ export default function AdminDashboardPage() {
           onClick={() => router.push("/admin/perusahaan")}
           className="bg-white rounded-[20px] p-4 flex gap-4 items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] cursor-pointer active:scale-[0.98] transition-transform"
         >
-          <div className="w-[52px] h-[52px] bg-[#e6f0ea] rounded-[16px] flex items-center justify-center shrink-0">
-            <Building2 className="w-6 h-6 text-[#1E4738]" />
+          <div className="w-[52px] h-[52px] bg-[#e6f0ea] rounded-[16px] flex items-center justify-center shrink-0 overflow-hidden relative">
+            {company?.avatar_company_url ? (
+              <img src={company.avatar_company_url} alt="Logo Perusahaan" className="w-full h-full object-cover" />
+            ) : (
+              <Building2 className="w-6 h-6 text-[#1E4738]" />
+            )}
           </div>
           <div className="flex flex-col flex-1 overflow-hidden">
             {isLoading ? (
@@ -272,7 +266,10 @@ export default function AdminDashboardPage() {
         <div className="flex flex-col gap-4 mt-3">
           <div className="flex justify-between items-center px-1">
             <h2 className="text-[16px] font-bold text-[#1E4738]">Aktivitas Terbaru</h2>
-            <button className="text-[#356E3B] text-[12px] font-semibold flex items-center gap-0.5 hover:underline active:opacity-70">
+            <button 
+              onClick={() => router.push("/notifikasi")}
+              className="text-[#356E3B] text-[12px] font-semibold flex items-center gap-0.5 hover:underline active:opacity-70"
+            >
               Lihat Semua
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -280,45 +277,63 @@ export default function AdminDashboardPage() {
 
           {/* Tabs */}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide px-1">
-            <button className="px-4 py-1.5 rounded-full text-[12px] font-semibold bg-[#e6f0ea] text-[#356E3B] whitespace-nowrap">Semua</button>
-            <button className="px-4 py-1.5 rounded-full text-[12px] font-medium bg-white border border-gray-200 text-gray-500 whitespace-nowrap">Perizinan</button>
-            <button className="px-4 py-1.5 rounded-full text-[12px] font-medium bg-white border border-gray-200 text-gray-500 whitespace-nowrap">Karyawan</button>
-            <button className="px-4 py-1.5 rounded-full text-[12px] font-medium bg-white border border-gray-200 text-gray-500 whitespace-nowrap">Pengumuman</button>
+            {["Semua", "Perizinan", "Karyawan", "Pengumuman"].map((tab) => (
+              <button 
+                key={tab}
+                onClick={() => setActiveFilter(tab)}
+                className={`px-4 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-colors ${
+                  activeFilter === tab 
+                    ? "font-semibold bg-[#e6f0ea] text-[#356E3B]" 
+                    : "font-medium bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
 
           {/* Activity List */}
           <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col overflow-hidden min-h-[120px]">
             
-            {isActivitiesLoading ? (
-              <div className="p-8 text-center text-[#7d998c] text-[13px] font-medium animate-pulse flex items-center justify-center h-full">Memuat aktivitas...</div>
-            ) : activities.length === 0 ? (
-              <div className="p-8 text-center text-[#7d998c] text-[13px] font-medium flex items-center justify-center h-full">Belum ada aktivitas terbaru.</div>
-            ) : (
-              activities.map((act, idx) => {
+            {(() => {
+              const filteredActivities = activities.filter(act => {
+                if (activeFilter === "Semua") return true;
+                if (activeFilter === "Perizinan") return act.type.startsWith("LEAVE");
+                if (activeFilter === "Karyawan") return act.type.startsWith("JOIN_REQUEST");
+                if (activeFilter === "Pengumuman") return act.type === "NEW_ANNOUNCEMENT";
+                return true;
+              }).slice(0, 5);
+
+              if (isActivitiesLoading) {
+                return <div className="p-8 text-center text-[#7d998c] text-[13px] font-medium animate-pulse flex items-center justify-center h-full">Memuat aktivitas...</div>;
+              }
+              if (filteredActivities.length === 0) {
+                return <div className="p-8 text-center text-[#7d998c] text-[13px] font-medium flex items-center justify-center h-full">Belum ada aktivitas terbaru.</div>;
+              }
+
+              return filteredActivities.map((act, idx) => {
                 let icon = <ClipboardList className="w-[22px] h-[22px] text-[#D97706]" strokeWidth={1.5} />;
                 let bgIcon = "bg-[#fdf5e6]";
-                let title = "";
-                let desc = "";
+                let title = act.title;
+                let desc = act.message;
 
-                if (act.type === 'leave') {
-                  title = "Pengajuan cuti baru";
-                  const start = new Date(act.start_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-                  const end = new Date(act.end_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-                  desc = `${act.author} mengajukan cuti pada ${start} - ${end}`;
-                } else if (act.type === 'join') {
+                if (act.type.startsWith('LEAVE')) {
+                  icon = <ClipboardList className="w-[22px] h-[22px] text-[#D97706]" strokeWidth={1.5} />;
+                  bgIcon = "bg-[#fdf5e6]";
+                } else if (act.type.startsWith('JOIN_REQUEST')) {
                   icon = <User className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />;
                   bgIcon = "bg-[#e6f0ea]";
-                  title = "Karyawan baru bergabung";
-                  desc = `${act.author} telah diterima sebagai karyawan.`;
-                } else if (act.type === 'news') {
+                } else if (act.type === 'NEW_ANNOUNCEMENT') {
                   icon = <Megaphone className="w-[22px] h-[22px] text-[#9333EA]" strokeWidth={1.5} />;
                   bgIcon = "bg-[#f3e8ff]";
-                  title = "Pengumuman perusahaan";
-                  desc = act.title || "Ada pengumuman baru.";
                 }
 
                 return (
-                  <div key={idx} className={`p-4 flex gap-3.5 items-center active:bg-gray-50 transition-colors ${idx !== activities.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                  <div 
+                    key={act.id} 
+                    onClick={() => router.push(`/notifikasi/${act.id}`)}
+                    className={`p-4 flex gap-3.5 items-center cursor-pointer active:bg-gray-50 transition-colors ${idx !== filteredActivities.length - 1 ? 'border-b border-gray-100' : ''}`}
+                  >
                     <div className={`w-[42px] h-[42px] rounded-xl ${bgIcon} flex items-center justify-center shrink-0`}>
                       {icon}
                     </div>
@@ -332,8 +347,8 @@ export default function AdminDashboardPage() {
                     <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
                   </div>
                 );
-              })
-            )}
+              });
+            })()}
 
           </div>
         </div>

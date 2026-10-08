@@ -71,6 +71,8 @@ function AdminKaryawanView() {
 
   const [isSavingRole, setIsSavingRole] = useState(false);
   const [saveRoleError, setSaveRoleError] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"Semua" | "Karyawan" | "Manajemen" | "Admin">("Semua");
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
   const fetchEmployeesData = async (token: string) => {
     setIsLoadingEmployees(true);
@@ -130,13 +132,25 @@ function AdminKaryawanView() {
   };
 
   const filteredEmployees = useMemo(() => {
-    if (!searchQuery) return employees;
+    let result = employees;
+
+    if (roleFilter !== "Semua") {
+      result = result.filter(e => {
+        const roles = e.roles || [];
+        if (roleFilter === "Admin") return roles.includes("Admin");
+        if (roleFilter === "Manajemen") return roles.includes("Manager");
+        if (roleFilter === "Karyawan") return roles.includes("Employee") && !roles.includes("Manager") && !roles.includes("Admin");
+        return true;
+      });
+    }
+
+    if (!searchQuery) return result;
     const q = searchQuery.toLowerCase();
-    return employees.filter(e => 
+    return result.filter(e => 
       (e.full_name && e.full_name.toLowerCase().includes(q)) || 
       (e.email && e.email.toLowerCase().includes(q))
     );
-  }, [employees, searchQuery]);
+  }, [employees, searchQuery, roleFilter]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -272,9 +286,40 @@ function AdminKaryawanView() {
               className="w-full bg-white border border-gray-100 rounded-[16px] pl-12 pr-4 py-3.5 text-[14px] text-[#1E4738] placeholder-gray-400 outline-none focus:border-[#356E3B] transition-colors shadow-[0_2px_12px_rgba(0,0,0,0.02)]"
             />
           </div>
-          <button className="w-[50px] h-[50px] bg-white border border-gray-100 rounded-[16px] flex items-center justify-center text-gray-500 shadow-[0_2px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-transform">
-            <ListFilter className="w-5 h-5" strokeWidth={2} />
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+              className="w-[50px] h-[50px] bg-white border border-gray-100 rounded-[16px] flex items-center justify-center text-gray-500 shadow-[0_2px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-transform"
+            >
+              <ListFilter className="w-5 h-5" strokeWidth={2} />
+            </button>
+
+            {isFilterDropdownOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsFilterDropdownOpen(false)}
+                />
+                <div className="absolute right-0 top-[60px] w-[140px] bg-white rounded-[16px] shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 py-2 z-50 overflow-hidden">
+                  {["Semua", "Karyawan", "Manajemen", "Admin"].map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        setRoleFilter(item as any);
+                        setIsFilterDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-3 text-[14px] transition-colors hover:bg-gray-50 flex items-center justify-between ${
+                        roleFilter === item ? "text-[#356E3B] font-medium bg-[#f4f9f6]/50" : "text-gray-600"
+                      }`}
+                    >
+                      {item}
+                      {roleFilter === item && <Check className="w-4 h-4 text-[#356E3B]" />}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Stats */}

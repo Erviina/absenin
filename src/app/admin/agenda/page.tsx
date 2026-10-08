@@ -290,7 +290,8 @@ export default function AdminAgendaPage() {
           notes: formCatatan || "",
           start_time: startDateTime.toISOString(),
           end_time: endDateTime.toISOString(),
-          agenda_category_id: null
+          agenda_category_id: null,
+          type: "COMPANY"
         })
       });
 

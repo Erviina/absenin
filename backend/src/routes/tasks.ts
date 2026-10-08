@@ -120,7 +120,7 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
       return;
     }
 
-    const taskId = req.params.id;
+    const taskId = String(req.params.id);
     const { title, date, time, note, completed } = req.body;
 
     const existingTask = await db.select().from(tasks).where(eq(tasks.id, taskId));
@@ -190,7 +190,7 @@ router.delete("/:id", authenticate, async (req: Request, res: Response): Promise
       return;
     }
 
-    const taskId = req.params.id;
+    const taskId = String(req.params.id);
 
     const existingTask = await db.select().from(tasks).where(eq(tasks.id, taskId));
 

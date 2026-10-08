@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronLeft, Plus, Calendar as CalendarIcon, Clock, MapPin, ChevronDown, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ChevronLeft, Calendar as CalendarIcon, Clock, MapPin, Info, Plus, Edit2, Trash2, X, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { TopBar } from "@/components/TopBar";
@@ -15,46 +15,107 @@ type AgendaItem = {
   title: string;
   time: string;
   location: string;
-  type: "Rapat" | "Acara" | "Review" | "Tenggat" | "Lainnya";
+  type: string;
   link?: string;
-};
-
-// Data Dummy Awal
-const INITIAL_AGENDAS: Record<string, AgendaItem[]> = {
-  "2026-09-18": [
-    { id: "1", title: "Meeting Project A", time: "09:00 - 10:30 WIB", location: "Ruang Rapat 1", type: "Rapat", link: "https://meet.google.com/abc" },
-    { id: "2", title: "Review Desain Absenin", time: "13:00 - 14:00 WIB", location: "Online", type: "Review", link: "https://meet.google.com/xyz" }
-  ],
-  "2026-09-20": [
-    { id: "3", title: "Team Building", time: "08:00 - 15:00 WIB", location: "Taman Kota", type: "Acara" }
-  ]
+  scope: "COMPANY" | "PERSONAL";
+  start_time: string;
+  end_time: string;
 };
 
 export default function AgendaPage() {
   const router = useRouter();
   
-  // State Navigasi
-  const [isAddingAgenda, setIsAddingAgenda] = useState(false);
-  
   // State Data
-  const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>(INITIAL_AGENDAS);
+  const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
   
   // State Kalender
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 8, 18)); // September 2026
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
 
-  // State Form Tambah Agenda
+  // State Modal
+  const [selectedAgendaDetail, setSelectedAgendaDetail] = useState<AgendaItem | null>(null);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // State Form Tambah/Edit Agenda
+  const [formId, setFormId] = useState("");
   const [formKegiatan, setFormKegiatan] = useState("");
-  const [formKategori, setFormKategori] = useState<AgendaItem["type"]>("Rapat");
+  const [formKategori, setFormKategori] = useState<string>("Rapat");
   const [formTanggal, setFormTanggal] = useState("");
   const [formWaktuMulai, setFormWaktuMulai] = useState("");
   const [formWaktuSelesai, setFormWaktuSelesai] = useState("");
   const [formCatatan, setFormCatatan] = useState("");
   const [formLink, setFormLink] = useState("");
-  const [activeFilter, setActiveFilter] = useState<string>("Semua");
+  const [submitError, setSubmitError] = useState("");
 
-  const [editingAgendaId, setEditingAgendaId] = useState<string | null>(null);
-  const [selectedAgendaDetail, setSelectedAgendaDetail] = useState<AgendaItem | null>(null);
+  const fetchAgendas = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setErrorMsg("");
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) throw new Error("API URL tidak ditemukan");
+
+      const res = await fetch(`${apiUrl}/agendas`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Gagal mengambil data agenda");
+      }
+
+      const newMap: Record<string, AgendaItem[]> = {};
+      
+      data.data.forEach((item: any) => {
+        const startDate = new Date(item.start_time);
+        const endDate = new Date(item.end_time);
+        
+        const dateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+        
+        const startTimeStr = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
+        const endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+        
+        if (!newMap[dateStr]) {
+          newMap[dateStr] = [];
+        }
+        
+        newMap[dateStr].push({
+          id: item.id,
+          title: item.title,
+          time: `${startTimeStr} - ${endTimeStr} WIB`,
+          location: item.notes || "Tanpa Keterangan",
+          type: item.category?.name || "Lainnya",
+          scope: item.type === "COMPANY" ? "COMPANY" : "PERSONAL",
+          start_time: item.start_time,
+          end_time: item.end_time,
+        });
+      });
+      
+      setAgendasMap(newMap);
+    } catch (err: any) {
+      console.error("Fetch agendas error:", err);
+      setErrorMsg(err.message || "Terjadi kesalahan sistem");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [router]);
+
+  useEffect(() => {
+    fetchAgendas();
+  }, [fetchAgendas]);
+
+  // Filter State
+  const [activeFilter, setActiveFilter] = useState<string>("Semua");
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
@@ -71,8 +132,8 @@ export default function AgendaPage() {
     }
   };
 
-  const handleOpenAdd = () => {
-    setEditingAgendaId(null);
+  const handleOpenAddModal = () => {
+    setFormId("");
     setFormKegiatan("");
     setFormKategori("Rapat");
     setFormTanggal(selectedDateStr || "");
@@ -80,16 +141,15 @@ export default function AgendaPage() {
     setFormWaktuSelesai("");
     setFormCatatan("");
     setFormLink("");
-    setIsAddingAgenda(true);
+    setSubmitError("");
+    setIsFormModalOpen(true);
   };
 
-  const handleEditAgenda = (agenda: AgendaItem, dateStr: string) => {
-    setEditingAgendaId(agenda.id);
+  const handleOpenEditModal = (agenda: AgendaItem) => {
+    setFormId(agenda.id);
     setFormKegiatan(agenda.title);
-    setFormKategori(agenda.type);
-    setFormTanggal(dateStr);
+    setFormKategori(agenda.type || "Rapat");
     
-    // Parse time if it matches "HH:mm - HH:mm WIB"
     const timeMatch = agenda.time.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
     if (timeMatch) {
       setFormWaktuMulai(timeMatch[1]);
@@ -99,60 +159,103 @@ export default function AgendaPage() {
       setFormWaktuSelesai("");
     }
     
+    const d = new Date(agenda.start_time);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    setFormTanggal(dateStr);
+    
     setFormCatatan(agenda.location !== "Tanpa Keterangan" ? agenda.location : "");
     setFormLink(agenda.link || "");
-    setIsAddingAgenda(true);
+    setSubmitError("");
+    
+    setSelectedAgendaDetail(null);
+    setIsFormModalOpen(true);
   };
 
-  const handleDeleteAgenda = (id: string, dateStr: string) => {
-    setAgendasMap(prev => {
-      const existing = prev[dateStr] || [];
-      return {
-        ...prev,
-        [dateStr]: existing.filter(a => a.id !== id)
+  const handleSubmit = async () => {
+    setSubmitError("");
+    if (!formKegiatan.trim()) {
+      setSubmitError("Judul agenda wajib diisi");
+      return;
+    }
+    if (!formTanggal || !formWaktuMulai || !formWaktuSelesai) {
+      setSubmitError("Waktu pelaksanaan wajib diisi lengkap");
+      return;
+    }
+
+    const startDateTime = new Date(`${formTanggal}T${formWaktuMulai}:00`);
+    const endDateTime = new Date(`${formTanggal}T${formWaktuSelesai}:00`);
+
+    if (endDateTime <= startDateTime) {
+      setSubmitError("Waktu selesai harus setelah waktu mulai");
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      
+      const payload: any = {
+        title: formKegiatan,
+        notes: formCatatan || "",
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime.toISOString(),
       };
-    });
-  };
 
-  const handleSubmitAgenda = () => {
-    if (!formTanggal || !formWaktuMulai || !formWaktuSelesai || !formKegiatan) return;
+      let url = `${apiUrl}/agendas`;
+      let method = "POST";
 
-    const newAgenda: AgendaItem = {
-      id: editingAgendaId || Date.now().toString(),
-      title: formKegiatan,
-      time: `${formWaktuMulai} - ${formWaktuSelesai} WIB`,
-      location: formCatatan || "Tanpa Keterangan",
-      type: formKategori,
-      link: formLink
-    };
-
-    setAgendasMap(prev => {
-      // First, if editing, remove the old one from all dates to be safe (or just the old date)
-      // For simplicity, let's just remove it from everywhere first
-      const cleanedMap = { ...prev };
-      if (editingAgendaId) {
-        Object.keys(cleanedMap).forEach(key => {
-          cleanedMap[key] = cleanedMap[key].filter(a => a.id !== editingAgendaId);
-        });
+      if (formId) {
+        url = `${apiUrl}/agendas/${formId}`;
+        method = "PATCH";
+      } else {
+        payload.type = "PERSONAL"; // Wajib untuk POST di frontend ini
       }
 
-      const existing = cleanedMap[formTanggal] || [];
-      return {
-        ...cleanedMap,
-        [formTanggal]: [...existing, newAgenda]
-      };
-    });
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
 
-    // Reset Form
-    setFormKegiatan("");
-    setFormKategori("Rapat");
-    setFormTanggal("");
-    setFormWaktuMulai("");
-    setFormWaktuSelesai("");
-    setFormCatatan("");
-    setFormLink("");
-    setIsAddingAgenda(false);
-    setEditingAgendaId(null);
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Gagal menyimpan agenda");
+
+      setIsFormModalOpen(false);
+      fetchAgendas();
+    } catch (err: any) {
+      setSubmitError(err.message || "Terjadi kesalahan sistem");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedAgendaDetail) return;
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      
+      const res = await fetch(`${apiUrl}/agendas/${selectedAgendaDetail.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Gagal menghapus agenda");
+
+      setIsDeleteModalOpen(false);
+      setSelectedAgendaDetail(null);
+      fetchAgendas();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Logika Menampilkan Agenda
@@ -161,7 +264,6 @@ export default function AgendaPage() {
     const list = agendasMap[selectedDateStr] || [];
     displayedAgendas = list.map(a => ({ agenda: a, dateStr: selectedDateStr }));
   } else {
-    // Tampilkan semua agenda di bulan ini
     Object.keys(agendasMap).forEach(dateStr => {
       const [y, m] = dateStr.split('-');
       if (parseInt(y) === currentDate.getFullYear() && parseInt(m) === currentDate.getMonth() + 1) {
@@ -170,11 +272,9 @@ export default function AgendaPage() {
         });
       }
     });
-    // Sort by date roughly
     displayedAgendas.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
   }
 
-  // Filter based on activeFilter
   if (activeFilter !== "Semua") {
     displayedAgendas = displayedAgendas.filter(a => a.agenda.type === activeFilter);
   }
@@ -183,144 +283,47 @@ export default function AgendaPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
       {/* Header */}
       <TopBar 
-        title={isAddingAgenda ? (editingAgendaId ? "Ubah Agenda" : "Tambah Agenda") : "Agenda & Jadwal"}
-        onBack={() => isAddingAgenda ? setIsAddingAgenda(false) : router.back()}
+        title="Agenda"
+        onBack={() => router.push("/dashboard")}
         rightAction={
-          !isAddingAgenda ? (
-            <button 
-              onClick={handleOpenAdd}
-              className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30"
-            >
-              <Plus className="w-6 h-6" />
-            </button>
-          ) : null
+          <button 
+            onClick={handleOpenAddModal}
+            className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
         }
       />
 
       <div className="px-6 pt-6 flex flex-col flex-1">
-        {isAddingAgenda ? (
-          /* FORM TAMBAH AGENDA */
-          <div className="flex flex-col gap-5">
-            <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-6">
-              
-              {/* Nama Kegiatan */}
-              <div className="flex flex-col gap-2">
-                <label className="text-[13px] font-bold text-[#374151]">
-                  Nama Agenda <span className="text-[#EF4444]">*</span>
-                </label>
-                <input 
-                  type="text"
-                  value={formKegiatan}
-                  onChange={(e) => setFormKegiatan(e.target.value)}
-                  placeholder="Misal: Rapat Evaluasi Mingguan"
-                  className="w-full border border-[#E5E7EB] rounded-[14px] px-4 py-3.5 text-[14px] text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white font-medium"
-                />
-              </div>
-
-              {/* Kategori */}
-              <div className="flex flex-col gap-2">
-                <label className="text-[13px] font-bold text-[#374151]">
-                  Kategori <span className="text-[#EF4444]">*</span>
-                </label>
-                <div className="relative">
-                  <CustomSelect 
-                    value={formKategori}
-                    onChange={(val) => setFormKategori(val as AgendaItem["type"])}
-                    options={[
-                      { value: "Rapat", label: "Rapat" },
-                      { value: "Acara", label: "Acara" },
-                      { value: "Review", label: "Review" },
-                      { value: "Tenggat", label: "Tenggat (Deadline)" },
-                      { value: "Lainnya", label: "Lainnya" }
-                    ]}
-                  />
-                </div>
-              </div>
-
-              {/* Tanggal Agenda */}
-              <div className="flex flex-col gap-2">
-                <label className="text-[13px] font-bold text-[#374151]">
-                  Tanggal Agenda <span className="text-[#EF4444]">*</span>
-                </label>
-                <div className="flex w-full">
-                  <CustomDatePicker 
-                    value={formTanggal}
-                    onChange={setFormTanggal}
-                  />
-                </div>
-              </div>
-
-              {/* Waktu Pelaksanaan */}
-              <div className="flex flex-col gap-2">
-                <label className="text-[13px] font-bold text-[#374151]">
-                  Waktu Pelaksanaan <span className="text-[#EF4444]">*</span>
-                </label>
-                <div className="flex gap-3">
-                  <div className="flex-1 relative">
-                    <CustomTimePicker 
-                      value={formWaktuMulai}
-                      onChange={setFormWaktuMulai}
-                      placeholder="Mulai"
-                    />
-                  </div>
-                  <div className="flex-1 relative">
-                    <CustomTimePicker 
-                      value={formWaktuSelesai}
-                      onChange={setFormWaktuSelesai}
-                      placeholder="Selesai"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Link Tautan */}
-              <div className="flex flex-col gap-2">
-                <label className="text-[13px] font-bold text-[#374151]">
-                  Link Tautan / Lokasi (Opsional)
-                </label>
-                <input 
-                  type="url"
-                  value={formLink}
-                  onChange={(e) => setFormLink(e.target.value)}
-                  placeholder="Misal: https://meet.google.com/..."
-                  className="w-full border border-[#E5E7EB] rounded-[14px] px-4 py-3.5 text-[14px] text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white font-medium"
-                />
-              </div>
-
-              {/* Catatan Tambahan */}
-              <div className="flex flex-col gap-2">
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-[13px] font-bold text-[#374151]">
-                    Catatan Tambahan
-                  </label>
-                  <span className="text-[11px] font-bold text-[#6B7280]">
-                    {formCatatan.length} / 200 karakter
-                  </span>
-                </div>
-                <textarea 
-                  rows={4}
-                  maxLength={200}
-                  value={formCatatan}
-                  onChange={(e) => setFormCatatan(e.target.value)}
-                  placeholder="Misal: Bawa dokumen presentasi..." 
-                  className="w-full border border-[#E5E7EB] rounded-[14px] px-4 py-3.5 text-[14px] text-[#4B5563] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all resize-none"
-                />
-              </div>
-
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center flex-1 py-12">
+            <div className="w-8 h-8 border-4 border-[#356E3B] border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-[#6B7280] text-[14px] font-medium">Memuat data agenda...</p>
+          </div>
+        ) : errorMsg ? (
+          <div className="flex flex-col items-center justify-center flex-1 py-12 px-4 text-center">
+            <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-4">
+              <Info className="w-6 h-6" />
             </div>
-
+            <p className="text-[#EF4444] text-[14px] font-bold mb-2">Gagal Memuat Agenda</p>
+            <p className="text-[#6B7280] text-[13px]">{errorMsg}</p>
             <button 
-              onClick={handleSubmitAgenda}
-              disabled={!formTanggal || !formWaktuMulai || !formWaktuSelesai}
-              className="w-full bg-[#356E3B] hover:bg-[#2A582F] disabled:bg-[#A3B8A8] text-white rounded-full py-4 mt-2 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98]"
+              onClick={() => window.location.reload()}
+              className="mt-4 px-6 py-2 bg-[#356E3B] text-white text-[13px] font-bold rounded-full hover:bg-[#2A582F] transition-colors"
             >
-              <CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5} />
-              {editingAgendaId ? "Simpan Perubahan" : "Simpan Agenda"}
+              Coba Lagi
             </button>
           </div>
         ) : (
-          /* MAIN CONTENT (KALENDER & LIST) */
           <>
+            <div className="mb-4 bg-[#E8F3EB] border border-[#D1E5D5] rounded-xl p-3 flex items-start gap-2 shadow-sm">
+              <Info className="w-5 h-5 text-[#356E3B] shrink-0 mt-0.5" />
+              <p className="text-[#2D5A3F] text-[12px] font-medium leading-tight">
+                Ini adalah halaman agenda. Anda dapat melihat agenda perusahaan dan mengelola agenda pribadi Anda.
+              </p>
+            </div>
+
             {/* Kalender Card */}
             <div className="mb-6 px-1">
               <div className="flex justify-between items-center mb-4">
@@ -407,36 +410,27 @@ export default function AgendaPage() {
                     onClick={() => setSelectedAgendaDetail(agenda)}
                     className="bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 hover:border-[#356E3B] transition-colors group relative overflow-hidden cursor-pointer"
                   >
-                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#356E3B] rounded-l-[20px]" />
+                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${agenda.scope === 'COMPANY' ? 'bg-[#356E3B]' : 'bg-[#F59E0B]'}`} />
                     
                     <div className="flex justify-between items-start pl-2">
                       <div className="flex flex-col gap-1">
-                        <div className={`px-2.5 py-1 w-fit rounded-full flex items-center border ${
-                          agenda.type === "Rapat" ? "bg-[#E8F3EB] border-[#D1E5D5] text-[#356E3B]" :
-                          agenda.type === "Acara" ? "bg-[#FFFBEB] border-[#FEF3C7] text-[#D97706]" :
-                          agenda.type === "Review" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
-                          agenda.type === "Tenggat" ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]" :
-                          "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]"
-                        }`}>
-                          <span className="text-[10px] font-bold uppercase tracking-wider">{agenda.type}</span>
+                        <div className="flex items-center gap-2">
+                          <div className={`px-2.5 py-1 w-fit rounded-full flex items-center border ${
+                            agenda.type === "Rapat" ? "bg-[#E8F3EB] border-[#D1E5D5] text-[#356E3B]" :
+                            agenda.type === "Acara" ? "bg-[#FFFBEB] border-[#FEF3C7] text-[#D97706]" :
+                            agenda.type === "Review" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
+                            agenda.type === "Tenggat" ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]" :
+                            "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]"
+                          }`}>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{agenda.type}</span>
+                          </div>
+                          {agenda.scope === "COMPANY" ? (
+                            <span className="bg-[#E0E7FF] text-[#4338CA] px-2 py-0.5 rounded text-[10px] font-bold border border-[#C7D2FE]">PERUSAHAAN</span>
+                          ) : (
+                            <span className="bg-[#FEF3C7] text-[#D97706] px-2 py-0.5 rounded text-[10px] font-bold border border-[#FDE68A]">PRIBADI</span>
+                          )}
                         </div>
                         <h3 className="text-[#111827] text-[16px] font-bold leading-tight pr-4 mt-1">{agenda.title}</h3>
-                      </div>
-                      
-                      {/* Action Buttons */}
-                      <div className="flex gap-2 opacity-100">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleEditAgenda(agenda, dateStr); }}
-                          className="w-8 h-8 rounded-full bg-[#F3F4F6] text-[#4B5563] flex items-center justify-center hover:bg-[#E5E7EB] transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                        </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleDeleteAgenda(agenda.id, dateStr); }}
-                          className="w-8 h-8 rounded-full bg-[#FEF2F2] text-[#EF4444] flex items-center justify-center hover:bg-[#FEE2E2] transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-                        </button>
                       </div>
                     </div>
                     
@@ -455,14 +449,6 @@ export default function AgendaPage() {
                         <MapPin className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
                         <span className="text-[#4B5563] text-[12px] font-medium">{agenda.location}</span>
                       </div>
-                      {agenda.link && (
-                        <div className="flex items-center gap-2">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#356E3B]"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                          <a href={agenda.link} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" className="text-[#356E3B] text-[12px] font-bold hover:underline truncate max-w-[200px]">
-                            {agenda.link}
-                          </a>
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))
@@ -477,7 +463,9 @@ export default function AgendaPage() {
         )}
       </div>
 
-      {!isAddingAgenda && <BottomNav activeTab="agenda" />}
+      <BottomNav activeTab="agenda" />
+
+
 
       {/* Modal Detail Agenda */}
       {selectedAgendaDetail && (
@@ -485,17 +473,24 @@ export default function AgendaPage() {
           <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => setSelectedAgendaDetail(null)} />
           <div className="relative w-full max-w-sm bg-white rounded-[24px] shadow-xl z-10 p-6 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
-              <div className={`px-3 py-1 w-fit rounded-full flex items-center border ${
-                selectedAgendaDetail.type === "Rapat" ? "bg-[#E8F3EB] border-[#D1E5D5] text-[#356E3B]" :
-                selectedAgendaDetail.type === "Acara" ? "bg-[#FFFBEB] border-[#FEF3C7] text-[#D97706]" :
-                selectedAgendaDetail.type === "Review" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
-                selectedAgendaDetail.type === "Tenggat" ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]" :
-                "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]"
-              }`}>
-                <span className="text-[11px] font-bold uppercase tracking-wider">{selectedAgendaDetail.type}</span>
+              <div className="flex items-center gap-2">
+                <div className={`px-3 py-1 w-fit rounded-full flex items-center border ${
+                  selectedAgendaDetail.type === "Rapat" ? "bg-[#E8F3EB] border-[#D1E5D5] text-[#356E3B]" :
+                  selectedAgendaDetail.type === "Acara" ? "bg-[#FFFBEB] border-[#FEF3C7] text-[#D97706]" :
+                  selectedAgendaDetail.type === "Review" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
+                  selectedAgendaDetail.type === "Tenggat" ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]" :
+                  "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]"
+                }`}>
+                  <span className="text-[11px] font-bold uppercase tracking-wider">{selectedAgendaDetail.type}</span>
+                </div>
+                {selectedAgendaDetail.scope === "COMPANY" ? (
+                  <span className="bg-[#E0E7FF] text-[#4338CA] px-2 py-1 rounded text-[10px] font-bold border border-[#C7D2FE]">PERUSAHAAN</span>
+                ) : (
+                  <span className="bg-[#FEF3C7] text-[#D97706] px-2 py-1 rounded text-[10px] font-bold border border-[#FDE68A]">PRIBADI</span>
+                )}
               </div>
               <button onClick={() => setSelectedAgendaDetail(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                <X className="w-5 h-5" />
               </button>
             </div>
             
@@ -507,20 +502,208 @@ export default function AgendaPage() {
                 <span className="text-[#374151] text-[14px] font-medium">{selectedAgendaDetail.time}</span>
               </div>
               
-              {selectedAgendaDetail.link && (
-                <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#356E3B]"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                  <a href={selectedAgendaDetail.link} target="_blank" rel="noreferrer" className="text-[#356E3B] text-[14px] font-bold hover:underline truncate">
-                    {selectedAgendaDetail.link}
-                  </a>
-                </div>
-              )}
-              
               <div className="flex flex-col gap-2 bg-[#F9FAFB] p-4 rounded-[14px]">
                 <h3 className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">Catatan Tambahan / Lokasi</h3>
                 <p className="text-[#374151] text-[14px] leading-relaxed whitespace-pre-wrap">
                   {selectedAgendaDetail.location}
                 </p>
+              </div>
+            </div>
+
+            {/* Action Buttons - Only for PERSONAL */}
+            {selectedAgendaDetail.scope === "PERSONAL" && (
+              <div className="flex items-center gap-3 mt-6 pt-6 border-t border-gray-100">
+                <button 
+                  onClick={() => setIsDeleteModalOpen(true)}
+                  className="flex-1 py-3 text-[#EF4444] bg-red-50 rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 hover:bg-red-100 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Hapus
+                </button>
+                <button 
+                  onClick={() => handleOpenEditModal(selectedAgendaDetail)}
+                  className="flex-1 py-3 text-white bg-[#356E3B] rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 hover:bg-[#2A582F] transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Edit
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Hapus */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => !isSubmitting && setIsDeleteModalOpen(false)} />
+          <div className="relative w-full max-w-sm bg-white rounded-[24px] shadow-xl z-10 p-6 animate-in zoom-in-95 duration-200 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+              <Trash2 className="w-8 h-8" />
+            </div>
+            <h3 className="text-[18px] font-bold text-[#111827] mb-2">Hapus Agenda?</h3>
+            <p className="text-[#6B7280] text-[14px] mb-6">Agenda ini akan dihapus secara permanen dan tidak dapat dikembalikan.</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setIsDeleteModalOpen(false)}
+                disabled={isSubmitting}
+                className="flex-1 py-3 text-[#4B5563] bg-gray-100 rounded-xl font-bold text-[14px] hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleDelete}
+                disabled={isSubmitting}
+                className="flex-1 py-3 text-white bg-red-500 rounded-xl font-bold text-[14px] hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center"
+              >
+                {isSubmitting ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  "Hapus"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Form Tambah/Edit dengan UI Identik Admin */}
+      {isFormModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center sm:p-4">
+          <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => !isSubmitting && setIsFormModalOpen(false)} />
+          <div className="relative w-full sm:max-w-md bg-white rounded-t-[24px] sm:rounded-[24px] shadow-xl z-10 flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-200">
+            
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
+              <h2 className="text-[18px] font-bold text-[#111827]">
+                {formId ? "Edit Agenda Pribadi" : "Tambah Agenda Pribadi"}
+              </h2>
+              <button onClick={() => setIsFormModalOpen(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-5 overflow-y-auto flex flex-col gap-5">
+              
+              <div className="flex flex-col gap-2">
+                <label className="text-[13px] font-bold text-[#374151]">
+                  Nama Agenda <span className="text-[#EF4444]">*</span>
+                </label>
+                <input 
+                  type="text"
+                  value={formKegiatan}
+                  onChange={(e) => setFormKegiatan(e.target.value)}
+                  placeholder="Misal: Rapat Evaluasi Mingguan"
+                  className="w-full border border-[#E5E7EB] rounded-[14px] px-4 py-3.5 text-[14px] text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white font-medium"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-[13px] font-bold text-[#374151]">
+                  Kategori <span className="text-[#EF4444]">*</span>
+                </label>
+                <div className="relative">
+                  <CustomSelect 
+                    value={formKategori}
+                    onChange={(val) => setFormKategori(val as string)}
+                    options={[
+                      { value: "Rapat", label: "Rapat" },
+                      { value: "Acara", label: "Acara" },
+                      { value: "Review", label: "Review" },
+                      { value: "Tenggat", label: "Tenggat (Deadline)" },
+                      { value: "Lainnya", label: "Lainnya" }
+                    ]}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-[13px] font-bold text-[#374151]">
+                  Tanggal Agenda <span className="text-[#EF4444]">*</span>
+                </label>
+                <div className="flex w-full">
+                  <CustomDatePicker 
+                    value={formTanggal}
+                    onChange={setFormTanggal}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-[13px] font-bold text-[#374151]">
+                  Waktu Pelaksanaan <span className="text-[#EF4444]">*</span>
+                </label>
+                <div className="flex gap-3">
+                  <div className="flex-1 relative">
+                    <CustomTimePicker 
+                      value={formWaktuMulai}
+                      onChange={setFormWaktuMulai}
+                      placeholder="Mulai"
+                    />
+                  </div>
+                  <div className="flex-1 relative">
+                    <CustomTimePicker 
+                      value={formWaktuSelesai}
+                      onChange={setFormWaktuSelesai}
+                      placeholder="Selesai"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-[13px] font-bold text-[#374151]">
+                  Link Tautan / Lokasi (Opsional)
+                </label>
+                <input 
+                  type="url"
+                  value={formLink}
+                  onChange={(e) => setFormLink(e.target.value)}
+                  placeholder="Misal: https://meet.google.com/..."
+                  className="w-full border border-[#E5E7EB] rounded-[14px] px-4 py-3.5 text-[14px] text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white font-medium"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[13px] font-bold text-[#374151]">
+                    Catatan Tambahan
+                  </label>
+                  <span className="text-[11px] font-bold text-[#6B7280]">
+                    {formCatatan.length} / 200 karakter
+                  </span>
+                </div>
+                <textarea 
+                  rows={3}
+                  maxLength={200}
+                  value={formCatatan}
+                  onChange={(e) => setFormCatatan(e.target.value)}
+                  placeholder="Misal: Bawa dokumen presentasi..." 
+                  className="w-full border border-[#E5E7EB] rounded-[14px] px-4 py-3.5 text-[14px] text-[#4B5563] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all resize-none"
+                />
+              </div>
+
+              {submitError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 text-[13px] font-medium flex items-center gap-2 mt-2">
+                  <Info className="w-4 h-4 shrink-0" />
+                  {submitError}
+                </div>
+              )}
+
+              <div className="pt-2 pb-4">
+                <button 
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !formTanggal || !formWaktuMulai || !formWaktuSelesai}
+                  className="w-full bg-[#356E3B] hover:bg-[#2A582F] disabled:bg-[#A3B8A8] text-white rounded-full py-4 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98]"
+                >
+                  {isSubmitting ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5} />
+                      {formId ? "Simpan Perubahan" : "Simpan Agenda Pribadi"}
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

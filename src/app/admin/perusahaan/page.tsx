@@ -35,25 +35,16 @@ function MapUpdater({ lat, lng }: { lat: number, lng: number }) {
   return null;
 }
 
-interface Schedule {
-  id: string;
-  days: string;
-  hours: string;
-  type?: 'kerja' | 'libur';
-  notes?: string;
-}
-
-interface SpecialSchedule {
-  id: string;
-  date: string;
-  name: string;
-}
-
 export default function KelolaPerusahaanPage() {
   const router = useRouter();
 
   const [initialData, setInitialData] = useState({ name: "", address: "", latitude: -6.9175, longitude: 107.6191 });
-  const [companyData, setCompanyData] = useState({ name: "", address: "", latitude: -6.9175, longitude: 107.6191, memberCount: 0, join_code: "" });
+  const [companyData, setCompanyData] = useState({ 
+    name: "", address: "", latitude: -6.9175, longitude: 107.6191, memberCount: 0, join_code: "",
+    work_days: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
+    work_start_time: "08:00",
+    work_end_time: "17:00"
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -135,13 +126,22 @@ export default function KelolaPerusahaanPage() {
           return;
         }
         if (data.success) {
+          const fetchedWorkDays = Array.isArray(data.data.work_days) && data.data.work_days.length > 0 
+            ? data.data.work_days 
+            : ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
+          const fetchedStart = data.data.work_start_time || "08:00";
+          const fetchedEnd = data.data.work_end_time || "17:00";
+
           setCompanyData({
             name: data.data.name || "",
             address: data.data.address || "",
             latitude: data.data.latitude || -6.9175,
             longitude: data.data.longitude || 107.6191,
             memberCount: data.data.memberCount || 0,
-            join_code: data.data.join_code || ""
+            join_code: data.data.join_code || "",
+            work_days: fetchedWorkDays,
+            work_start_time: fetchedStart,
+            work_end_time: fetchedEnd
           });
           setInitialData({
             name: data.data.name || "",
@@ -258,58 +258,48 @@ export default function KelolaPerusahaanPage() {
 
   // Jadwal State
   const [isKelolaJadwalOpen, setIsKelolaJadwalOpen] = useState(false);
-  const [schedules, setSchedules] = useState<Schedule[]>([
-    { id: "1", days: "Senin – Jumat", hours: "08:00 - 17:00" },
-    { id: "2", days: "Sabtu", hours: "08:00 - 12:00" }
-  ]);
-  const [specialSchedules, setSpecialSchedules] = useState<SpecialSchedule[]>([
-    { id: "s1", date: "1 Jan 2025", name: "Tahun Baru" },
-    { id: "s2", date: "27 Jan 2025", name: "Isra Mi'raj" },
-    { id: "s3", date: "29 Mar 2025", name: "Nyepi" }
-  ]);
-
-  // Edit Jadwal State
-  const [isEditJadwalOpen, setIsEditJadwalOpen] = useState(false);
   const [jadwalForm, setJadwalForm] = useState({
-    id: "",
-    type: "kerja",
-    hari: "Senin",
-    jamMulai: "08:00",
-    jamSelesai: "17:00",
-    keterangan: ""
+    work_days: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
+    work_start_time: "08:00",
+    work_end_time: "17:00"
   });
 
   // Tambah Karyawan State
   const [isTambahKaryawanOpen, setIsTambahKaryawanOpen] = useState(false);
 
-  const handleAddSchedule = () => {
-    setJadwalForm({ id: "", type: "kerja", hari: "Senin", jamMulai: "08:00", jamSelesai: "17:00", keterangan: "" });
-    setIsEditJadwalOpen(true);
-  };
+  const handleSaveJadwal = async () => {
+    try {
+      setIsSaving(true);
+      const token = localStorage.getItem("accessToken");
+      const requestBody = { 
+        work_days: jadwalForm.work_days,
+        work_start_time: jadwalForm.work_start_time,
+        work_end_time: jadwalForm.work_end_time
+      };
 
-  const handleEditSchedule = (sched: Schedule) => {
-    const [start, end] = sched.hours.split(" - ");
-    setJadwalForm({
-      id: sched.id,
-      type: sched.type || "kerja",
-      hari: sched.days,
-      jamMulai: start || "08:00",
-      jamSelesai: end || "17:00",
-      keterangan: sched.notes || ""
-    });
-    setIsEditJadwalOpen(true);
-  };
-
-  const handleSaveJadwal = () => {
-    const newHours = `${jadwalForm.jamMulai} - ${jadwalForm.jamSelesai}`;
-    if (jadwalForm.id) {
-      // Edit
-      setSchedules(schedules.map(s => s.id === jadwalForm.id ? { ...s, days: jadwalForm.hari, hours: newHours, notes: jadwalForm.keterangan } : s));
-    } else {
-      // Add
-      setSchedules([...schedules, { id: Date.now().toString(), days: jadwalForm.hari, hours: newHours, notes: jadwalForm.keterangan }]);
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify(requestBody)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCompanyData(prev => ({ 
+          ...prev, 
+          work_days: jadwalForm.work_days,
+          work_start_time: jadwalForm.work_start_time,
+          work_end_time: jadwalForm.work_end_time
+        }));
+        setIsKelolaJadwalOpen(false);
+        alert("Jadwal operasional berhasil diperbarui!");
+      } else {
+        alert(data.message || "Gagal menyimpan jadwal.");
+      }
+    } catch (e) {
+      alert("Terjadi kesalahan jaringan.");
+    } finally {
+      setIsSaving(false);
     }
-    setIsEditJadwalOpen(false);
   };
 
   const openModal = () => {
@@ -484,17 +474,24 @@ export default function KelolaPerusahaanPage() {
             </div>
             
             <div className="flex flex-col gap-2.5 ml-5">
-              {schedules.map((sched) => (
-                <div key={sched.id} className="flex justify-between items-center text-[13px] text-[#111827] font-bold">
-                  <span>{sched.days}</span>
-                  <span>{sched.hours}</span>
-                </div>
-              ))}
+              <div className="flex justify-between items-center text-[13px] text-[#111827] font-bold gap-4">
+                <span className="leading-tight flex-1">
+                  {companyData.work_days.length > 0 ? (companyData.work_days.length === 7 ? "Setiap Hari" : companyData.work_days.join(", ")) : "Belum diatur"}
+                </span>
+                <span className="shrink-0 whitespace-nowrap">{companyData.work_start_time} - {companyData.work_end_time}</span>
+              </div>
             </div>
           </div>
 
           <button 
-            onClick={() => setIsKelolaJadwalOpen(true)}
+            onClick={() => {
+              setJadwalForm({
+                work_days: companyData.work_days,
+                work_start_time: companyData.work_start_time,
+                work_end_time: companyData.work_end_time
+              });
+              setIsKelolaJadwalOpen(true);
+            }}
             className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 mt-2 transition-transform active:scale-[0.98] shadow-sm"
           >
             <Pencil className="w-4 h-4" strokeWidth={2} />
@@ -720,11 +717,11 @@ export default function KelolaPerusahaanPage() {
 
       {/* Modal Kelola Jadwal Jam Kerja */}
       {isKelolaJadwalOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end">
           {/* Backdrop */}
           <div 
             className="absolute inset-0 bg-black/40 transition-opacity"
-            onClick={() => setIsKelolaJadwalOpen(false)}
+            onClick={() => !isSaving && setIsKelolaJadwalOpen(false)}
           />
           
           {/* Bottom Sheet */}
@@ -739,15 +736,16 @@ export default function KelolaPerusahaanPage() {
                   <Clock className="w-4 h-4 text-[#356E3B]" strokeWidth={2} />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <h2 className="text-[#1E4738] text-[17px] font-bold leading-none mt-1">Kelola Jadwal Jam Kerja</h2>
+                  <h2 className="text-[#1E4738] text-[17px] font-bold leading-none mt-1">Kelola Jam Operasional</h2>
                   <p className="text-[#7d998c] text-[12px] leading-[1.4] pr-4">
-                    Atur jam operasional perusahaan dan jadwal kerja untuk setiap hari.
+                    Tentukan hari dan jam operasional perusahaan.
                   </p>
                 </div>
               </div>
               <button 
+                disabled={isSaving}
                 onClick={() => setIsKelolaJadwalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors shrink-0 disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -755,154 +753,31 @@ export default function KelolaPerusahaanPage() {
 
             <div className="flex-1 overflow-y-auto px-6 pb-8 flex flex-col gap-5 mt-2">
               
-              <button 
-                onClick={handleAddSchedule}
-                className="w-full bg-white border border-[#356E3B]/30 hover:bg-[#f4f9f6] text-[#356E3B] font-semibold text-[13px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
-              >
-                + Tambah Jadwal
-              </button>
-
-              {/* Jam Operasional */}
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-1.5 text-[#1E4738]">
-                  <Clock className="w-4 h-4" strokeWidth={2} />
-                  <h3 className="text-[14px] font-bold">Jam Operasional</h3>
-                </div>
-                
-                <div className="flex flex-col gap-2">
-                  {schedules.map((sched) => (
-                    <div 
-                      key={sched.id} 
-                      onClick={() => handleEditSchedule(sched)}
-                      className="bg-white border border-[#eef5f0] rounded-[16px] p-4 flex justify-between items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] active:border-[#356E3B]/30 cursor-pointer transition-colors"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[#1E4738] text-[14px] font-bold">{sched.days}</span>
-                        <span className="text-[#7d998c] text-[12px]">{sched.hours}</span>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm("Hapus jadwal operasional ini?")) {
-                            setSchedules(schedules.filter(s => s.id !== sched.id));
-                          }
-                        }}
-                        className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Jadwal Khusus */}
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5 text-[#1E4738]">
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                      <line x1="16" y1="2" x2="16" y2="6"></line>
-                      <line x1="8" y1="2" x2="8" y2="6"></line>
-                      <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                    <h3 className="text-[14px] font-bold">Jadwal Khusus</h3>
-                  </div>
-                  <p className="text-[#7d998c] text-[12px]">
-                    Atur jadwal khusus seperti libur nasional atau cuti bersama.
-                  </p>
-                </div>
-
-                <div className="bg-white border border-[#eef5f0] rounded-[20px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
-                  {specialSchedules.map((spec, idx) => (
-                    <div key={idx} className={`p-4 flex justify-between items-center bg-white hover:bg-gray-50 cursor-pointer transition-colors ${idx !== specialSchedules.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[#1E4738] text-[14px] font-bold">{spec.date}</span>
-                        <span className="text-[#7d998c] text-[12px]">{spec.name}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="bg-[#fff1f2] text-[#e11d48] text-[10px] font-bold px-3 py-1 rounded-full">
-                          Libur
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-gray-300" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Tambah / Edit Jadwal */}
-      {isEditJadwalOpen && (
-        <div className="fixed inset-0 z-[60] flex flex-col justify-end">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/40 transition-opacity"
-            onClick={() => setIsEditJadwalOpen(false)}
-          />
-          
-          {/* Bottom Sheet */}
-          <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[32px] flex flex-col max-h-[90dvh] animate-in slide-in-from-bottom-full duration-300">
-            {/* Drag handle */}
-            <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1"></div>
-            
-            {/* Modal Header */}
-            <div className="flex justify-between items-center px-6 py-4">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
-                  <Calendar className="w-4 h-4 text-[#356E3B]" strokeWidth={2} />
-                </div>
-                <h2 className="text-[#1E4738] text-[17px] font-bold">Tambah / Edit Jadwal</h2>
-              </div>
-              <button 
-                onClick={() => setIsEditJadwalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-6 pb-8 flex flex-col gap-5">
-              
-              {/* Type Toggle */}
-              <div className="flex bg-[#f4f6f5] rounded-[16px] p-1">
-                <button 
-                  onClick={() => setJadwalForm({ ...jadwalForm, type: "kerja" })}
-                  className={`flex-1 py-2.5 rounded-[12px] text-[13px] font-bold transition-all ${jadwalForm.type === "kerja" ? "bg-[#356E3B] text-white shadow-sm" : "text-gray-500 hover:text-[#1E4738]"}`}
-                >
-                  Jam Kerja
-                </button>
-                <button 
-                  onClick={() => setJadwalForm({ ...jadwalForm, type: "libur" })}
-                  className={`flex-1 py-2.5 rounded-[12px] text-[13px] font-bold transition-all ${jadwalForm.type === "libur" ? "bg-[#356E3B] text-white shadow-sm" : "text-gray-500 hover:text-[#1E4738]"}`}
-                >
-                  Libur
-                </button>
-              </div>
-
               <div className="flex flex-col gap-4">
-                {/* Hari */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[#1E4738] text-[12px] font-bold">Hari</label>
-                  <div className="relative">
-                    <CustomSelect
-                      value={jadwalForm.hari}
-                      onChange={(val) => setJadwalForm({ ...jadwalForm, hari: val })}
-                      options={[
-                        { value: "Senin", label: "Senin" },
-                        { value: "Selasa", label: "Selasa" },
-                        { value: "Rabu", label: "Rabu" },
-                        { value: "Kamis", label: "Kamis" },
-                        { value: "Jumat", label: "Jumat" },
-                        { value: "Sabtu", label: "Sabtu" },
-                        { value: "Minggu", label: "Minggu" },
-                        { value: "Senin – Jumat", label: "Senin – Jumat" }
-                      ]}
-                    />
+                {/* Hari Kerja */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[#1E4738] text-[12px] font-bold">Hari Kerja</label>
+                  <div className="flex flex-wrap gap-2">
+                    {["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"].map((hari) => {
+                      const isSelected = jadwalForm.work_days.includes(hari);
+                      return (
+                        <button
+                          key={hari}
+                          onClick={() => {
+                            if (isSelected) {
+                              setJadwalForm(prev => ({ ...prev, work_days: prev.work_days.filter(d => d !== hari) }));
+                            } else {
+                              setJadwalForm(prev => ({ ...prev, work_days: [...prev.work_days, hari] }));
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-full text-[13px] font-bold transition-colors ${
+                            isSelected ? "bg-[#356E3B] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          }`}
+                        >
+                          {hari}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -911,8 +786,8 @@ export default function KelolaPerusahaanPage() {
                   <label className="text-[#1E4738] text-[12px] font-bold">Jam Mulai</label>
                   <div className="relative">
                     <CustomTimePicker
-                      value={jadwalForm.jamMulai}
-                      onChange={(val) => setJadwalForm({ ...jadwalForm, jamMulai: val })}
+                      value={jadwalForm.work_start_time}
+                      onChange={(val) => setJadwalForm({ ...jadwalForm, work_start_time: val })}
                       placeholder="08:00"
                     />
                   </div>
@@ -923,37 +798,29 @@ export default function KelolaPerusahaanPage() {
                   <label className="text-[#1E4738] text-[12px] font-bold">Jam Selesai</label>
                   <div className="relative">
                     <CustomTimePicker
-                      value={jadwalForm.jamSelesai}
-                      onChange={(val) => setJadwalForm({ ...jadwalForm, jamSelesai: val })}
+                      value={jadwalForm.work_end_time}
+                      onChange={(val) => setJadwalForm({ ...jadwalForm, work_end_time: val })}
                       placeholder="17:00"
                     />
                   </div>
-                </div>
-
-                {/* Keterangan */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[#1E4738] text-[12px] font-bold">
-                    Keterangan <span className="text-gray-400 font-normal">(opsional)</span>
-                  </label>
-                  <input 
-                    type="text" 
-                    placeholder="Contoh: Shift pagi"
-                    value={jadwalForm.keterangan}
-                    onChange={(e) => setJadwalForm({ ...jadwalForm, keterangan: e.target.value })}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-[14px] text-[#1E4738] placeholder-gray-400 outline-none focus:border-[#356E3B] transition-colors"
-                  />
                 </div>
               </div>
 
               {/* Save Button */}
               <button 
                 onClick={handleSaveJadwal}
-                className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[14px] py-4 rounded-xl flex items-center justify-center gap-2 mt-2 transition-transform active:scale-[0.98] shadow-[0_4px_12px_rgba(53,110,59,0.2)]"
+                disabled={isSaving || jadwalForm.work_days.length === 0}
+                className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[14px] py-4 rounded-xl flex items-center justify-center gap-2 mt-2 transition-transform active:scale-[0.98] shadow-[0_4px_12px_rgba(53,110,59,0.2)] disabled:opacity-50 disabled:active:scale-100"
               >
-                <Save className="w-4 h-4" strokeWidth={2} />
-                Simpan Jadwal
+                {isSaving ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" strokeWidth={2} />
+                    Simpan Perubahan
+                  </>
+                )}
               </button>
-
             </div>
           </div>
         </div>

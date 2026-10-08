@@ -63,6 +63,8 @@ export const agendaCategories = pgTable("agendas_categories", {
   deleted_by: uuid("deleted_by"),
 });
 
+export const agendaTypeEnum = pgEnum("agenda_type_enum", ["COMPANY", "PERSONAL"]);
+
 export const agenda = pgTable("agendas", {
   id: uuid("id").primaryKey().defaultRandom(),
   company_id: uuid("company_id").references(() => companies.id),
@@ -70,6 +72,7 @@ export const agenda = pgTable("agendas", {
   notes: text("notes"),
   start_time: timestamp("start_time", { withTimezone: true }),
   end_time: timestamp("end_time", { withTimezone: true }),
+  type: agendaTypeEnum("type").default("COMPANY").notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   deleted_at: timestamp("deleted_at", { withTimezone: true }),
@@ -158,4 +161,22 @@ export const tasks = pgTable("tasks", {
   created_by: uuid("created_by"),
   updated_by: uuid("updated_by"),
   deleted_by: uuid("deleted_by"),
+});
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  company_id: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }).notNull(),
+  recipient_id: uuid("recipient_id").references(() => profiles.id, { onDelete: "cascade" }).notNull(),
+  type: varchar("type").notNull(),
+  title: varchar("title").notNull(),
+  message: text("message").notNull(),
+  reference_id: uuid("reference_id"),
+  is_read: boolean("is_read").default(false).notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => {
+  return [
+    index("notifications_recipient_idx").on(table.recipient_id),
+    index("notifications_unread_idx").on(table.recipient_id, table.is_read),
+    index("notifications_created_idx").on(table.created_at),
+  ];
 });

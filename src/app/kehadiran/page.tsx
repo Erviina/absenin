@@ -6,11 +6,15 @@ import { BottomNav } from "@/components/bottom-nav";
 import { useRouter } from "next/navigation";
 import { CustomCalendar } from "@/components/CustomCalendar";
 import { TopBar } from "@/components/TopBar";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 export default function KehadiranPage() {
   const router = useRouter();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeCalendar, setActiveCalendar] = useState<"start" | "end" | null>(null);
+  const [isDownloadOpen, setIsDownloadOpen] = useState(false);
   
   // Date states
   const [startDate, setStartDate] = useState("");
@@ -132,6 +136,47 @@ export default function KehadiranPage() {
     return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).replace(/\./g, ':');
   };
 
+  const handleDownloadPDF = () => {
+    setIsDownloadOpen(false);
+    const doc = new jsPDF();
+    doc.text("Rekap Kehadiran", 14, 15);
+    
+    const tableData = searchedAttendances.map((item, idx) => [
+      idx + 1,
+      formatDate(item.check_in_time),
+      item.work_mode,
+      extractTime(item.check_in_time),
+      extractTime(item.check_out_time),
+      item.check_in_address || "-"
+    ]);
+
+    autoTable(doc, {
+      head: [["No", "Tanggal", "Tipe", "Jam Masuk", "Jam Keluar", "Alamat Masuk"]],
+      body: tableData,
+      startY: 20
+    });
+
+    doc.save("Rekap_Kehadiran.pdf");
+  };
+
+  const handleDownloadExcel = () => {
+    setIsDownloadOpen(false);
+    const excelData = searchedAttendances.map((item, idx) => ({
+      No: idx + 1,
+      Tanggal: formatDate(item.check_in_time),
+      "Tipe": item.work_mode,
+      "Jam Masuk": extractTime(item.check_in_time),
+      "Jam Keluar": extractTime(item.check_out_time),
+      "Alamat Masuk": item.check_in_address || "-",
+      "Alamat Keluar": item.check_out_address || "-"
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Kehadiran");
+    XLSX.writeFile(workbook, "Rekap_Kehadiran.xlsx");
+  };
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
       {/* Header */}
@@ -139,9 +184,37 @@ export default function KehadiranPage() {
         title="Kehadiran" 
         onBack={() => router.push("/dashboard")} 
         rightAction={
-          <button className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors">
-            <Download className="w-5 h-5 text-white" />
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setIsDownloadOpen(!isDownloadOpen)}
+              className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"
+            >
+              <Download className="w-5 h-5 text-white" />
+            </button>
+            
+            {isDownloadOpen && (
+              <>
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsDownloadOpen(false)}
+                />
+                <div className="absolute top-12 right-0 w-40 bg-white rounded-xl shadow-lg border border-[#E5E7EB] py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <button 
+                    onClick={handleDownloadPDF}
+                    className="w-full text-left px-4 py-2 text-[13px] font-medium text-[#4B5563] hover:bg-[#F3F4F6] transition-colors"
+                  >
+                    Unduh PDF
+                  </button>
+                  <button 
+                    onClick={handleDownloadExcel}
+                    className="w-full text-left px-4 py-2 text-[13px] font-medium text-[#4B5563] hover:bg-[#F3F4F6] transition-colors"
+                  >
+                    Unduh Excel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         }
       />
 

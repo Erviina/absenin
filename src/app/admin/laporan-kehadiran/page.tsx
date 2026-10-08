@@ -3,13 +3,24 @@
 import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
 import { useState, useMemo, useEffect } from "react";
-import { Search, ListFilter, Check, User, ChevronRight, ChevronLeft, FileDown, CalendarDays, CheckCircle2, Clock, FileWarning, Loader2 } from "lucide-react";
+import { Search, ListFilter, Check, User, ChevronRight, ChevronLeft, FileDown, CalendarDays, CheckCircle2, Clock, FileWarning, Loader2, X } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 export default function LaporanKehadiranPage() {
   const router = useRouter();
+  
+  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState("Oktober 2026");
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const d = new Date();
+    return `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+  });
+  const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(null);
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -29,7 +40,6 @@ export default function LaporanKehadiranPage() {
         }
 
         const [monthName, yearString] = selectedMonth.split(" ");
-        const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
         const monthNum = monthNames.indexOf(monthName) + 1;
         const yearNum = parseInt(yearString);
 
@@ -59,9 +69,56 @@ export default function LaporanKehadiranPage() {
     fetchSummary();
   }, [selectedMonth, router]);
 
+  const handlePrevMonth = () => {
+    const [monthName, yearString] = selectedMonth.split(" ");
+    let monthIdx = monthNames.indexOf(monthName);
+    let year = parseInt(yearString);
+    if (monthIdx === 0) {
+      monthIdx = 11;
+      year -= 1;
+    } else {
+      monthIdx -= 1;
+    }
+    setSelectedMonth(`${monthNames[monthIdx]} ${year}`);
+  };
+
+  const handleNextMonth = () => {
+    const [monthName, yearString] = selectedMonth.split(" ");
+    let monthIdx = monthNames.indexOf(monthName);
+    let year = parseInt(yearString);
+    if (monthIdx === 11) {
+      monthIdx = 0;
+      year += 1;
+    } else {
+      monthIdx += 1;
+    }
+    setSelectedMonth(`${monthNames[monthIdx]} ${year}`);
+  };
+
+  const resetFilters = () => {
+    setSearchQuery("");
+    setActiveStatusFilter(null);
+    setIsFilterMenuOpen(false);
+  };
+
   const filteredData = useMemo(() => {
-    return dataKaryawan.filter(emp => emp.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [dataKaryawan, searchQuery]);
+    return dataKaryawan.filter(emp => {
+      const matchSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      let matchStatus = true;
+      if (activeStatusFilter === "Hadir") {
+        matchStatus = emp.hadir > 0;
+      } else if (activeStatusFilter === "Terlambat") {
+        matchStatus = emp.terlambat > 0;
+      } else if (activeStatusFilter === "Izin") {
+        matchStatus = emp.izin > 0;
+      } else if (activeStatusFilter === "Tidak Hadir") {
+        matchStatus = emp.total === 0;
+      }
+
+      return matchSearch && matchStatus;
+    });
+  }, [dataKaryawan, searchQuery, activeStatusFilter]);
 
   const toggleSelectAll = () => {
     if (selectedItems.length === filteredData.length && filteredData.length > 0) {
@@ -79,14 +136,62 @@ export default function LaporanKehadiranPage() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = (type: 'pdf' | 'xlsx') => {
     if (selectedItems.length === 0) return;
     setIsExporting(true);
-    setTimeout(() => {
-      alert(`Berhasil mengekspor rekap kehadiran untuk ${selectedItems.length} karyawan! (Data tersimpan di perangkat)`);
+    
+    try {
+      const selectedData = dataKaryawan.filter(emp => selectedItems.includes(emp.id));
+      const [monthName, yearString] = selectedMonth.split(" ");
+      const fileName = `laporan-kehadiran-${monthName}-${yearString}`;
+      
+      const tableColumn = ["No", "Nama", "Email", "Hadir", "Izin", "Terlambat", "Total"];
+      const tableRows = selectedData.map((emp, index) => [
+        index + 1,
+        emp.name || "-",
+        emp.email || "-", // API currently doesn't return email, fallback to "-"
+        emp.hadir || 0,
+        emp.izin || 0,
+        emp.terlambat || 0,
+        emp.total || 0
+      ]);
+
+      if (type === 'pdf') {
+        const doc = new jsPDF({ orientation: 'landscape' });
+        doc.setFontSize(16);
+        doc.text("LAPORAN KEHADIRAN KARYAWAN", 14, 20);
+        doc.setFontSize(11);
+        doc.text(`Periode: ${selectedMonth}`, 14, 28);
+        
+        autoTable(doc, {
+          startY: 35,
+          head: [tableColumn],
+          body: tableRows,
+          theme: 'grid',
+          headStyles: { fillColor: [45, 90, 63] } // matching #2D5A3F
+        });
+        
+        doc.save(`${fileName}.pdf`);
+      } else if (type === 'xlsx') {
+        const wsData = [
+          ["LAPORAN KEHADIRAN KARYAWAN"],
+          [`Periode: ${selectedMonth}`],
+          [],
+          tableColumn,
+          ...tableRows
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Laporan Kehadiran");
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
+      }
+    } catch (err) {
+      console.error("Export error", err);
+      // fallback without alert per requirements, just log it.
+    } finally {
       setIsExporting(false);
       setSelectedItems([]);
-    }, 1500);
+    }
   };
 
   return (
@@ -99,19 +204,19 @@ export default function LaporanKehadiranPage() {
         {/* Date Filter & Search */}
         <div className="flex flex-col gap-3">
           <div className="bg-white border border-gray-100 rounded-[16px] p-1 flex items-center justify-between shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-            <button className="w-10 h-10 flex items-center justify-center text-gray-400 hover:bg-gray-50 rounded-full active:scale-95 transition-all">
+            <button onClick={handlePrevMonth} className="w-10 h-10 flex items-center justify-center text-gray-400 hover:bg-gray-50 rounded-full active:scale-95 transition-all">
               <ChevronLeft className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-[#356E3B]" />
               <span className="text-[#1E4738] font-bold text-[14px]">{selectedMonth}</span>
             </div>
-            <button className="w-10 h-10 flex items-center justify-center text-gray-400 hover:bg-gray-50 rounded-full active:scale-95 transition-all">
+            <button onClick={handleNextMonth} className="w-10 h-10 flex items-center justify-center text-gray-400 hover:bg-gray-50 rounded-full active:scale-95 transition-all">
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="flex gap-3 mt-1">
+          <div className="flex gap-3 mt-1 relative">
             <div className="relative flex-1">
               <Search className="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" strokeWidth={2} />
               <input 
@@ -119,12 +224,67 @@ export default function LaporanKehadiranPage() {
                 placeholder="Cari nama karyawan..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white border border-gray-100 rounded-[16px] pl-12 pr-4 py-3.5 text-[14px] text-[#1E4738] placeholder-gray-400 outline-none focus:border-[#356E3B] transition-colors shadow-[0_2px_12px_rgba(0,0,0,0.02)]"
+                className="w-full bg-white border border-gray-100 rounded-[16px] pl-12 pr-10 py-3.5 text-[14px] text-[#1E4738] placeholder-gray-400 outline-none focus:border-[#356E3B] transition-colors shadow-[0_2px_12px_rgba(0,0,0,0.02)]"
               />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            <button className="w-[50px] h-[50px] bg-white border border-gray-100 rounded-[16px] flex items-center justify-center text-gray-500 shadow-[0_2px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-transform">
-              <ListFilter className="w-5 h-5" strokeWidth={2} />
-            </button>
+            
+            <div className="relative">
+              <button 
+                onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
+                className={`w-[50px] h-[50px] bg-white border ${activeStatusFilter ? 'border-[#356E3B] text-[#356E3B]' : 'border-gray-100 text-gray-500'} rounded-[16px] flex items-center justify-center shadow-[0_2px_12px_rgba(0,0,0,0.02)] active:scale-95 transition-transform`}
+              >
+                <ListFilter className="w-5 h-5" strokeWidth={2} />
+              </button>
+              
+              {isFilterMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsFilterMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-[16px] shadow-lg border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95">
+                    <div className="px-4 py-2 border-b border-gray-50 flex justify-between items-center">
+                      <span className="text-[12px] font-bold text-[#1E4738]">Filter Status</span>
+                      {(activeStatusFilter || searchQuery) && (
+                        <button onClick={resetFilters} className="text-[10px] text-red-500 font-medium hover:underline">Reset</button>
+                      )}
+                    </div>
+                    <button 
+                      onClick={() => { setActiveStatusFilter(null); setIsFilterMenuOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-[13px] font-medium transition-colors ${!activeStatusFilter ? 'bg-[#f4f9f6] text-[#356E3B]' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Semua
+                    </button>
+                    <button 
+                      onClick={() => { setActiveStatusFilter("Hadir"); setIsFilterMenuOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-[13px] font-medium transition-colors ${activeStatusFilter === 'Hadir' ? 'bg-[#f4f9f6] text-[#356E3B]' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Hadir
+                    </button>
+                    <button 
+                      onClick={() => { setActiveStatusFilter("Terlambat"); setIsFilterMenuOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-[13px] font-medium transition-colors ${activeStatusFilter === 'Terlambat' ? 'bg-[#f4f9f6] text-[#356E3B]' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Terlambat
+                    </button>
+                    <button 
+                      onClick={() => { setActiveStatusFilter("Izin"); setIsFilterMenuOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-[13px] font-medium transition-colors ${activeStatusFilter === 'Izin' ? 'bg-[#f4f9f6] text-[#356E3B]' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Izin
+                    </button>
+                    <button 
+                      onClick={() => { setActiveStatusFilter("Tidak Hadir"); setIsFilterMenuOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-[13px] font-medium transition-colors ${activeStatusFilter === 'Tidak Hadir' ? 'bg-[#f4f9f6] text-[#356E3B]' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Tidak Hadir
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -215,20 +375,22 @@ export default function LaporanKehadiranPage() {
       {/* Floating Export Button */}
       {selectedItems.length > 0 && (
         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-5 pb-6 pt-4 bg-gradient-to-t from-white via-white to-transparent z-50 animate-in slide-in-from-bottom-5 pointer-events-none">
-          <div className="w-full pointer-events-auto">
+          <div className="w-full flex gap-3 pointer-events-auto">
             <button 
-              onClick={handleExport}
+              onClick={() => handleExport('pdf')}
               disabled={isExporting}
-              className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#356E3B] text-white rounded-[16px] font-bold text-[14px] active:scale-95 transition-all shadow-lg shadow-[#356E3B]/20 disabled:opacity-70 disabled:scale-100"
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-[#EF4444] text-white rounded-[16px] font-bold text-[14px] active:scale-95 transition-all shadow-lg shadow-[#EF4444]/20 disabled:opacity-70 disabled:scale-100"
             >
-              {isExporting ? (
-                "Mengekspor data..."
-              ) : (
-                <>
-                  <FileDown className="w-5 h-5" />
-                  Export {selectedItems.length} Laporan (.PDF / .XLSX)
-                </>
-              )}
+              <FileDown className="w-5 h-5" />
+              {isExporting ? "Memproses..." : "Export PDF"}
+            </button>
+            <button 
+              onClick={() => handleExport('xlsx')}
+              disabled={isExporting}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-[#356E3B] text-white rounded-[16px] font-bold text-[14px] active:scale-95 transition-all shadow-lg shadow-[#356E3B]/20 disabled:opacity-70 disabled:scale-100"
+            >
+              <FileDown className="w-5 h-5" />
+              {isExporting ? "Memproses..." : "Export XLSX"}
             </button>
           </div>
         </div>

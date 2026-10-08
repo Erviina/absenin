@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express";
 import { db } from "../db";
-import { leaveRequests, leaveCategories } from "../db/schema";
+import { leaveRequests, leaveCategories, notifications } from "../db/schema";
 import { authenticate } from "../middleware/auth";
 import { eq, desc, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -76,6 +76,31 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       updated_by: userAuth.id
     }).returning();
     
+    // Add notification logic
+    const requesterRes = await db.execute(sql`SELECT full_name, email FROM profiles WHERE id = ${userAuth.id}`);
+    const requesterName = requesterRes.rows[0]?.full_name || requesterRes.rows[0]?.email || "Employee";
+
+    const managersAdminsRes = await db.execute(sql`
+      SELECT pr.profile_id
+      FROM profile_roles pr
+      JOIN profiles p ON p.id = pr.profile_id
+      WHERE p.company_id = ${companyId} 
+        AND pr.role IN ('Admin', 'Manager')
+        AND pr.profile_id != ${userAuth.id}
+    `);
+
+    if (managersAdminsRes.rows.length > 0) {
+      const notifData = managersAdminsRes.rows.map((userRow: any) => ({
+        company_id: companyId as string,
+        recipient_id: userRow.profile_id as string,
+        type: "LEAVE_PENDING",
+        title: "Pengajuan Izin Baru",
+        message: `${requesterName} mengajukan izin/cuti baru.`,
+        reference_id: newLeave[0].id as string,
+      }));
+      await db.insert(notifications).values(notifData);
+    }
+
     res.status(201).json({ success: true, data: newLeave[0] });
   } catch (error) {
     console.error("Error creating leave request:", error);
@@ -156,15 +181,34 @@ router.put("/:id/status", authenticate, async (req: Request, res: Response): Pro
       return res.status(403).json({ success: false, message: "Only Admins can access this." });
     }
     
-    const companyId = profileRes.rows[0].company_id;
+    const companyId = profileRes.rows[0].company_id as string;
 
-    // Update status
-    const updateRes = await db.execute(sql`
-      UPDATE leave_requests
-      SET status = ${status}, approved_by = ${userAuth.id}, approved_at = now(), updated_at = now()
-      WHERE id = ${leaveId} AND company_id = ${companyId}
-      RETURNING id, status
-    `);
+    // Update status and create notification in a transaction
+    const updateRes = await db.transaction(async (tx) => {
+      const up = await tx.execute(sql`
+        UPDATE leave_requests
+        SET status = ${status}, approved_by = ${userAuth.id}, approved_at = now(), updated_at = now()
+        WHERE id = ${leaveId} AND company_id = ${companyId}
+        RETURNING id, status, profile_id
+      `);
+
+      if (up.rows.length > 0) {
+        const leaveData = up.rows[0];
+        const isApproved = status === "Disetujui";
+        
+        await tx.insert(notifications).values({
+          company_id: companyId,
+          recipient_id: leaveData.profile_id as string,
+          type: isApproved ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
+          title: isApproved ? "Pengajuan Izin Disetujui" : "Pengajuan Izin Ditolak",
+          message: isApproved 
+            ? "Pengajuan izin Anda telah disetujui." 
+            : "Maaf, pengajuan izin Anda ditolak.",
+          reference_id: leaveData.id as string,
+        });
+      }
+      return up;
+    });
     
     if (updateRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Leave request not found or unauthorized." });

@@ -87,7 +87,7 @@ export default function KelolaIzinPage() {
     } else {
       const newSelected = [...selectedItems, id];
       setSelectedItems(newSelected);
-      if (newSelected.length === filteredData.length) {
+      if (newSelected.length === pendingLeaves.length) {
         setSelectAll(true);
       }
     }

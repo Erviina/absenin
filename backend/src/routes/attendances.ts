@@ -427,29 +427,69 @@ router.get("/management/summary", authenticate, async (req: AuthRequest, res: Re
     
     const attendancesRes = await db.execute(sql`
       SELECT 
+        a.profile_id,
+        sum(CASE WHEN 
+          (c.work_days IS NULL OR c.work_days = '{}' OR (
+            CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(c.work_days))
+        THEN 1 ELSE 0 END) as hadir_count,
+        sum(CASE WHEN c.work_start_time IS NOT NULL AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > c.work_start_time 
+          AND (c.work_days IS NULL OR c.work_days = '{}' OR (
+            CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(c.work_days))
+        THEN 1 ELSE 0 END) as terlambat_count
+      FROM attendances a
+      JOIN companies c ON a.company_id = c.id
+      WHERE a.company_id = ${companyId}
+        AND a.deleted_at IS NULL
+        AND EXTRACT(MONTH FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${monthNum}
+        AND EXTRACT(YEAR FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${yearNum}
+      GROUP BY a.profile_id
+    `);
+
+    const attendanceMap: Record<string, { hadir: number, terlambat: number }> = {};
+    for (const row of attendancesRes.rows) {
+      attendanceMap[row.profile_id as string] = {
+        hadir: parseInt(row.hadir_count as string) || 0,
+        terlambat: parseInt(row.terlambat_count as string) || 0
+      };
+    }
+
+    // 6. Get leave requests for the given month and year
+    const leavesRes = await db.execute(sql`
+      SELECT 
         profile_id,
-        count(*) as count
-      FROM attendances
+        count(id) as izin_count
+      FROM leave_requests
       WHERE company_id = ${companyId}
+        AND status = 'Disetujui'
         AND deleted_at IS NULL
-        AND EXTRACT(MONTH FROM check_in_time AT TIME ZONE 'Asia/Jakarta') = ${monthNum}
-        AND EXTRACT(YEAR FROM check_in_time AT TIME ZONE 'Asia/Jakarta') = ${yearNum}
+        AND (
+          (EXTRACT(MONTH FROM start_date) = ${monthNum} AND EXTRACT(YEAR FROM start_date) = ${yearNum})
+          OR 
+          (EXTRACT(MONTH FROM end_date) = ${monthNum} AND EXTRACT(YEAR FROM end_date) = ${yearNum})
+        )
       GROUP BY profile_id
     `);
 
-    const attendanceMap: Record<string, number> = {};
-    for (const row of attendancesRes.rows) {
-      attendanceMap[row.profile_id as string] = parseInt(row.count as string);
+    const leaveMap: Record<string, number> = {};
+    for (const row of leavesRes.rows) {
+      leaveMap[row.profile_id as string] = parseInt(row.izin_count as string) || 0;
     }
 
-    // 6. Build the summary
-    // Since there is no 'work_start_time' in the schema and no leave table, 
-    // terlambat and izin will be 0.
+    // 7. Build the summary
     const summary = employeesRes.rows.map((emp) => {
       const empId = emp.id as string;
-      const hadir = attendanceMap[empId] || 0;
-      const izin = 0; // No leave table exists
-      const terlambat = 0; // No work_start_time in schema
+      const attStats = attendanceMap[empId] || { hadir: 0, terlambat: 0 };
+      const hadir = attStats.hadir;
+      const terlambat = attStats.terlambat;
+      const izin = leaveMap[empId] || 0; 
       const role = rolesMap[empId] || 'Employee';
       const roleDisplay = role === 'Admin' ? 'Admin' : (role === 'Manager' ? 'Manajemen' : 'Karyawan');
       
@@ -470,6 +510,141 @@ router.get("/management/summary", authenticate, async (req: AuthRequest, res: Re
     });
   } catch (error: any) {
     console.error("Get management summary error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error." });
+  }
+});
+
+router.get("/management/employees/:employeeId", authenticate, async (req: AuthRequest, res: Response): Promise<any> => {
+  try {
+    const userId = req.user.id;
+    const { employeeId } = req.params;
+    const { month, year } = req.query;
+
+    if (!month || !year) {
+      return res.status(400).json({ success: false, message: "Month and year are required." });
+    }
+
+    // 1. Get Admin/Manager's company_id
+    const profileRes = await db.execute(sql`
+      SELECT company_id FROM profiles WHERE id = ${userId}
+    `);
+    
+    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+      return res.status(404).json({ success: false, message: "Anda tidak terhubung ke perusahaan manapun" });
+    }
+    const companyId = profileRes.rows[0].company_id as string;
+
+    // 2. Verify if user is an Admin or Manager
+    const roleRes = await db.execute(sql`
+      SELECT role FROM profile_roles WHERE profile_id = ${userId} AND role IN ('Admin', 'Manager')
+    `);
+    if (roleRes.rows.length === 0) {
+      return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses." });
+    }
+
+    // 3. Get Employee info & Verify company
+    const employeeRes = await db.execute(sql`
+      SELECT p.id, p.full_name, p.email, p.avatar_url, pr.role
+      FROM profiles p
+      LEFT JOIN profile_roles pr ON pr.profile_id = p.id
+      WHERE p.id = ${employeeId} AND p.company_id = ${companyId}
+    `);
+
+    if (employeeRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Karyawan tidak ditemukan di perusahaan ini." });
+    }
+
+    const employee = employeeRes.rows[0];
+
+    // 4. Calculate Summary for the month/year
+    const monthNum = parseInt(month as string);
+    const yearNum = parseInt(year as string);
+
+    const attendancesRes = await db.execute(sql`
+      SELECT 
+        a.id, a.work_mode, a.check_in_time, a.check_in_latitude, a.check_in_longitude, 
+        a.check_in_address, a.check_in_photo_url, a.check_out_time, a.check_out_latitude, 
+        a.check_out_longitude, a.check_out_address, a.check_out_photo_url,
+        (CASE WHEN c.work_start_time IS NOT NULL AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > c.work_start_time 
+          AND (c.work_days IS NULL OR c.work_days = '{}' OR (
+            CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(c.work_days))
+        THEN 1 ELSE 0 END) as is_terlambat
+      FROM attendances a
+      JOIN companies c ON a.company_id = c.id
+      WHERE a.company_id = ${companyId}
+        AND a.profile_id = ${employeeId}
+        AND a.deleted_at IS NULL
+        AND EXTRACT(MONTH FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${monthNum}
+        AND EXTRACT(YEAR FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${yearNum}
+      ORDER BY a.check_in_time DESC
+    `);
+
+    let hadir = 0;
+    let terlambat = 0;
+    
+    const attendancesList = attendancesRes.rows.map(row => {
+      hadir++;
+      if (parseInt(row.is_terlambat as string) === 1) {
+        terlambat++;
+      }
+      return {
+        id: row.id,
+        work_mode: row.work_mode,
+        check_in_time: row.check_in_time,
+        check_in_latitude: row.check_in_latitude,
+        check_in_longitude: row.check_in_longitude,
+        check_in_address: row.check_in_address,
+        check_in_photo_url: row.check_in_photo_url,
+        check_out_time: row.check_out_time,
+        check_out_latitude: row.check_out_latitude,
+        check_out_longitude: row.check_out_longitude,
+        check_out_address: row.check_out_address,
+        check_out_photo_url: row.check_out_photo_url,
+      };
+    });
+
+    const leavesRes = await db.execute(sql`
+      SELECT count(id) as izin_count
+      FROM leave_requests
+      WHERE company_id = ${companyId}
+        AND profile_id = ${employeeId}
+        AND status = 'Disetujui'
+        AND deleted_at IS NULL
+        AND (
+          (EXTRACT(MONTH FROM start_date) = ${monthNum} AND EXTRACT(YEAR FROM start_date) = ${yearNum})
+          OR 
+          (EXTRACT(MONTH FROM end_date) = ${monthNum} AND EXTRACT(YEAR FROM end_date) = ${yearNum})
+        )
+    `);
+
+    const izin = parseInt(leavesRes.rows[0].izin_count as string) || 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        employee: {
+          id: employee.id,
+          full_name: employee.full_name || "Tanpa Nama",
+          email: employee.email || "",
+          avatar_url: employee.avatar_url || null,
+          role: employee.role || "Employee"
+        },
+        summary: {
+          hadir,
+          izin,
+          terlambat,
+          total: hadir + izin
+        },
+        attendances: attendancesList
+      }
+    });
+
+  } catch (error: any) {
+    console.error("Get management employee detail error:", error);
     return res.status(500).json({ success: false, message: "Internal server error." });
   }
 });

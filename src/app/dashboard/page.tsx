@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [attendanceStatus, setAttendanceStatus] = useState<"NOT_CHECKED_IN" | "CHECKED_IN" | "CHECKED_OUT" | null>(null);
   const [isAttendanceLoading, setIsAttendanceLoading] = useState(true);
   const [attendanceError, setAttendanceError] = useState(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -37,10 +38,11 @@ export default function DashboardPage() {
           return;
         }
 
-        const [authRes, newsRes, attendRes] = await Promise.all([
+        const [authRes, newsRes, attendRes, notifRes] = await Promise.all([
           fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", { headers: { Authorization: `Bearer ${token}` } }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/news", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/attendances/today", { headers: { Authorization: `Bearer ${token}` } })
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/attendances/today", { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications/unread-count", { headers: { Authorization: `Bearer ${token}` } })
         ]);
 
         try {
@@ -59,6 +61,15 @@ export default function DashboardPage() {
           }
         } catch (e) {
           console.error("Failed to parse news data", e);
+        }
+
+        try {
+          const notifData = await notifRes.json();
+          if (notifData.success) {
+            setUnreadCount(notifData.data.count);
+          }
+        } catch (e) {
+          console.error("Failed to parse notif data", e);
         }
 
         try {
@@ -203,7 +214,9 @@ export default function DashboardPage() {
           onClick={() => router.push("/notifikasi")}
         >
           <Bell className="w-6 h-6 text-[#1E4738]" strokeWidth={1.5} />
-          <div className="absolute top-[2px] right-[2px] w-2.5 h-2.5 bg-[#00a859] border-[2px] border-[#fbfdfc] rounded-full"></div>
+          {unreadCount > 0 && (
+            <div className="absolute top-[2px] right-[2px] w-2.5 h-2.5 bg-[#00a859] border-[2px] border-[#fbfdfc] rounded-full"></div>
+          )}
         </button>
       </div>
 
