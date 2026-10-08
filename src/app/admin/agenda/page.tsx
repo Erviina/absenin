@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, Plus, Calendar as CalendarIcon, Clock, MapPin, CheckCircle2, Info } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
@@ -18,16 +18,7 @@ type AgendaItem = {
   link?: string;
 };
 
-// Data Dummy Awal
-const INITIAL_AGENDAS: Record<string, AgendaItem[]> = {
-  "2026-09-18": [
-    { id: "1", title: "Meeting Project A", time: "09:00 - 10:30 WIB", location: "Ruang Rapat 1", type: "Rapat", link: "https://meet.google.com/abc" },
-    { id: "2", title: "Review Desain Absenin", time: "13:00 - 14:00 WIB", location: "Online", type: "Review", link: "https://meet.google.com/xyz" }
-  ],
-  "2026-09-20": [
-    { id: "3", title: "Team Building", time: "08:00 - 15:00 WIB", location: "Taman Kota", type: "Acara" }
-  ]
-};
+const INITIAL_AGENDAS: Record<string, AgendaItem[]> = {};
 
 export default function AdminAgendaPage() {
   const router = useRouter();
@@ -36,11 +27,76 @@ export default function AdminAgendaPage() {
   const [isAddingAgenda, setIsAddingAgenda] = useState(false);
   
   // State Data
-  const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>(INITIAL_AGENDAS);
+  const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   
   // State Kalender
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 8, 18)); // September 2026
+  const [currentDate, setCurrentDate] = useState(new Date()); // Menggunakan tanggal hari ini, bukan hardcoded September
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+
+  const fetchAgendas = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setErrorMsg("");
+        const token = localStorage.getItem("accessToken");
+        if (!token) {
+          router.push("/login");
+          return;
+        }
+
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+        if (!apiUrl) throw new Error("API URL tidak ditemukan");
+
+        const res = await fetch(`${apiUrl}/agendas`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Gagal mengambil data agenda");
+        }
+
+        const newMap: Record<string, AgendaItem[]> = {};
+        
+        data.data.forEach((item: any) => {
+          const startDate = new Date(item.start_time);
+          const endDate = new Date(item.end_time);
+          
+          const dateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+          
+          const startTimeStr = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
+          const endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+          
+          if (!newMap[dateStr]) {
+            newMap[dateStr] = [];
+          }
+          
+          newMap[dateStr].push({
+            id: item.id,
+            title: item.title,
+            time: `${startTimeStr} - ${endTimeStr} WIB`,
+            location: item.notes || "Tanpa Keterangan",
+            type: (item.category?.name as any) || "Lainnya",
+          });
+        });
+        
+        setAgendasMap(newMap);
+      } catch (err: any) {
+        console.error("Fetch agendas error:", err);
+        setErrorMsg(err.message || "Terjadi kesalahan sistem");
+      } finally {
+        setIsLoading(false);
+      }
+  }, [router]);
+
+  useEffect(() => {
+    fetchAgendas();
+  }, [fetchAgendas]);
 
   // State Form Tambah Agenda
   const [formKegiatan, setFormKegiatan] = useState("");
@@ -79,6 +135,7 @@ export default function AdminAgendaPage() {
     setFormWaktuSelesai("");
     setFormCatatan("");
     setFormLink("");
+    setSubmitError("");
     setIsAddingAgenda(true);
   };
 
@@ -103,53 +160,163 @@ export default function AdminAgendaPage() {
     setIsAddingAgenda(true);
   };
 
-  const handleDeleteAgenda = (id: string, dateStr: string) => {
-    setAgendasMap(prev => {
-      const existing = prev[dateStr] || [];
-      return {
-        ...prev,
-        [dateStr]: existing.filter(a => a.id !== id)
-      };
-    });
-  };
+  const handleDeleteAgenda = async (id: string) => {
+    if (isDeletingId) return;
+    
+    if (!confirm("Apakah Anda yakin ingin menghapus agenda ini?")) return;
 
-  const handleSubmitAgenda = () => {
-    if (!formTanggal || !formWaktuMulai || !formWaktuSelesai || !formKegiatan) return;
-
-    const newAgenda: AgendaItem = {
-      id: editingAgendaId || Date.now().toString(),
-      title: formKegiatan,
-      time: `${formWaktuMulai} - ${formWaktuSelesai} WIB`,
-      location: formCatatan || "Tanpa Keterangan",
-      type: formKategori,
-      link: formLink
-    };
-
-    setAgendasMap(prev => {
-      const cleanedMap = { ...prev };
-      if (editingAgendaId) {
-        Object.keys(cleanedMap).forEach(key => {
-          cleanedMap[key] = cleanedMap[key].filter(a => a.id !== editingAgendaId);
-        });
+    try {
+      setIsDeletingId(id);
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        router.push("/login");
+        return;
       }
 
-      const existing = cleanedMap[formTanggal] || [];
-      return {
-        ...cleanedMap,
-        [formTanggal]: [...existing, newAgenda]
-      };
-    });
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
-    // Reset Form
-    setFormKegiatan("");
-    setFormKategori("Rapat");
-    setFormTanggal("");
-    setFormWaktuMulai("");
-    setFormWaktuSelesai("");
-    setFormCatatan("");
-    setFormLink("");
-    setIsAddingAgenda(false);
-    setEditingAgendaId(null);
+      const res = await fetch(`${apiUrl}/agendas/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Gagal menghapus agenda");
+      }
+
+      await fetchAgendas();
+    } catch (err: any) {
+      alert(err.message || "Terjadi kesalahan sistem");
+    } finally {
+      setIsDeletingId(null);
+    }
+  };
+
+  const handleSubmitAgenda = async () => {
+    setSubmitError("");
+    if (!formKegiatan.trim()) {
+      setSubmitError("Judul agenda wajib diisi");
+      return;
+    }
+    if (!formTanggal || !formWaktuMulai || !formWaktuSelesai) {
+      setSubmitError("Waktu pelaksanaan wajib diisi lengkap");
+      return;
+    }
+
+    const startDateTime = new Date(`${formTanggal}T${formWaktuMulai}:00`);
+    const endDateTime = new Date(`${formTanggal}T${formWaktuSelesai}:00`);
+
+    if (endDateTime <= startDateTime) {
+      setSubmitError("Waktu selesai harus setelah waktu mulai");
+      return;
+    }
+
+    if (editingAgendaId) {
+      try {
+        setIsSubmitting(true);
+        const token = localStorage.getItem("accessToken");
+        if (!token) {
+          router.push("/login");
+          return;
+        }
+
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+        if (!apiUrl) throw new Error("API URL tidak ditemukan");
+
+        const res = await fetch(`${apiUrl}/agendas/${editingAgendaId}`, {
+          method: "PATCH",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            title: formKegiatan,
+            notes: formCatatan || "",
+            start_time: startDateTime.toISOString(),
+            end_time: endDateTime.toISOString(),
+            agenda_category_id: null
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Gagal mengubah agenda");
+        }
+
+        await fetchAgendas();
+
+        // Reset Form
+        setFormKegiatan("");
+        setFormKategori("Rapat");
+        setFormTanggal("");
+        setFormWaktuMulai("");
+        setFormWaktuSelesai("");
+        setFormCatatan("");
+        setFormLink("");
+        setIsAddingAgenda(false);
+        setEditingAgendaId(null);
+      } catch (err: any) {
+        setSubmitError(err.message || "Terjadi kesalahan sistem");
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // CREATE (POST) Agenda
+    try {
+      setIsSubmitting(true);
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) throw new Error("API URL tidak ditemukan");
+
+      const res = await fetch(`${apiUrl}/agendas`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          title: formKegiatan,
+          notes: formCatatan || "",
+          start_time: startDateTime.toISOString(),
+          end_time: endDateTime.toISOString(),
+          agenda_category_id: null
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Gagal menyimpan agenda");
+      }
+
+      // Muat ulang data agenda dari server agar konsisten dengan format GET (seperti kategori dll)
+      await fetchAgendas();
+
+      // Reset Form
+      setFormKegiatan("");
+      setFormKategori("Rapat");
+      setFormTanggal("");
+      setFormWaktuMulai("");
+      setFormWaktuSelesai("");
+      setFormCatatan("");
+      setFormLink("");
+      setIsAddingAgenda(false);
+      setEditingAgendaId(null);
+    } catch (err: any) {
+      setSubmitError(err.message || "Terjadi kesalahan sistem");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Logika Menampilkan Agenda
@@ -308,13 +475,39 @@ export default function AdminAgendaPage() {
 
             </div>
 
+            {submitError && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-600 rounded-xl p-3 text-[13px] font-medium flex items-center gap-2">
+                <Info className="w-4 h-4 shrink-0" />
+                {submitError}
+              </div>
+            )}
+
             <button 
               onClick={handleSubmitAgenda}
-              disabled={!formTanggal || !formWaktuMulai || !formWaktuSelesai}
+              disabled={isSubmitting || !formTanggal || !formWaktuMulai || !formWaktuSelesai}
               className="w-full bg-[#356E3B] hover:bg-[#2A582F] disabled:bg-[#A3B8A8] text-white rounded-full py-4 mt-2 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98]"
             >
               <CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5} />
-              {editingAgendaId ? "Simpan Perubahan" : "Simpan Agenda ke Semua"}
+              {isSubmitting ? "Menyimpan..." : editingAgendaId ? "Simpan Perubahan" : "Simpan Agenda ke Semua"}
+            </button>
+          </div>
+        ) : isLoading ? (
+          <div className="flex flex-col items-center justify-center flex-1 py-12">
+            <div className="w-8 h-8 border-4 border-[#356E3B] border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-[#6B7280] text-[14px] font-medium">Memuat data agenda...</p>
+          </div>
+        ) : errorMsg ? (
+          <div className="flex flex-col items-center justify-center flex-1 py-12 px-4 text-center">
+            <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-4">
+              <Info className="w-6 h-6" />
+            </div>
+            <p className="text-[#EF4444] text-[14px] font-bold mb-2">Gagal Memuat Agenda</p>
+            <p className="text-[#6B7280] text-[13px]">{errorMsg}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-4 px-6 py-2 bg-[#356E3B] text-white text-[13px] font-bold rounded-full hover:bg-[#2A582F] transition-colors"
+            >
+              Coba Lagi
             </button>
           </div>
         ) : (
@@ -426,15 +619,21 @@ export default function AdminAgendaPage() {
                       <div className="flex gap-2 opacity-100">
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleEditAgenda(agenda, dateStr); }}
-                          className="w-8 h-8 rounded-full bg-[#F3F4F6] text-[#4B5563] flex items-center justify-center hover:bg-[#E5E7EB] transition-colors"
+                          disabled={isDeletingId === agenda.id}
+                          className="w-8 h-8 rounded-full bg-[#F3F4F6] text-[#4B5563] flex items-center justify-center hover:bg-[#E5E7EB] transition-colors disabled:opacity-50"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                         </button>
                         <button 
-                          onClick={(e) => { e.stopPropagation(); handleDeleteAgenda(agenda.id, dateStr); }}
-                          className="w-8 h-8 rounded-full bg-[#FEF2F2] text-[#EF4444] flex items-center justify-center hover:bg-[#FEE2E2] transition-colors"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteAgenda(agenda.id); }}
+                          disabled={isDeletingId === agenda.id}
+                          className="w-8 h-8 rounded-full bg-[#FEF2F2] text-[#EF4444] flex items-center justify-center hover:bg-[#FEE2E2] transition-colors disabled:opacity-50"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                          {isDeletingId === agenda.id ? (
+                            <div className="w-3.5 h-3.5 border-2 border-[#EF4444] border-t-transparent rounded-full animate-spin"></div>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                          )}
                         </button>
                       </div>
                     </div>

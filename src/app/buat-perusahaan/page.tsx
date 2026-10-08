@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { CustomSelect } from "@/components/CustomSelect";
+import { QRCodeSVG } from "qrcode.react";
 
 export default function BuatPerusahaanPage() {
   const router = useRouter();
@@ -17,6 +18,81 @@ export default function BuatPerusahaanPage() {
   const [joinCode, setJoinCode] = useState("");
 
   const maxAlamat = 300;
+
+  const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "http://192.168.100.11:3000";
+  const qrUrl = `${BASE_URL}/gabung-perusahaan?code=${joinCode}`;
+
+  const handleBagikanUndangan = async () => {
+    const text = `Mari bergabung dengan perusahaan ${nama} di AbsenIN!\n\nKode perusahaan: ${joinCode}\n\nGunakan link berikut untuk bergabung:`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Undangan Bergabung ke AbsenIN",
+          text: text,
+          url: qrUrl
+        });
+      } catch (error: any) {
+        if (error.name !== "AbortError") {
+          console.error("Error sharing", error);
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(`${text}\n${qrUrl}`);
+        alert("Link undangan berhasil disalin ke clipboard.");
+      } catch (error) {
+        console.error("Error copying to clipboard", error);
+        alert("Gagal menyalin link undangan.");
+      }
+    }
+  };
+
+  const handleSimpanQR = () => {
+    try {
+      const svg = document.getElementById("qr-code-svg");
+      if (!svg) throw new Error("QR SVG not found");
+
+      const svgData = new XMLSerializer().serializeToString(svg);
+      
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      
+      const size = 1024; // High resolution
+      canvas.width = size;
+      canvas.height = size;
+      
+      const img = new Image();
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgData);
+      
+      img.onload = () => {
+        if (!ctx) return;
+        
+        // Background putih
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, size, size);
+        
+        // Gambar QR dengan margin (padding 10%)
+        const padding = size * 0.1;
+        const innerSize = size - (padding * 2);
+        ctx.drawImage(img, padding, padding, innerSize, innerSize);
+        
+        const pngFile = canvas.toDataURL("image/png");
+        const downloadLink = document.createElement("a");
+        downloadLink.download = `absenin-qr-${joinCode}.png`;
+        downloadLink.href = pngFile;
+        downloadLink.click();
+      };
+      
+      img.onerror = () => {
+        throw new Error("Gagal load SVG ke image");
+      };
+      
+    } catch (error) {
+      console.error(error);
+      alert("Gagal menyimpan QR Code. Silakan coba lagi.");
+    }
+  };
 
   const handleLanjutkan = async () => {
     // Basic validation
@@ -80,7 +156,7 @@ export default function BuatPerusahaanPage() {
         {/* QR Code Card */}
         <div className="bg-white rounded-[24px] p-6 w-full max-w-[320px] shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-[#eef5f0] flex items-center gap-5 mb-8">
           <div className="w-[80px] h-[80px] bg-[#f8faf9] rounded-[16px] flex items-center justify-center border border-gray-100 shrink-0">
-            <QrCode className="w-12 h-12 text-[#1E293B]" strokeWidth={1.5} />
+            <QRCodeSVG id="qr-code-svg" value={qrUrl} size={48} />
           </div>
           <div className="flex flex-col justify-center gap-1 flex-1">
             <p className="text-[#64748B] text-[12px] font-medium">Kode Bergabung</p>
@@ -95,11 +171,17 @@ export default function BuatPerusahaanPage() {
 
         {/* Actions */}
         <div className="flex w-full max-w-[320px] gap-3 mb-16">
-          <button className="flex-1 bg-white border border-[#356E3B] text-[#356E3B] py-3.5 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#f4f9f6] transition-colors">
+          <button 
+            onClick={handleBagikanUndangan}
+            className="flex-1 bg-white border border-[#356E3B] text-[#356E3B] py-3.5 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#f4f9f6] transition-colors"
+          >
             <Share className="w-4 h-4" />
             Bagikan Undangan
           </button>
-          <button className="flex-1 bg-[#356E3B] text-white py-3.5 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#2b5930] shadow-[0_4px_12px_rgba(53,110,59,0.2)] transition-colors">
+          <button 
+            onClick={handleSimpanQR}
+            className="flex-1 bg-[#356E3B] text-white py-3.5 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#2b5930] shadow-[0_4px_12px_rgba(53,110,59,0.2)] transition-colors"
+          >
             <ImageIcon className="w-4 h-4" />
             Simpan QR
           </button>

@@ -14,6 +14,9 @@ export default function DashboardPage() {
   const [news, setNews] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [avatarError, setAvatarError] = useState(false);
+  const [attendanceStatus, setAttendanceStatus] = useState<"NOT_CHECKED_IN" | "CHECKED_IN" | "CHECKED_OUT" | null>(null);
+  const [isAttendanceLoading, setIsAttendanceLoading] = useState(true);
+  const [attendanceError, setAttendanceError] = useState(false);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -34,24 +37,55 @@ export default function DashboardPage() {
           return;
         }
 
-        const [authRes, newsRes] = await Promise.all([
+        const [authRes, newsRes, attendRes] = await Promise.all([
           fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/news", { headers: { Authorization: `Bearer ${token}` } })
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/news", { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/attendances/today", { headers: { Authorization: `Bearer ${token}` } })
         ]);
 
-        const authData = await authRes.json();
-        if (authData.success) {
-          setUser(authData.data.user);
+        try {
+          const authData = await authRes.json();
+          if (authData.success) {
+            setUser(authData.data.user);
+          }
+        } catch (e) {
+          console.error("Failed to parse auth data", e);
         }
 
-        const newsData = await newsRes.json();
-        if (newsData.success) {
-          setNews(newsData.data.slice(0, 2));
+        try {
+          const newsData = await newsRes.json();
+          if (newsData.success) {
+            setNews(newsData.data.slice(0, 2));
+          }
+        } catch (e) {
+          console.error("Failed to parse news data", e);
+        }
+
+        try {
+          const attendData = await attendRes.json();
+          console.log("=== DEBUG ATTENDANCE ===");
+          console.log("attendRes.status:", attendRes.status);
+          console.log("attendData:", attendData);
+          console.log("attendData?.data?.status:", attendData?.data?.status);
+          
+          if (attendData.success && attendData.data) {
+            console.log("Setting attendanceStatus to:", attendData.data.status);
+            setAttendanceStatus(attendData.data.status);
+            setAttendanceError(false);
+          } else {
+            console.log("Setting attendanceError to true because success is false or data is missing");
+            setAttendanceError(true);
+          }
+        } catch (e) {
+          console.error("Failed to parse attendance data", e);
+          setAttendanceError(true);
         }
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
+        setAttendanceError(true);
       } finally {
         setIsLoading(false);
+        setIsAttendanceLoading(false);
       }
     };
     fetchData();
@@ -128,7 +162,10 @@ export default function DashboardPage() {
               
               <div className="flex flex-col gap-1">
                 {/* Personal Mode (Active) */}
-                <div className="flex items-center justify-between p-2 bg-[#F0FDF4] rounded-[16px] cursor-default">
+                <div 
+                  className="flex items-center justify-between p-2 bg-[#F0FDF4] rounded-[16px] cursor-pointer hover:bg-[#E8F3EB] transition-colors"
+                  onClick={() => router.push("/profil")}
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-[42px] h-[42px] rounded-[14px] bg-[#2D5A3F] flex items-center justify-center shrink-0">
                       <User className="w-5 h-5 text-white" strokeWidth={2} />
@@ -195,10 +232,17 @@ export default function DashboardPage() {
           <div className="absolute bottom-0 right-0 z-20 flex items-end">
             <button 
               onClick={() => window.location.href = '/checkin'}
-              className="bg-[#1E4738] hover:bg-[#153428] text-white rounded-l-full pl-5 pr-4 py-3 flex items-center gap-2 shadow-sm border-[4px] border-r-0 border-white transition-all active:scale-95"
+              disabled={isAttendanceLoading || attendanceError}
+              className="bg-[#1E4738] hover:bg-[#153428] text-white rounded-l-full pl-5 pr-4 py-3 flex items-center gap-2 shadow-sm border-[4px] border-r-0 border-white transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               <MapPin className="w-[18px] h-[18px]" strokeWidth={2.5} />
-              <span className="font-bold text-[14px]">Check In</span>
+              <span className="font-bold text-[14px]">
+                {isAttendanceLoading 
+                  ? "Memuat..." 
+                  : attendanceError 
+                    ? "Gagal Memuat" 
+                    : (attendanceStatus === "CHECKED_IN" ? "Check Out" : "Check In")}
+              </span>
               <ArrowRight className="w-5 h-5 ml-1" strokeWidth={2.5} />
             </button>
           </div>

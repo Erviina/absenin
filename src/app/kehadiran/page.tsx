@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronLeft, Search, ListFilter, Download, CheckCircle2, XCircle, X, CalendarDays, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronLeft, Search, ListFilter, Download, CheckCircle2, XCircle, X, CalendarDays, Check, RefreshCcw } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
 import { useRouter } from "next/navigation";
 import { CustomCalendar } from "@/components/CustomCalendar";
@@ -18,6 +18,11 @@ export default function KehadiranPage() {
   
   const [appliedStartDate, setAppliedStartDate] = useState("");
   const [appliedEndDate, setAppliedEndDate] = useState("");
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [attendances, setAttendances] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "Pilih Tanggal";
@@ -63,28 +68,68 @@ export default function KehadiranPage() {
     }
   };
 
-  // Dummy data for history
-  const dummyHistory = [
-    { id: 1, date: "2026-09-17", type: "WFH", checkIn: "11:51", checkOut: null },
-    { id: 2, date: "2026-09-16", type: "WFO", checkIn: "07:58", checkOut: "17:05" },
-    { id: 3, date: "2026-09-15", type: "WFO", checkIn: "08:05", checkOut: "17:10" },
-    { id: 4, date: "2026-09-10", type: "WFH", checkIn: "08:15", checkOut: "17:02" },
-    { id: 5, date: "2026-09-02", type: "WFO", checkIn: "07:50", checkOut: "17:00" },
-    { id: 6, date: "2026-08-30", type: "WFO", checkIn: "08:00", checkOut: "17:01" },
-  ];
+  const fetchAttendances = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+      
+      let url = `${process.env.NEXT_PUBLIC_API_URL}/attendances`;
+      const queryParams = new URLSearchParams();
+      if (appliedStartDate) queryParams.append("start_date", appliedStartDate);
+      if (appliedEndDate) queryParams.append("end_date", appliedEndDate);
+      const qString = queryParams.toString();
+      if (qString) url += `?${qString}`;
+      
+      const res = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Gagal mengambil data kehadiran");
+      }
+      
+      setAttendances(data.data || []);
+    } catch (err: any) {
+      setError(err.message || "Terjadi kesalahan sistem");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Filtering logic
-  const filteredHistory = dummyHistory.filter(item => {
-    if (!appliedStartDate && !appliedEndDate) return true;
-    if (appliedStartDate && item.date < appliedStartDate) return false;
-    if (appliedEndDate && item.date > appliedEndDate) return false;
-    return true;
+  useEffect(() => {
+    fetchAttendances();
+  }, [appliedStartDate, appliedEndDate]);
+
+  const searchedAttendances = attendances.filter(item => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    const dateStr = formatDate(item.check_in_time).toLowerCase();
+    const mode = (item.work_mode || "").toLowerCase();
+    const addressIn = (item.check_in_address || "").toLowerCase();
+    const addressOut = (item.check_out_address || "").toLowerCase();
+    
+    return dateStr.includes(q) || mode.includes(q) || addressIn.includes(q) || addressOut.includes(q);
   });
 
   const getDayName = (dateStr: string) => {
     const d = new Date(dateStr);
     const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
     return days[d.getDay()];
+  };
+
+  const extractTime = (dateString: string | null) => {
+    if (!dateString) return "—";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "—";
+    return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).replace(/\./g, ':');
   };
 
   return (
@@ -107,7 +152,9 @@ export default function KehadiranPage() {
             <Search className="w-5 h-5 text-[#9CA3AF] absolute left-4 top-1/2 -translate-y-1/2" strokeWidth={2} />
             <input 
               type="text" 
-              placeholder="Cari..." 
+              placeholder="Cari (tanggal, wfo/wfh, alamat)..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full h-12 pl-12 pr-4 rounded-2xl border border-[#E5E7EB] bg-white text-[14px] focus:outline-none focus:border-[#2D5A3F] focus:ring-1 focus:ring-[#2D5A3F] transition-all"
             />
           </div>
@@ -126,14 +173,33 @@ export default function KehadiranPage() {
         {/* History Cards */}
         <div className="flex flex-col gap-4">
           
-          {filteredHistory.length === 0 ? (
+          {isLoading ? (
+            <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
+              <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
+              <p className="text-[#4B5563] font-medium text-[14px]">Memuat riwayat kehadiran...</p>
+            </div>
+          ) : error ? (
+            <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
+              <XCircle className="w-12 h-12 text-red-400 mb-3" />
+              <p className="text-red-600 font-medium text-[15px]">Gagal Memuat Data</p>
+              <p className="text-[#9CA3AF] text-[13px] mt-1 mb-4">{error}</p>
+              <button 
+                onClick={fetchAttendances}
+                className="px-6 h-10 rounded-full bg-[#356E3B] text-white font-bold text-[13px] flex items-center gap-2 hover:bg-[#1E4738] transition-colors"
+              >
+                <RefreshCcw className="w-4 h-4" /> Coba Lagi
+              </button>
+            </div>
+          ) : searchedAttendances.length === 0 ? (
             <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
               <CalendarDays className="w-12 h-12 text-[#D1D5DB] mb-3" />
-              <p className="text-[#4B5563] font-medium text-[15px]">Tidak ada riwayat</p>
-              <p className="text-[#9CA3AF] text-[13px] mt-1">Coba sesuaikan rentang tanggal filter Anda.</p>
+              <p className="text-[#4B5563] font-medium text-[15px]">Belum ada riwayat kehadiran.</p>
+              {appliedStartDate || appliedEndDate ? (
+                <p className="text-[#9CA3AF] text-[13px] mt-1">Coba sesuaikan rentang tanggal filter Anda.</p>
+              ) : null}
             </div>
           ) : (
-            filteredHistory.map((item) => (
+            searchedAttendances.map((item) => (
               <div 
                 key={item.id} 
                 onClick={() => router.push(`/kehadiran/${item.id}`)}
@@ -141,10 +207,10 @@ export default function KehadiranPage() {
               >
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-[#374151] font-medium text-[15px]">
-                    {getDayName(item.date)}, {formatDate(item.date)}
+                    {getDayName(item.check_in_time)}, {formatDate(item.check_in_time)}
                   </span>
-                  <span className="bg-[#E8F3EB] text-[#2D5A3F] text-[12px] font-bold px-3 py-1 rounded-full">
-                    {item.type}
+                  <span className="bg-[#E8F3EB] text-[#2D5A3F] text-[12px] font-bold px-3 py-1 rounded-full uppercase">
+                    {item.work_mode}
                   </span>
                 </div>
                 
@@ -158,7 +224,7 @@ export default function KehadiranPage() {
                     <div className="flex flex-col">
                       <span className="text-[#9CA3AF] text-[12px] font-medium mb-0.5">Jam Masuk</span>
                       <div className="flex items-baseline gap-1">
-                        <span className="text-[#111827] font-bold text-[16px]">{item.checkIn}</span>
+                        <span className="text-[#111827] font-bold text-[16px]">{extractTime(item.check_in_time)}</span>
                         <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
                       </div>
                     </div>
@@ -167,8 +233,8 @@ export default function KehadiranPage() {
                   <div className="w-[1px] h-10 bg-[#F3F4F6] mx-2" />
                   
                   <div className="flex items-start gap-3 flex-1 pl-2">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.checkOut ? "bg-[#E8F3EB]" : "bg-[#F3F4F6]"}`}>
-                      {item.checkOut ? (
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.check_out_time ? "bg-[#E8F3EB]" : "bg-[#F3F4F6]"}`}>
+                      {item.check_out_time ? (
                         <CheckCircle2 className="w-6 h-6 text-[#2D5A3F]" strokeWidth={2} />
                       ) : (
                         <XCircle className="w-6 h-6 text-[#D1D5DB]" strokeWidth={2} />
@@ -176,9 +242,9 @@ export default function KehadiranPage() {
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[#9CA3AF] text-[12px] font-medium mb-0.5">Jam Keluar</span>
-                      {item.checkOut ? (
+                      {item.check_out_time ? (
                         <div className="flex items-baseline gap-1">
-                          <span className="text-[#111827] font-bold text-[16px]">{item.checkOut}</span>
+                          <span className="text-[#111827] font-bold text-[16px]">{extractTime(item.check_out_time)}</span>
                           <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
                         </div>
                       ) : (
