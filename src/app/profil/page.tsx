@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+
 
 export default function ProfilPage() {
   const router = useRouter();
@@ -235,21 +235,7 @@ export default function ProfilPage() {
           <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
         </div>
 
-        {/* Masuk Manajemen Card */}
-        {(user.roles.includes("Admin") || user.roles.includes("Manager")) && (
-          <div 
-            onClick={() => router.push("/admin/dashboard")}
-            className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-9 flex justify-center">
-                <LogIn className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
-              </div>
-              <span className="text-[#111827] text-[14px] font-bold">Masuk Manajemen</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
-          </div>
-        )}
+
           </>
         )}
       </div>
