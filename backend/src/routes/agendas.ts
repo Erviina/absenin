@@ -12,9 +12,8 @@ const agendaSchema = z.object({
   start_time: z.string().refine(val => !isNaN(Date.parse(val)), "Format waktu mulai tidak valid"),
   end_time: z.string().refine(val => !isNaN(Date.parse(val)), "Format waktu selesai tidak valid"),
   agenda_category_id: z.string().uuid().nullable().optional(),
-  type: z.enum(["COMPANY", "PERSONAL"], { 
-    required_error: "Type wajib diisi",
-    invalid_type_error: "Type harus berupa COMPANY atau PERSONAL"
+  type: z.enum(["COMPANY", "PERSONAL"], {
+    error: "Type harus berupa COMPANY atau PERSONAL"
   })
 }).strict().refine(data => new Date(data.end_time) > new Date(data.start_time), {
   message: "Waktu selesai tidak boleh lebih awal dari waktu mulai",
