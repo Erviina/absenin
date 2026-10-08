@@ -36,10 +36,10 @@ export async function uploadAttendancePhoto(
   const uniqueId = crypto.randomUUID();
   const filePath = `${companyId}/${profileId}/${uniqueId}${extension}`;
 
-  // 4. Upload to Supabase Storage (Using the 'attendances' bucket)
-  // Note: The 'attendances' bucket must be created manually in Supabase.
+  // 4. Upload to Supabase Storage (Using the 'attachment' bucket)
+  // Note: The 'attachment' bucket must be created manually in Supabase.
   const { data, error } = await supabaseAdmin.storage
-    .from("attendances")
+    .from("attachment")
     .upload(filePath, fileBuffer, {
       contentType: mimeType,
       upsert: false,
@@ -51,14 +51,14 @@ export async function uploadAttendancePhoto(
 
   // 5. Get Public URL
   const { data: publicUrlData } = supabaseAdmin.storage
-    .from("attendances")
+    .from("attachment")
     .getPublicUrl(filePath);
 
   return publicUrlData.publicUrl;
 }
 
 /**
- * Uploads an avatar photo to the Supabase Storage attachments bucket.
+ * Uploads an avatar photo to the Supabase Storage attachment bucket.
  * 
  * @param fileBuffer The buffer of the image to upload
  * @param mimeType The MIME type of the image
@@ -85,9 +85,9 @@ export async function uploadAvatarPhoto(
   const uniqueId = crypto.randomUUID();
   const filePath = `avatars/${profileId}/${uniqueId}${extension}`;
 
-  // 4. Upload to Supabase Storage (Using the 'attachments' bucket)
+  // 4. Upload to Supabase Storage (Using the 'attachment' bucket)
   const { data, error } = await supabaseAdmin.storage
-    .from("attachments")
+    .from("attachment")
     .upload(filePath, fileBuffer, {
       contentType: mimeType,
       upsert: false,
@@ -99,14 +99,14 @@ export async function uploadAvatarPhoto(
 
   // 5. Get Public URL
   const { data: publicUrlData } = supabaseAdmin.storage
-    .from("attachments")
+    .from("attachment")
     .getPublicUrl(filePath);
 
   return publicUrlData.publicUrl;
 }
 
 /**
- * Uploads a company avatar photo to the Supabase Storage attachments bucket.
+ * Uploads a company avatar photo to the Supabase Storage attachment bucket.
  * 
  * @param fileBuffer The buffer of the image to upload
  * @param mimeType The MIME type of the image
@@ -133,9 +133,9 @@ export async function uploadCompanyPhoto(
   const uniqueId = crypto.randomUUID();
   const filePath = `companies/${companyId}/${uniqueId}${extension}`;
 
-  // 4. Upload to Supabase Storage (Using the 'attachments' bucket)
+  // 4. Upload to Supabase Storage (Using the 'attachment' bucket)
   const { data, error } = await supabaseAdmin.storage
-    .from("attachments")
+    .from("attachment")
     .upload(filePath, fileBuffer, {
       contentType: mimeType,
       upsert: false,
@@ -147,7 +147,7 @@ export async function uploadCompanyPhoto(
 
   // 5. Get Public URL
   const { data: publicUrlData } = supabaseAdmin.storage
-    .from("attachments")
+    .from("attachment")
     .getPublicUrl(filePath);
 
   return publicUrlData.publicUrl;
