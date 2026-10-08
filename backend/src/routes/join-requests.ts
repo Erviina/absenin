@@ -23,7 +23,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
       return res.status(400).json({
         success: false,
         message: "Validasi gagal",
-        errors: parseResult.error.errors.map((e) => e.message),
+        errors: (parseResult.error as any).errors.map((e: any) => e.message),
       });
     }
 

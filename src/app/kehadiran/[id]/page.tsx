@@ -1,7 +1,7 @@
 "use client";
 
-import { use } from "react";
-import { ChevronLeft, ShieldCheck, MapPin, ExternalLink, Info, Plus, Minus } from "lucide-react";
+import { useState, useEffect, use } from "react";
+import { ChevronLeft, ShieldCheck, MapPin, ExternalLink, Info, Plus, Minus, RefreshCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { TopBar } from "@/components/TopBar";
@@ -20,21 +20,49 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
   const router = useRouter();
   const { id } = use(params);
   
-  // Dummy data (in real app, this would be fetched from API based on params.id)
-  const dummyHistory = [
-    { id: "1", date: "2026-09-17", type: "WFH", checkIn: "11:51", checkOut: "17:05", checkInStatus: "Terlambat 3j 51m", checkOutStatus: "Tepat Waktu" },
-    { id: "2", date: "2026-09-16", type: "WFO", checkIn: "07:58", checkOut: "17:05", checkInStatus: "Tepat Waktu", checkOutStatus: "Tepat Waktu" },
-    { id: "3", date: "2026-09-15", type: "WFO", checkIn: "08:05", checkOut: "17:10", checkInStatus: "Terlambat 5m", checkOutStatus: "Tepat Waktu" },
-    { id: "4", date: "2026-09-10", type: "WFH", checkIn: "08:15", checkOut: "17:02", checkInStatus: "Terlambat 15m", checkOutStatus: "Tepat Waktu" },
-    { id: "5", date: "2026-09-02", type: "WFO", checkIn: "07:50", checkOut: "17:00", checkInStatus: "Tepat Waktu", checkOutStatus: "Tepat Waktu" },
-    { id: "6", date: "2026-08-30", type: "WFO", checkIn: "08:00", checkOut: "17:01", checkInStatus: "Tepat Waktu", checkOutStatus: "Tepat Waktu" },
-    // Example for ongoing/missing checkout today:
-    { id: "7", date: "2026-09-29", type: "WFO", checkIn: "07:55", checkOut: null, checkInStatus: "Tepat Waktu", checkOutStatus: "" },
-  ];
+  const [data, setData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const data = dummyHistory.find(item => item.id === id) || dummyHistory[0];
+  const fetchData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+      
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/${id}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      
+      const result = await res.json();
+      
+      if (res.status === 404) {
+        throw new Error("Data kehadiran tidak ditemukan.");
+      }
+      if (!res.ok) {
+        throw new Error(result.message || "Gagal mengambil data kehadiran");
+      }
+      
+      setData(result.data);
+    } catch (err: any) {
+      setError(err.message || "Terjadi kesalahan sistem");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) fetchData();
+  }, [id]);
 
   const formatDateWithDay = (dateString: string) => {
+    if (!dateString) return "";
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return dateString;
     const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -43,16 +71,24 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
     return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
-  // Kalkulasi durasi kerja jika checkOut ada
+  const extractTime = (dateString: string | null) => {
+    if (!dateString) return "—";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "—";
+    return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).replace(/\./g, ':');
+  };
+
   let durasiKerja = "-- jam";
-  if (data.checkIn && data.checkOut) {
-    const [inH, inM] = data.checkIn.split(':').map(Number);
-    const [outH, outM] = data.checkOut.split(':').map(Number);
-    let diff = (outH * 60 + outM) - (inH * 60 + inM);
-    if (diff < 0) diff += 24 * 60; // Just in case it crosses midnight
-    const diffH = Math.floor(diff / 60);
-    const diffM = diff % 60;
-    durasiKerja = diffM > 0 ? `${diffH}j ${diffM}m` : `${diffH} jam`;
+  if (data?.check_in_time && data?.check_out_time) {
+    const dIn = new Date(data.check_in_time);
+    const dOut = new Date(data.check_out_time);
+    let diffMs = dOut.getTime() - dIn.getTime();
+    if (diffMs > 0) {
+      const diffM = Math.floor(diffMs / 60000);
+      const h = Math.floor(diffM / 60);
+      const m = diffM % 60;
+      durasiKerja = m > 0 ? `${h}j ${m}m` : `${h} jam`;
+    }
   }
 
   return (
@@ -60,14 +96,33 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
       {/* Header */}
       <TopBar title="Detail Kehadiran" />
 
-      <div className="px-6 pt-6 pb-12 flex flex-col gap-6">
-        {/* Title Section */}
+      {isLoading ? (
+        <div className="flex-1 flex flex-col items-center justify-center h-[50vh]">
+          <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
+          <p className="text-[#4B5563] font-medium text-[14px]">Memuat detail kehadiran...</p>
+        </div>
+      ) : error ? (
+        <div className="flex-1 flex flex-col items-center justify-center h-[50vh] p-6 text-center">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
+            <Info className="w-8 h-8 text-red-500" strokeWidth={2} />
+          </div>
+          <p className="text-red-600 font-bold text-[18px] mb-2">{error}</p>
+          <button 
+            onClick={fetchData}
+            className="mt-4 px-6 h-12 rounded-full bg-[#356E3B] text-white font-bold text-[14px] flex items-center gap-2 hover:bg-[#1E4738] transition-colors"
+          >
+            <RefreshCcw className="w-4 h-4" /> Coba Lagi
+          </button>
+        </div>
+      ) : data && (
+        <div className="px-6 pt-6 pb-12 flex flex-col gap-6">
+          {/* Title Section */}
         <div>
           <p className="text-[#6EA874] text-[11px] font-bold tracking-wider uppercase mb-1">
             Tanggal Presensi
           </p>
           <h2 className="text-[#111827] text-[22px] font-bold tracking-tight">
-            {formatDateWithDay(data.date)}
+            {formatDateWithDay(data.check_in_time)}
           </h2>
         </div>
 
@@ -79,8 +134,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 <ShieldCheck className="w-5 h-5 text-white" strokeWidth={2} />
               </div>
               <div className="flex flex-col">
-                <span className="text-[#111827] text-[14px] font-bold">{data.type} • {data.type === "WFH" ? "Work From Home" : "Work From Office"}</span>
-                <span className="text-[#6B7280] text-[12px]">Shift Reguler (08:00 - 17:00)</span>
+                <span className="text-[#111827] text-[14px] font-bold uppercase">{data.work_mode} • {data.work_mode === "WFH" ? "Work From Home" : "Work From Office"}</span>
               </div>
             </div>
             <div className="bg-white border border-[#E8F3EB] rounded-full px-3 py-1.5 flex items-center">
@@ -97,28 +151,22 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 <span className="text-[#6B7280] text-[12px] font-medium">Jam Masuk</span>
               </div>
               <div className="flex items-baseline gap-1 mb-2">
-                <span className="text-[#111827] text-[24px] font-bold leading-none">{data.checkIn}</span>
+                <span className="text-[#111827] text-[24px] font-bold leading-none">{extractTime(data.check_in_time)}</span>
                 <span className="text-[#9CA3AF] text-[12px] font-bold">WIB</span>
               </div>
-              <span className={`text-[11px] font-bold ${data.checkInStatus.includes("Terlambat") ? "text-[#EF4444]" : "text-[#356E3B]"}`}>
-                {data.checkInStatus}
-              </span>
             </div>
             
             {/* Jam Keluar */}
-            {data.checkOut ? (
+            {data.check_out_time ? (
               <div className="flex-1 bg-white border border-[#E8F3EB] rounded-[16px] p-4 flex flex-col justify-center">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2 h-2 rounded-full bg-[#5C8966]" />
                   <span className="text-[#6B7280] text-[12px] font-medium">Jam Keluar</span>
                 </div>
                 <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-[#111827] text-[24px] font-bold leading-none">{data.checkOut}</span>
+                  <span className="text-[#111827] text-[24px] font-bold leading-none">{extractTime(data.check_out_time)}</span>
                   <span className="text-[#9CA3AF] text-[12px] font-bold">WIB</span>
                 </div>
-                <span className={`text-[11px] font-bold ${data.checkOutStatus.includes("Cepat") ? "text-[#EF4444]" : "text-[#356E3B]"}`}>
-                  {data.checkOutStatus}
-                </span>
               </div>
             ) : (
               <div className="flex-1 bg-white border border-dashed border-[#E5E7EB] rounded-[16px] p-4 flex flex-col justify-center">
@@ -166,57 +214,58 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
           <div className="p-5 bg-white flex justify-between items-center">
             <div className="flex flex-col pr-4">
               <span className="text-[#111827] text-[13px] font-bold leading-tight mb-1">
-                Jalan Merak No. 5, Coblong, Kota Bandung, Jawa Barat
+                Check-in: {data.check_in_address || "Lokasi tidak diketahui"}
               </span>
-              <span className="text-[#9CA3AF] text-[11px] font-mono">
-                Lat: -7.2564186 • Long: 112.4882029
+              <span className="text-[#9CA3AF] text-[11px] font-mono mb-3">
+                Lat: {data.check_in_latitude} • Long: {data.check_in_longitude}
               </span>
-            </div>
-            <button className="flex items-center gap-1.5 bg-[#F3F4F6] hover:bg-[#E5E7EB] px-3 py-2 rounded-xl text-[#4B5563] text-[12px] font-bold shrink-0 transition-colors">
-              Buka Maps
-              <ExternalLink className="w-3.5 h-3.5" strokeWidth={2.5} />
-            </button>
-          </div>
-        </div>
-
-        {/* Detail Pelanggaran & Jam Kerja */}
-        <div className="border border-[#E5E7EB] rounded-[24px] p-5">
-          <div className="flex items-center gap-2 mb-5">
-            <Info className="w-4 h-4 text-[#4B5563]" strokeWidth={2.5} />
-            <span className="text-[#111827] text-[14px] font-bold">Detail Pelanggaran & Jam Kerja</span>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-center text-[13px]">
-              <span className="text-[#6B7280]">Total Jam Kerja</span>
-              <span className="text-[#111827] font-bold">
-                {data.checkOut ? durasiKerja : "- (Sedang Berjalan)"}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center bg-[#FEF2F2] px-3 py-2 -mx-3 rounded-xl text-[13px]">
-              <span className="text-[#374151]">Keterlambatan</span>
-              <span className="text-[#EF4444] font-bold">
-                {data.checkInStatus.includes("Terlambat") ? data.checkInStatus.replace("Terlambat ", "").replace("j", " jam").replace("m", " menit") : "-"}
-              </span>
-            </div>
-            
-            <div className="flex justify-between items-center text-[13px]">
-              <span className="text-[#6B7280]">Pulang Cepat</span>
-              <span className={`${data.checkOutStatus.includes("Cepat") ? "text-[#EF4444]" : "text-[#356E3B]"} font-bold`}>
-                {data.checkOutStatus === "Tepat Waktu" ? "0 menit (Tepat Waktu)" : (data.checkOutStatus || "-")}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center bg-[#FEF2F2] px-3 py-2.5 -mx-3 rounded-xl text-[13px] mt-1">
-              <span className="text-[#7F1D1D] font-bold">Total Durasi Pelanggaran</span>
-              <span className="text-[#EF4444] font-bold">
-                {data.checkInStatus.includes("Terlambat") ? data.checkInStatus.replace("Terlambat ", "").replace("j", " jam").replace("m", " menit") : "-"}
-              </span>
+              
+              {data.check_out_time && (
+                <>
+                  <span className="text-[#111827] text-[13px] font-bold leading-tight mb-1 border-t border-gray-100 pt-3">
+                    Check-out: {data.check_out_address || "Lokasi tidak diketahui"}
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px] font-mono">
+                    Lat: {data.check_out_latitude} • Long: {data.check_out_longitude}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Foto Bukti */}
+        <div className="border border-[#E5E7EB] rounded-[24px] overflow-hidden flex flex-col bg-white p-5">
+          <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">
+            <span className="text-[#111827] text-[14px] font-bold">Foto Bukti Kehadiran</span>
+          </div>
+          <div className="flex gap-4">
+            <div className="flex-1 flex flex-col gap-2">
+              <span className="text-[12px] font-bold text-[#4B5563]">Masuk</span>
+              {data.check_in_photo_url ? (
+                <img src={data.check_in_photo_url} alt="Foto Check-in" className="w-full aspect-[3/4] object-cover rounded-[16px] bg-gray-100" />
+              ) : (
+                <div className="w-full aspect-[3/4] bg-gray-100 rounded-[16px] flex items-center justify-center text-gray-400 text-[12px]">Tidak ada foto</div>
+              )}
+            </div>
+            
+            <div className="flex-1 flex flex-col gap-2">
+              <span className="text-[12px] font-bold text-[#4B5563]">Keluar</span>
+              {data.check_out_time ? (
+                data.check_out_photo_url ? (
+                  <img src={data.check_out_photo_url} alt="Foto Check-out" className="w-full aspect-[3/4] object-cover rounded-[16px] bg-gray-100" />
+                ) : (
+                  <div className="w-full aspect-[3/4] bg-gray-100 rounded-[16px] flex items-center justify-center text-gray-400 text-[12px]">Tidak ada foto</div>
+                )
+              ) : (
+                <div className="w-full aspect-[3/4] border-2 border-dashed border-gray-200 rounded-[16px] flex items-center justify-center text-gray-400 text-[12px]">Belum Checkout</div>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
+      )}
     </div>
   );
 }

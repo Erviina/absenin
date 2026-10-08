@@ -1,18 +1,29 @@
 "use client";
 
 import { ChevronLeft, ScanLine, QrCode, X, Zap, Hourglass, Building2, Check } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
+import { Html5Qrcode } from "html5-qrcode";
 
-export default function GabungPerusahaanPage() {
+function GabungPerusahaanContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [kode, setKode] = useState("");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [status, setStatus] = useState<'idle' | 'pending' | 'accepted'>('idle');
   const [companyName, setCompanyName] = useState("Perusahaan");
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isFlashOn, setIsFlashOn] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  useEffect(() => {
+    const codeFromUrl = searchParams.get("code");
+    if (codeFromUrl) {
+      setKode(codeFromUrl.toUpperCase());
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -34,6 +45,70 @@ export default function GabungPerusahaanPage() {
     };
     fetchStatus();
   }, []);
+
+  useEffect(() => {
+    if (isScannerOpen) {
+      const html5QrCode = new Html5Qrcode("qr-reader");
+      scannerRef.current = html5QrCode;
+
+      const onScanSuccess = (decodedText: string) => {
+        try {
+          const url = new URL(decodedText);
+          const codeFromUrl = url.searchParams.get("code");
+          if (codeFromUrl) {
+            setKode(codeFromUrl.toUpperCase());
+          } else {
+            setKode(decodedText.toUpperCase());
+          }
+        } catch {
+          // If not URL
+          setKode(decodedText.toUpperCase());
+        }
+        setIsScannerOpen(false);
+      };
+
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onScanSuccess,
+        () => {} // onScanFailure ignore
+      ).catch(err => {
+        console.error("Camera error", err);
+        alert("Kamera tidak dapat diakses atau permission ditolak.");
+        setIsScannerOpen(false);
+      });
+
+      return () => {
+        setIsFlashOn(false);
+        try {
+          if (html5QrCode.getState() === 2) { // 2 = SCANNING
+            html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
+          } else {
+            html5QrCode.clear();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+    }
+  }, [isScannerOpen]);
+
+  const toggleFlash = async () => {
+    if (!scannerRef.current) return;
+    const html5QrCode = scannerRef.current;
+    
+    try {
+      if (html5QrCode.getState() !== 2) return; // 2 = SCANNING
+      
+      await html5QrCode.applyVideoConstraints({
+        advanced: [{ torch: !isFlashOn } as any]
+      });
+      setIsFlashOn(!isFlashOn);
+    } catch (error) {
+      console.warn("Torch failed", error);
+      alert("Flash tidak didukung di perangkat atau browser ini.");
+    }
+  };
 
   const handleGabung = async () => {
     if (!kode) return;
@@ -151,8 +226,11 @@ export default function GabungPerusahaanPage() {
             <X className="w-6 h-6" />
           </button>
           <h1 className="text-[17px] font-bold">Scan QR</h1>
-          <button className="w-10 h-10 flex items-center justify-center -mr-2 active:scale-95 transition-transform">
-            <Zap className="w-6 h-6 fill-white" />
+          <button 
+            onClick={toggleFlash}
+            className="w-10 h-10 flex items-center justify-center -mr-2 active:scale-95 transition-transform"
+          >
+            <Zap className={`w-6 h-6 ${isFlashOn ? 'fill-yellow-400 text-yellow-400' : 'fill-white text-white'}`} />
           </button>
         </div>
 
@@ -162,18 +240,18 @@ export default function GabungPerusahaanPage() {
           <div className="relative w-[280px] h-[280px] mb-8">
             
             {/* Corner Brackets */}
-            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#76d8a3] rounded-tl-[24px]"></div>
-            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#76d8a3] rounded-tr-[24px]"></div>
-            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#76d8a3] rounded-bl-[24px]"></div>
-            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#76d8a3] rounded-br-[24px]"></div>
+            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#76d8a3] rounded-tl-[24px] z-10"></div>
+            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#76d8a3] rounded-tr-[24px] z-10"></div>
+            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#76d8a3] rounded-bl-[24px] z-10"></div>
+            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#76d8a3] rounded-br-[24px] z-10"></div>
             
             {/* White Background with QR (Simulating camera focus area) */}
-            <div className="absolute inset-2 bg-[#f4f6f5] rounded-2xl flex items-center justify-center overflow-hidden">
-              <QrCode className="w-[180px] h-[180px] text-[#222]" strokeWidth={1} />
+            <div className="absolute inset-2 bg-[#f4f6f5] rounded-2xl flex items-center justify-center overflow-hidden relative">
+              <div id="qr-reader" className="w-full h-full object-cover"></div>
               
               {/* Scan Line glow */}
               <div 
-                className="absolute left-0 right-0 h-1 bg-[#76d8a3] shadow-[0_0_16px_8px_rgba(118,216,163,0.5)]"
+                className="absolute left-0 right-0 h-1 bg-[#76d8a3] shadow-[0_0_16px_8px_rgba(118,216,163,0.5)] z-20"
                 style={{ top: '50%', transform: 'translateY(-50%)' }}
               ></div>
             </div>
@@ -277,5 +355,13 @@ export default function GabungPerusahaanPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function GabungPerusahaanPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+      <GabungPerusahaanContent />
+    </Suspense>
   );
 }

@@ -4,6 +4,10 @@ import { db } from "../db";
 import { profiles } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
+import multer from "multer";
+import { uploadAvatarPhoto } from "../utils/storage";
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
@@ -70,6 +74,48 @@ router.patch("/", authenticate, async (req: Request, res: Response): Promise<any
 
   } catch (error: any) {
     console.error("Update profile error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      errors: [error.message],
+    });
+  }
+});
+
+router.post("/avatar", authenticate, upload.single("avatar"), async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = (req as any).user.id;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ success: false, message: "File foto tidak ditemukan." });
+    }
+
+    // 1. Upload photo to Supabase
+    let photoUrl;
+    try {
+      photoUrl = await uploadAvatarPhoto(file.buffer, file.mimetype, userId);
+    } catch (err: any) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+
+    // 2. Update profile with new avatar URL
+    const updateRes = await db.update(profiles)
+      .set({ avatar_url: photoUrl })
+      .where(eq(profiles.id, userId))
+      .returning();
+
+    if (!updateRes.length) {
+      return res.status(404).json({ success: false, message: "Profile tidak ditemukan" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Avatar berhasil diperbarui",
+      data: { avatarUrl: photoUrl },
+    });
+  } catch (error: any) {
+    console.error("Upload avatar error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

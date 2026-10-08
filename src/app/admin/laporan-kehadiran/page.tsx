@@ -2,8 +2,8 @@
 
 import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
-import { useState, useMemo } from "react";
-import { Search, ListFilter, Check, User, ChevronRight, ChevronLeft, FileDown, CalendarDays, CheckCircle2, Clock, FileWarning } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Search, ListFilter, Check, User, ChevronRight, ChevronLeft, FileDown, CalendarDays, CheckCircle2, Clock, FileWarning, Loader2 } from "lucide-react";
 
 export default function LaporanKehadiranPage() {
   const router = useRouter();
@@ -13,15 +13,51 @@ export default function LaporanKehadiranPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
-  // Data Dummy Karyawan dengan rekap kehadiran
-  const dataKaryawan = useMemo(() => [
-    { id: "1", name: "Ayu Lestari", role: "Manajemen", hadir: 18, izin: 1, terlambat: 1, total: 20 },
-    { id: "2", name: "Budi Santoso", role: "Karyawan", hadir: 20, izin: 0, terlambat: 0, total: 20 },
-    { id: "3", name: "Citra Dewi", role: "Karyawan", hadir: 17, izin: 2, terlambat: 1, total: 20 },
-    { id: "4", name: "Dika Pratama", role: "Karyawan", hadir: 15, izin: 0, terlambat: 5, total: 20 },
-    { id: "5", name: "Rina Aprilia", role: "Karyawan", hadir: 19, izin: 1, terlambat: 0, total: 20 },
-    { id: "6", name: "Fajar Nugroho", role: "Karyawan", hadir: 16, izin: 3, terlambat: 1, total: 20 },
-  ], []);
+  const [dataKaryawan, setDataKaryawan] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchSummary = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const token = localStorage.getItem("accessToken");
+        if (!token) {
+          router.push("/login");
+          return;
+        }
+
+        const [monthName, yearString] = selectedMonth.split(" ");
+        const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+        const monthNum = monthNames.indexOf(monthName) + 1;
+        const yearNum = parseInt(yearString);
+
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/management/summary?month=${monthNum}&year=${yearNum}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const data = await res.json();
+        
+        if (res.status === 401 || res.status === 403) {
+          router.push("/dashboard"); // fallback if not admin
+          return;
+        }
+
+        if (data.success) {
+          setDataKaryawan(data.data);
+        } else {
+          setError(data.message || "Gagal memuat laporan kehadiran");
+        }
+      } catch (err) {
+        console.error("Fetch summary error:", err);
+        setError("Terjadi kesalahan jaringan");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSummary();
+  }, [selectedMonth, router]);
 
   const filteredData = useMemo(() => {
     return dataKaryawan.filter(emp => emp.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -112,7 +148,14 @@ export default function LaporanKehadiranPage() {
 
           {/* List Items */}
           <div className="flex flex-col gap-3">
-            {filteredData.length === 0 ? (
+            {isLoading ? (
+              <div className="py-10 flex flex-col items-center justify-center text-gray-400">
+                <Loader2 className="w-8 h-8 animate-spin text-[#356E3B] mb-2" />
+                <span className="text-[13px]">Memuat data...</span>
+              </div>
+            ) : error ? (
+              <div className="py-10 text-center text-red-500 text-[13px]">{error}</div>
+            ) : filteredData.length === 0 ? (
               <div className="py-10 text-center text-gray-400 text-[13px]">Karyawan tidak ditemukan</div>
             ) : (
               filteredData.map((emp) => (
