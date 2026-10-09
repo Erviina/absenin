@@ -346,7 +346,7 @@ router.get("/:id", authenticate, async (req: AuthRequest, res: Response): Promis
       .from(attendances)
       .where(
         and(
-          eq(attendances.id, id),
+          eq(attendances.id, id as string),
           eq(attendances.profile_id, userId),
           isNull(attendances.deleted_at)
         )
