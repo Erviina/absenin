@@ -324,7 +324,7 @@ router.get("/", authenticate, async (req: AuthRequest, res: Response): Promise<a
 router.get("/:id", authenticate, async (req: AuthRequest, res: Response): Promise<any> => {
   try {
     const userId = req.user.id;
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const detail = await db
       .select({

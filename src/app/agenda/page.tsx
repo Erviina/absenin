@@ -16,6 +16,7 @@ type AgendaItem = {
   time: string;
   location: string;
   type: string;
+  category_id?: string | null;
   link?: string;
   scope: "COMPANY" | "PERSONAL";
   start_time: string;
@@ -30,6 +31,25 @@ export default function AgendaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   
+  const [categories, setCategories] = useState<any[]>([]);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(`${apiUrl}/agendas/categories`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCategories(data.data);
+      }
+    } catch (err) {
+      console.error("Fetch categories error:", err);
+    }
+  }, []);
+  
   // State Kalender
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
@@ -43,7 +63,7 @@ export default function AgendaPage() {
   // State Form Tambah/Edit Agenda
   const [formId, setFormId] = useState("");
   const [formKegiatan, setFormKegiatan] = useState("");
-  const [formKategori, setFormKategori] = useState<string>("Rapat");
+  const [formKategoriId, setFormKategoriId] = useState("");
   const [formTanggal, setFormTanggal] = useState("");
   const [formWaktuMulai, setFormWaktuMulai] = useState("");
   const [formWaktuSelesai, setFormWaktuSelesai] = useState("");
@@ -95,6 +115,7 @@ export default function AgendaPage() {
           time: `${startTimeStr} - ${endTimeStr} WIB`,
           location: item.notes || "Tanpa Keterangan",
           type: item.category?.name || "Lainnya",
+          category_id: item.category?.id || null,
           scope: item.type === "COMPANY" ? "COMPANY" : "PERSONAL",
           start_time: item.start_time,
           end_time: item.end_time,
@@ -111,8 +132,9 @@ export default function AgendaPage() {
   }, [router]);
 
   useEffect(() => {
+    fetchCategories();
     fetchAgendas();
-  }, [fetchAgendas]);
+  }, [fetchCategories, fetchAgendas]);
 
   // Filter State
   const [activeFilter, setActiveFilter] = useState<string>("Semua");
@@ -135,7 +157,11 @@ export default function AgendaPage() {
   const handleOpenAddModal = () => {
     setFormId("");
     setFormKegiatan("");
-    setFormKategori("Rapat");
+    if (categories.length > 0) {
+      setFormKategoriId(categories[0].id);
+    } else {
+      setFormKategoriId("");
+    }
     setFormTanggal(selectedDateStr || "");
     setFormWaktuMulai("");
     setFormWaktuSelesai("");
@@ -148,7 +174,7 @@ export default function AgendaPage() {
   const handleOpenEditModal = (agenda: AgendaItem) => {
     setFormId(agenda.id);
     setFormKegiatan(agenda.title);
-    setFormKategori(agenda.type || "Rapat");
+    setFormKategoriId(agenda.category_id || (categories.length > 0 ? categories[0].id : ""));
     
     const timeMatch = agenda.time.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
     if (timeMatch) {
@@ -200,6 +226,7 @@ export default function AgendaPage() {
         notes: formCatatan || "",
         start_time: startDateTime.toISOString(),
         end_time: endDateTime.toISOString(),
+        agenda_category_id: formKategoriId || null,
       };
 
       let url = `${apiUrl}/agendas`;
@@ -388,17 +415,27 @@ export default function AgendaPage() {
 
               {/* Filter Tabs */}
               <div className="flex gap-2 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden snap-x">
-                {["Semua", "Rapat", "Acara", "Review", "Tenggat", "Lainnya"].map(kat => (
+                <button 
+                  onClick={() => setActiveFilter("Semua")}
+                  className={`px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[13px] font-bold transition-all border ${
+                    activeFilter === "Semua" 
+                      ? "bg-[#356E3B] text-white border-[#356E3B] shadow-md" 
+                      : "bg-white text-[#4B5563] border-[#E5E7EB] hover:bg-gray-50"
+                  }`}
+                >
+                  Semua
+                </button>
+                {categories.map(kat => (
                   <button 
-                    key={kat}
-                    onClick={() => setActiveFilter(kat)}
+                    key={kat.id}
+                    onClick={() => setActiveFilter(kat.name)}
                     className={`px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[13px] font-bold transition-all border ${
-                      activeFilter === kat 
+                      activeFilter === kat.name 
                         ? "bg-[#356E3B] text-white border-[#356E3B] shadow-md" 
                         : "bg-white text-[#4B5563] border-[#E5E7EB] hover:bg-gray-50"
                     }`}
                   >
-                    {kat}
+                    {kat.name}
                   </button>
                 ))}
               </div>
@@ -603,15 +640,9 @@ export default function AgendaPage() {
                 </label>
                 <div className="relative">
                   <CustomSelect 
-                    value={formKategori}
-                    onChange={(val) => setFormKategori(val as string)}
-                    options={[
-                      { value: "Rapat", label: "Rapat" },
-                      { value: "Acara", label: "Acara" },
-                      { value: "Review", label: "Review" },
-                      { value: "Tenggat", label: "Tenggat (Deadline)" },
-                      { value: "Lainnya", label: "Lainnya" }
-                    ]}
+                    value={formKategoriId}
+                    onChange={(val) => setFormKategoriId(val)}
+                    options={categories.map(c => ({ value: c.id, label: c.name }))}
                   />
                 </div>
               </div>

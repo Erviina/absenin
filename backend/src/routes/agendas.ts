@@ -6,17 +6,22 @@ import { z } from "zod";
 
 const router = Router();
 
-const agendaSchema = z.object({
+const agendaBaseSchema = z.object({
   title: z.string().min(1, "Judul agenda tidak boleh kosong"),
   notes: z.string().optional(),
   start_time: z.string().refine(val => !isNaN(Date.parse(val)), "Format waktu mulai tidak valid"),
   end_time: z.string().refine(val => !isNaN(Date.parse(val)), "Format waktu selesai tidak valid"),
   agenda_category_id: z.string().uuid().nullable().optional(),
-  type: z.enum(["COMPANY", "PERSONAL"], { 
-    required_error: "Type wajib diisi",
-    invalid_type_error: "Type harus berupa COMPANY atau PERSONAL"
-  })
-}).strict().refine(data => new Date(data.end_time) > new Date(data.start_time), {
+  type: z.enum(["COMPANY", "PERSONAL"])
+}).strict();
+
+const agendaSchema = agendaBaseSchema.refine(data => new Date(data.end_time) > new Date(data.start_time), {
+  message: "Waktu selesai tidak boleh lebih awal dari waktu mulai",
+  path: ["end_time"]
+});
+
+const patchBaseSchema = agendaBaseSchema.omit({ type: true });
+const patchSchema = patchBaseSchema.refine(data => new Date(data.end_time) > new Date(data.start_time), {
   message: "Waktu selesai tidak boleh lebih awal dari waktu mulai",
   path: ["end_time"]
 });
@@ -33,6 +38,24 @@ const getUserRoles = async (profileId: string) => {
   const rolesRes = await db.execute(sql`SELECT role FROM profile_roles WHERE profile_id = ${profileId}`);
   return rolesRes.rows.map((r: any) => r.role);
 };
+
+router.get("/categories", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const categoriesRes = await db.execute(sql`
+      SELECT id, name, description
+      FROM agendas_categories
+      ORDER BY name ASC
+    `);
+
+    return res.status(200).json({
+      success: true,
+      data: categoriesRes.rows
+    });
+  } catch (error: any) {
+    console.error("Get agenda categories error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
 
 router.get("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
@@ -139,7 +162,6 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
     const roles = await getUserRoles(profileData.profileId);
     
     // Type tidak boleh diubah melalui PATCH, jadi kita omit dari validasi
-    const patchSchema = agendaSchema.omit({ type: true });
     
     const parseResult = patchSchema.safeParse(req.body);
     if (!parseResult.success) {
@@ -191,6 +213,7 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
     });
   } catch (error: any) {
     console.error("Update agenda error:", error);
+    require("fs").writeFileSync("error.log", error.stack || error.message);
     return res.status(500).json({ success: false, message: "Internal server error", errors: [error.message] });
   }
 });

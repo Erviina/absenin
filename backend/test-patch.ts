@@ -1,63 +1,38 @@
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
+import { db } from "./src/db";
+import { sql } from "drizzle-orm";
 
-dotenv.config();
+async function main() {
+  try {
+    const payload = {
+        title: "Senam Pagi",
+        notes: "sadsad",
+        start_time: new Date("2026-10-09T01:00:00").toISOString(),
+        end_time: new Date("2026-10-09T02:00:00").toISOString(),
+        agenda_category_id: "95a7fd20-a932-46ad-9c08-365d7a0532e5"
+    };
 
-async function runTest() {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("No secret");
+    const agendaId = "ff3c7f2c-ba58-4c50-80ed-4ecab75a19b2";
+    const profileId = "5049b6d0-e0f2-4525-8c60-3732f78c0bd9";
+    
+    console.log("Updating...");
+    const updateRes = await db.execute(sql`
+      UPDATE agendas 
+      SET 
+        title = ${payload.title},
+        notes = ${payload.notes || null},
+        start_time = ${payload.start_time},
+        end_time = ${payload.end_time},
+        agenda_category_id = ${payload.agenda_category_id || null},
+        updated_at = NOW(),
+        updated_by = ${profileId}
+      WHERE id = ${agendaId}
+      RETURNING *
+    `);
+    console.log("Update success:", updateRes.rows);
 
-  // Create token for Ervina (Admin)
-  const token = jwt.sign(
-    {
-      sub: '5c59fdd5-d5d1-48c0-961f-76d7892a546a',
-      email: 'ervinaanakbaik@gmail.com',
-      role: 'authenticated'
-    },
-    secret,
-    { expiresIn: "7d" }
-  );
-
-  console.log("=== TEST 1: PATCH /api/profile (Update Name) ===");
-  const res1 = await fetch("http://localhost:3004/api/profile", {
-    method: "PATCH",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      full_name: "Nama Test Profile"
-    })
-  });
-  const data1 = await res1.json();
-  console.log("Status:", res1.status);
-  console.log("Response:", JSON.stringify(data1, null, 2));
-
-  console.log("\n=== TEST 2: GET /api/auth/me (Verify) ===");
-  const res2 = await fetch("http://localhost:3004/api/auth/me", {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${token}`
-    }
-  });
-  const data2 = await res2.json();
-  console.log("Status:", res2.status);
-  console.log("Response:", JSON.stringify(data2, null, 2));
-
-  console.log("\n=== TEST 3: PATCH /api/profile (Forbidden field) ===");
-  const res3 = await fetch("http://localhost:3004/api/profile", {
-    method: "PATCH",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      email: "test@example.com"
-    })
-  });
-  const data3 = await res3.json();
-  console.log("Status:", res3.status);
-  console.log("Response:", JSON.stringify(data3, null, 2));
+  } catch(e: any) {
+    console.error("Error:", e);
+  }
+  process.exit(0);
 }
-
-runTest().catch(console.error);
+main();

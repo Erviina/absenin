@@ -14,7 +14,8 @@ type AgendaItem = {
   title: string;
   time: string;
   location: string;
-  type: "Rapat" | "Acara" | "Review" | "Tenggat" | "Lainnya";
+  type: string;
+  category_id?: string | null;
   link?: string;
 };
 
@@ -37,6 +38,25 @@ export default function AdminAgendaPage() {
   // State Kalender
   const [currentDate, setCurrentDate] = useState(new Date()); // Menggunakan tanggal hari ini, bukan hardcoded September
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+
+  const [categories, setCategories] = useState<any[]>([]);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const res = await fetch(`${apiUrl}/agendas/categories`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCategories(data.data);
+      }
+    } catch (err) {
+      console.error("Fetch categories error:", err);
+    }
+  }, []);
 
   const fetchAgendas = useCallback(async () => {
     try {
@@ -81,7 +101,8 @@ export default function AdminAgendaPage() {
             title: item.title,
             time: `${startTimeStr} - ${endTimeStr} WIB`,
             location: item.notes || "Tanpa Keterangan",
-            type: (item.category?.name as any) || "Lainnya",
+            type: item.category?.name || "Lainnya",
+            category_id: item.category?.id || null,
           });
         });
         
@@ -95,12 +116,13 @@ export default function AdminAgendaPage() {
   }, [router]);
 
   useEffect(() => {
+    fetchCategories();
     fetchAgendas();
-  }, [fetchAgendas]);
+  }, [fetchCategories, fetchAgendas]);
 
   // State Form Tambah Agenda
   const [formKegiatan, setFormKegiatan] = useState("");
-  const [formKategori, setFormKategori] = useState<AgendaItem["type"]>("Rapat");
+  const [formKategoriId, setFormKategoriId] = useState("");
   const [formTanggal, setFormTanggal] = useState("");
   const [formWaktuMulai, setFormWaktuMulai] = useState("");
   const [formWaktuSelesai, setFormWaktuSelesai] = useState("");
@@ -129,7 +151,11 @@ export default function AdminAgendaPage() {
   const handleOpenAdd = () => {
     setEditingAgendaId(null);
     setFormKegiatan("");
-    setFormKategori("Rapat");
+    if (categories.length > 0) {
+      setFormKategoriId(categories[0].id);
+    } else {
+      setFormKategoriId("");
+    }
     setFormTanggal(selectedDateStr || "");
     setFormWaktuMulai("");
     setFormWaktuSelesai("");
@@ -142,7 +168,7 @@ export default function AdminAgendaPage() {
   const handleEditAgenda = (agenda: AgendaItem, dateStr: string) => {
     setEditingAgendaId(agenda.id);
     setFormKegiatan(agenda.title);
-    setFormKategori(agenda.type);
+    setFormKategoriId(agenda.category_id || (categories.length > 0 ? categories[0].id : ""));
     setFormTanggal(dateStr);
     
     // Parse time if it matches "HH:mm - HH:mm WIB"
@@ -238,7 +264,7 @@ export default function AdminAgendaPage() {
             notes: formCatatan || "",
             start_time: startDateTime.toISOString(),
             end_time: endDateTime.toISOString(),
-            agenda_category_id: null
+            agenda_category_id: formKategoriId || null
           })
         });
 
@@ -251,7 +277,11 @@ export default function AdminAgendaPage() {
 
         // Reset Form
         setFormKegiatan("");
-        setFormKategori("Rapat");
+        if (categories.length > 0) {
+          setFormKategoriId(categories[0].id);
+        } else {
+          setFormKategoriId("");
+        }
         setFormTanggal("");
         setFormWaktuMulai("");
         setFormWaktuSelesai("");
@@ -290,7 +320,7 @@ export default function AdminAgendaPage() {
           notes: formCatatan || "",
           start_time: startDateTime.toISOString(),
           end_time: endDateTime.toISOString(),
-          agenda_category_id: null,
+          agenda_category_id: formKategoriId || null,
           type: "COMPANY"
         })
       });
@@ -305,7 +335,11 @@ export default function AdminAgendaPage() {
 
       // Reset Form
       setFormKegiatan("");
-      setFormKategori("Rapat");
+      if (categories.length > 0) {
+        setFormKategoriId(categories[0].id);
+      } else {
+        setFormKategoriId("");
+      }
       setFormTanggal("");
       setFormWaktuMulai("");
       setFormWaktuSelesai("");
@@ -395,15 +429,9 @@ export default function AdminAgendaPage() {
                 </label>
                 <div className="relative">
                   <CustomSelect 
-                    value={formKategori}
-                    onChange={(val) => setFormKategori(val as AgendaItem["type"])}
-                    options={[
-                      { value: "Rapat", label: "Rapat" },
-                      { value: "Acara", label: "Acara" },
-                      { value: "Review", label: "Review" },
-                      { value: "Tenggat", label: "Tenggat (Deadline)" },
-                      { value: "Lainnya", label: "Lainnya" }
-                    ]}
+                    value={formKategoriId}
+                    onChange={(val) => setFormKategoriId(val)}
+                    options={categories.map(c => ({ value: c.id, label: c.name }))}
                   />
                 </div>
               </div>
@@ -578,17 +606,27 @@ export default function AdminAgendaPage() {
 
               {/* Filter Tabs */}
               <div className="flex gap-2 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden snap-x">
-                {["Semua", "Rapat", "Acara", "Review", "Tenggat", "Lainnya"].map(kat => (
+                <button 
+                  onClick={() => setActiveFilter("Semua")}
+                  className={`px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[13px] font-bold transition-all border ${
+                    activeFilter === "Semua" 
+                      ? "bg-[#356E3B] text-white border-[#356E3B] shadow-md" 
+                      : "bg-white text-[#4B5563] border-[#E5E7EB] hover:bg-gray-50"
+                  }`}
+                >
+                  Semua
+                </button>
+                {categories.map(kat => (
                   <button 
-                    key={kat}
-                    onClick={() => setActiveFilter(kat)}
+                    key={kat.id}
+                    onClick={() => setActiveFilter(kat.name)}
                     className={`px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[13px] font-bold transition-all border ${
-                      activeFilter === kat 
+                      activeFilter === kat.name 
                         ? "bg-[#356E3B] text-white border-[#356E3B] shadow-md" 
                         : "bg-white text-[#4B5563] border-[#E5E7EB] hover:bg-gray-50"
                     }`}
                   >
-                    {kat}
+                    {kat.name}
                   </button>
                 ))}
               </div>
