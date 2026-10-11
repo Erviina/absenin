@@ -1,5 +1,5 @@
-import { db } from "./src/db";
-import { profiles, companies, profileRoles } from "./src/db/schema";
+import { db } from "../src/db";
+import { profiles, companies, profileRoles } from "../src/db/schema";
 import { eq } from "drizzle-orm";
 import dotenv from "dotenv";
 

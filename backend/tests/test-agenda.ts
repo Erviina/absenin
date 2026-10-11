@@ -1,6 +1,6 @@
 import fetch from "node-fetch";
 import jwt from "jsonwebtoken";
-import { db } from "./src/db/index";
+import { db } from "../src/db/index";
 import { sql } from "drizzle-orm";
 import dotenv from "dotenv";
 

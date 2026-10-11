@@ -42,7 +42,7 @@ async function testNews() {
     );
     
     const express = (await import('express')).default;
-    const newsRoutes = (await import('./src/routes/news')).default;
+    const newsRoutes = (await import('../src/routes/news')).default;
     
     const app = express();
     app.use(express.json());
