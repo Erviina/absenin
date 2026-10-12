@@ -6,9 +6,11 @@ import { useState } from "react";
 import { TopBar } from "@/components/TopBar";
 import { CustomSelect } from "@/components/CustomSelect";
 import { QRCodeSVG } from "qrcode.react";
+import { useCompany } from "@/context/CompanyContext";
 
 export default function BuatPerusahaanPage() {
   const router = useRouter();
+  const { refreshMemberships, switchCompany } = useCompany();
 
   const [jenis, setJenis] = useState("Perusahaan");
   const [nama, setNama] = useState("");
@@ -94,6 +96,12 @@ export default function BuatPerusahaanPage() {
     }
   };
 
+  const getCategoryCode = (categoryLabel: string): "business" | "organization" | "community" => {
+    if (categoryLabel === "Komunitas") return "community";
+    if (categoryLabel === "Organisasi") return "organization";
+    return "business";
+  };
+
   const handleLanjutkan = async () => {
     // Basic validation
     if (!nama || !alamat) return;
@@ -107,19 +115,30 @@ export default function BuatPerusahaanPage() {
         return;
       }
 
+      const categoryCode = getCategoryCode(jenis);
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({ name: nama, address: alamat }),
+        body: JSON.stringify({ 
+          name: nama, 
+          address: alamat,
+          category_code: categoryCode 
+        }),
       });
 
       const data = await res.json();
       if (data.success) {
         setJoinCode(data.data.join_code);
         setIsSuccess(true);
+        // Refresh memberships and switch to new company
+        await refreshMemberships();
+        if (data.data?.id) {
+          switchCompany(data.data.id);
+        }
       } else {
         alert(data.message || "Gagal membuat perusahaan");
       }
@@ -130,6 +149,7 @@ export default function BuatPerusahaanPage() {
       setIsLoading(false);
     }
   };
+
 
   if (isSuccess) {
     return (

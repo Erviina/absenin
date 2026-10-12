@@ -4,9 +4,13 @@ import { Bell, MapPin, ArrowRight, ChevronDown, ChevronUp, User, Building2, Chec
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
+import { CompanySwitcher } from "@/components/CompanySwitcher";
+import { useCompany } from "@/context/CompanyContext";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { activeCompanyId, activeRole } = useCompany();
+
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -18,6 +22,11 @@ export default function DashboardPage() {
   const [isAttendanceLoading, setIsAttendanceLoading] = useState(true);
   const [attendanceError, setAttendanceError] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  // Close dropdown whenever active company or active role changes
+  useEffect(() => {
+    setIsProfileDropdownOpen(false);
+  }, [activeCompanyId, activeRole]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -38,17 +47,27 @@ export default function DashboardPage() {
           return;
         }
 
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        const compId = activeCompanyId || (typeof window !== "undefined" ? localStorage.getItem("activeCompanyId") : null);
+        if (compId) {
+          headers["x-company-id"] = compId;
+        }
+
         const [authRes, newsRes, attendRes, notifRes] = await Promise.all([
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/news", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/attendances/today", { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications/unread-count", { headers: { Authorization: `Bearer ${token}` } })
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", { headers }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/news", { headers }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/attendances/today", { headers }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications/unread-count", { headers })
         ]);
 
         try {
           const authData = await authRes.json();
           if (authData.success) {
             setUser(authData.data.user);
+            if (!authData.data.user?.company && !activeCompanyId) {
+              router.push("/cek-perusahaan");
+              return;
+            }
           }
         } catch (e) {
           console.error("Failed to parse auth data", e);
@@ -74,17 +93,10 @@ export default function DashboardPage() {
 
         try {
           const attendData = await attendRes.json();
-          console.log("=== DEBUG ATTENDANCE ===");
-          console.log("attendRes.status:", attendRes.status);
-          console.log("attendData:", attendData);
-          console.log("attendData?.data?.status:", attendData?.data?.status);
-          
           if (attendData.success && attendData.data) {
-            console.log("Setting attendanceStatus to:", attendData.data.status);
             setAttendanceStatus(attendData.data.status);
             setAttendanceError(false);
           } else {
-            console.log("Setting attendanceError to true because success is false or data is missing");
             setAttendanceError(true);
           }
         } catch (e) {
@@ -100,7 +112,8 @@ export default function DashboardPage() {
       }
     };
     fetchData();
-  }, [router]);
+  }, [router, activeCompanyId]);
+
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
@@ -127,98 +140,110 @@ export default function DashboardPage() {
           </div>
 
           {/* Name & Dropdown Toggle */}
-          <div 
-            className="flex flex-col cursor-pointer select-none"
-            onClick={() => {
-              const isManagement =
-                user?.roles?.includes("Admin") ||
-                user?.roles?.includes("Manager");
+          {(() => {
+            const isManagement = activeRole 
+              ? ["owner", "admin", "manager"].includes(activeRole) 
+              : Boolean(user?.isManagement || (user?.roles?.includes("Admin") || user?.roles?.includes("Manager")));
 
-              if (isManagement) {
-                setIsProfileDropdownOpen(!isProfileDropdownOpen);
-              } else {
-                router.push("/profil");
-              }
-            }}
-          >
-            <span className="text-[#5C786C] text-[12px] font-medium leading-tight">
-              Selamat datang,
-            </span>
-
-            <span className="text-[#1E4738] text-[17px] font-bold leading-tight flex items-center gap-1">
-              {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
-
-              {(user?.roles?.includes("Admin") ||
-                user?.roles?.includes("Manager")) &&
-                (isProfileDropdownOpen ? (
-                  <ChevronUp
-                    className="w-4 h-4 text-[#1E4738]"
-                    strokeWidth={2.5}
-                  />
-                ) : (
-                  <ChevronDown
-                    className="w-4 h-4 text-[#1E4738]"
-                    strokeWidth={2.5}
-                  />
-                ))}
-            </span>
-          </div>
-
-          {/* Dropdown Profile */}
-          {(user?.roles?.includes("Admin") || user?.roles?.includes("Manager")) && isProfileDropdownOpen && (
-            <div className="absolute top-[calc(100%+8px)] left-0 w-[270px] bg-white rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-2 z-50 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-              <div className="px-3 pt-2 pb-1.5">
-                <span className="text-[10px] font-bold text-[#9CA3AF] tracking-[0.05em] uppercase">Pilih Mode Akun</span>
-              </div>
-              
-              <div className="flex flex-col gap-1">
-                {/* Personal Mode (Active) */}
+            return (
+              <>
                 <div 
-                  className="flex items-center justify-between p-2 bg-[#F0FDF4] rounded-[16px] cursor-pointer hover:bg-[#E8F3EB] transition-colors"
-                  onClick={() => router.push("/profil")}
+                  className="flex flex-col cursor-pointer select-none"
+                  onClick={() => {
+                    if (isManagement) {
+                      setIsProfileDropdownOpen(!isProfileDropdownOpen);
+                    } else {
+                      router.push("/profil");
+                    }
+                  }}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-[42px] h-[42px] rounded-[14px] bg-[#2D5A3F] flex items-center justify-center shrink-0">
-                      <User className="w-5 h-5 text-white" strokeWidth={2} />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[#111827] text-[14px] font-bold leading-tight">Mode Personal</span>
-                      <span className="text-[#356E3B] text-[12px] font-medium mt-0.5">Aktif saat ini</span>
-                    </div>
-                  </div>
-                  <Check className="w-5 h-5 text-[#356E3B] mr-2" strokeWidth={3} />
+                  <span className="text-[#5C786C] text-[12px] font-medium leading-tight">
+                    Selamat datang,
+                  </span>
+
+                  <span className="text-[#1E4738] text-[17px] font-bold leading-tight flex items-center gap-1">
+                    {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
+
+                    {isManagement && (
+                      isProfileDropdownOpen ? (
+                        <ChevronUp
+                          className="w-4 h-4 text-[#1E4738]"
+                          strokeWidth={2.5}
+                        />
+                      ) : (
+                        <ChevronDown
+                          className="w-4 h-4 text-[#1E4738]"
+                          strokeWidth={2.5}
+                        />
+                      )
+                    )}
+                  </span>
                 </div>
 
-                {/* Management Mode */}
-                <div 
-                  className="flex items-center justify-between p-2 hover:bg-[#F3F4F6] rounded-[16px] cursor-pointer transition-colors"
-                  onClick={() => router.push("/admin/dashboard")}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-[42px] h-[42px] rounded-[14px] bg-[#F3F4F6] flex items-center justify-center shrink-0 border border-[#E5E7EB]">
-                      <Building2 className="w-5 h-5 text-[#4B5563]" strokeWidth={2} />
+                {/* Dropdown Profile */}
+                {isManagement && isProfileDropdownOpen && (
+                  <div className="absolute top-[calc(100%+8px)] left-0 w-[270px] bg-white rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-2 z-50 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+                    <div className="px-3 pt-2 pb-1.5">
+                      <span className="text-[10px] font-bold text-[#9CA3AF] tracking-[0.05em] uppercase">Pilih Mode Akun</span>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-[#111827] text-[14px] font-bold leading-tight">Mode Manajemen</span>
-                      <span className="text-[#9CA3AF] text-[12px] font-medium mt-0.5">Beralih peran</span>
+                    
+                    <div className="flex flex-col gap-1">
+                      {/* Personal Mode (Active) */}
+                      <div 
+                        className="flex items-center justify-between p-2 bg-[#F0FDF4] rounded-[16px] cursor-pointer hover:bg-[#E8F3EB] transition-colors"
+                        onClick={() => router.push("/profil")}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-[42px] h-[42px] rounded-[14px] bg-[#2D5A3F] flex items-center justify-center shrink-0">
+                            <User className="w-5 h-5 text-white" strokeWidth={2} />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[#111827] text-[14px] font-bold leading-tight">Mode Personal</span>
+                            <span className="text-[#356E3B] text-[12px] font-medium mt-0.5">Aktif saat ini</span>
+                          </div>
+                        </div>
+                        <Check className="w-5 h-5 text-[#356E3B] mr-2" strokeWidth={3} />
+                      </div>
+
+                      {/* Management Mode */}
+                      <div 
+                        className="flex items-center justify-between p-2 hover:bg-[#F3F4F6] rounded-[16px] cursor-pointer transition-colors"
+                        onClick={() => router.push("/admin/dashboard")}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-[42px] h-[42px] rounded-[14px] bg-[#F3F4F6] flex items-center justify-center shrink-0 border border-[#E5E7EB]">
+                            <Building2 className="w-5 h-5 text-[#4B5563]" strokeWidth={2} />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[#111827] text-[14px] font-bold leading-tight">Mode Manajemen</span>
+                            <span className="text-[#9CA3AF] text-[12px] font-medium mt-0.5">Beralih peran</span>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-[#9CA3AF] mr-2" strokeWidth={2.5} />
+                      </div>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-[#9CA3AF] mr-2" strokeWidth={2.5} />
-                </div>
-              </div>
-            </div>
-          )}
+                )}
+              </>
+            );
+          })()}
         </div>
-        <button 
-          className="relative active:scale-95 transition-transform"
-          onClick={() => router.push("/notifikasi")}
-        >
-          <Bell className="w-6 h-6 text-[#1E4738]" strokeWidth={1.5} />
-          {unreadCount > 0 && (
-            <div className="absolute top-[2px] right-[2px] w-2.5 h-2.5 bg-[#00a859] border-[2px] border-[#fbfdfc] rounded-full"></div>
-          )}
-        </button>
+
+        <div className="flex items-center gap-2">
+          <CompanySwitcher />
+          <button 
+            className="w-10 h-10 rounded-full bg-[#f4f9f6] border border-[#eef5f0] flex items-center justify-center relative active:scale-95 transition-transform"
+            onClick={() => router.push("/notifikasi")}
+            title="Notifikasi"
+          >
+            <Bell className="w-5 h-5 text-[#1E4738]" strokeWidth={1.8} />
+            {unreadCount > 0 && (
+              <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#00a859] border-[2px] border-white rounded-full"></div>
+            )}
+          </button>
+        </div>
       </div>
+
 
       {/* Main Content */}
       <div className="flex-1 px-6 pt-4 flex flex-col gap-8">

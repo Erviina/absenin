@@ -8,6 +8,7 @@ import { TopBar } from "@/components/TopBar";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { CustomSelect } from "@/components/CustomSelect";
 import { CustomTimePicker } from "@/components/CustomTimePicker";
+import { useCompany } from "@/context/CompanyContext";
 
 // Tipe Data untuk Agenda
 type AgendaItem = {
@@ -25,6 +26,7 @@ type AgendaItem = {
 
 export default function AgendaPage() {
   const router = useRouter();
+  const { activeCompanyId, activeCompany, activeRole, canCreate } = useCompany();
   
   // State Data
   const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>({});
@@ -38,8 +40,10 @@ export default function AgendaPage() {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
       const res = await fetch(`${apiUrl}/agendas/categories`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers
       });
       const data = await res.json();
       if (data.success) {
@@ -48,7 +52,7 @@ export default function AgendaPage() {
     } catch (err) {
       console.error("Fetch categories error:", err);
     }
-  }, []);
+  }, [activeCompanyId]);
   
   // State Kalender
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -62,6 +66,7 @@ export default function AgendaPage() {
 
   // State Form Tambah/Edit Agenda
   const [formId, setFormId] = useState("");
+  const [formScope, setFormScope] = useState<"PERSONAL" | "COMPANY">("PERSONAL");
   const [formKegiatan, setFormKegiatan] = useState("");
   const [formKategoriId, setFormKategoriId] = useState("");
   const [formTanggal, setFormTanggal] = useState("");
@@ -84,8 +89,11 @@ export default function AgendaPage() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(`${apiUrl}/agendas`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers
       });
       
       const data = await res.json();
@@ -129,7 +137,7 @@ export default function AgendaPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, [router, activeCompanyId]);
 
   useEffect(() => {
     fetchCategories();
@@ -156,6 +164,7 @@ export default function AgendaPage() {
 
   const handleOpenAddModal = () => {
     setFormId("");
+    setFormScope("PERSONAL");
     setFormKegiatan("");
     if (categories.length > 0) {
       setFormKategoriId(categories[0].id);
@@ -173,6 +182,7 @@ export default function AgendaPage() {
 
   const handleOpenEditModal = (agenda: AgendaItem) => {
     setFormId(agenda.id);
+    setFormScope(agenda.scope);
     setFormKegiatan(agenda.title);
     setFormKategoriId(agenda.category_id || (categories.length > 0 ? categories[0].id : ""));
     
@@ -215,6 +225,11 @@ export default function AgendaPage() {
       setSubmitError("Waktu selesai harus setelah waktu mulai");
       return;
     }
+
+    if (formScope === "COMPANY" && !canCreate("agendas")) {
+      setSubmitError("Hanya Owner/Admin/Manager yang dapat membuat agenda organisasi atau perusahaan");
+      return;
+    }
     
     setIsSubmitting(true);
     try {
@@ -227,6 +242,7 @@ export default function AgendaPage() {
         start_time: startDateTime.toISOString(),
         end_time: endDateTime.toISOString(),
         agenda_category_id: formKategoriId || null,
+        company_id: activeCompanyId,
       };
 
       let url = `${apiUrl}/agendas`;
@@ -236,15 +252,18 @@ export default function AgendaPage() {
         url = `${apiUrl}/agendas/${formId}`;
         method = "PATCH";
       } else {
-        payload.type = "PERSONAL"; // Wajib untuk POST di frontend ini
+        payload.type = formScope;
       }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
       const res = await fetch(url, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify(payload)
       });
 
@@ -267,9 +286,12 @@ export default function AgendaPage() {
       const token = localStorage.getItem("accessToken");
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(`${apiUrl}/agendas/${selectedAgendaDetail.id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
+        headers
       });
 
       const data = await res.json();
@@ -547,8 +569,8 @@ export default function AgendaPage() {
               </div>
             </div>
 
-            {/* Action Buttons - Only for PERSONAL */}
-            {selectedAgendaDetail.scope === "PERSONAL" && (
+            {/* Action Buttons - For PERSONAL or COMPANY if user is management */}
+            {(selectedAgendaDetail.scope === "PERSONAL" || canCreate("agendas")) && (
               <div className="flex items-center gap-3 mt-6 pt-6 border-t border-gray-100">
                 <button 
                   onClick={() => setIsDeleteModalOpen(true)}
@@ -612,7 +634,7 @@ export default function AgendaPage() {
             
             <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
               <h2 className="text-[18px] font-bold text-[#111827]">
-                {formId ? "Edit Agenda Pribadi" : "Tambah Agenda Pribadi"}
+                {formId ? `Edit Agenda (${formScope === "COMPANY" ? "Organisasi/Perusahaan" : "Pribadi"})` : "Tambah Agenda"}
               </h2>
               <button onClick={() => setIsFormModalOpen(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
                 <X className="w-5 h-5" />
@@ -620,6 +642,37 @@ export default function AgendaPage() {
             </div>
             
             <div className="p-5 overflow-y-auto flex flex-col gap-5">
+              {canCreate("agendas") && !formId && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-[13px] font-bold text-[#374151]">
+                    Tingkat Agenda <span className="text-[#EF4444]">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 bg-[#F3F4F6] p-1 rounded-[14px]">
+                    <button
+                      type="button"
+                      onClick={() => setFormScope("PERSONAL")}
+                      className={`py-2 text-[13px] font-bold rounded-[10px] transition-all ${
+                        formScope === "PERSONAL"
+                          ? "bg-white text-[#1E4738] shadow-sm"
+                          : "text-[#6B7280] hover:text-[#111827]"
+                      }`}
+                    >
+                      Pribadi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormScope("COMPANY")}
+                      className={`py-2 text-[13px] font-bold rounded-[10px] transition-all ${
+                        formScope === "COMPANY"
+                          ? "bg-white text-[#1E4738] shadow-sm"
+                          : "text-[#6B7280] hover:text-[#111827]"
+                      }`}
+                    >
+                      {activeCompany?.name || "Organisasi / Perusahaan"}
+                    </button>
+                  </div>
+                </div>
+              )}
               
               <div className="flex flex-col gap-2">
                 <label className="text-[13px] font-bold text-[#374151]">

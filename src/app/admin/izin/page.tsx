@@ -33,8 +33,12 @@ export default function KelolaIzinPage() {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/admin", {
-        headers: { Authorization: `Bearer ${token}` }
+        headers
       });
       const resData = await res.json();
       if (resData.success) {
@@ -98,12 +102,16 @@ export default function KelolaIzinPage() {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/leaves/${id}/status`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({ status })
       });
       

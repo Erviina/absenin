@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -11,11 +11,19 @@ export const metadata: Metadata = {
   title: "AbsenIn - Smart Attendance System",
   description: "Absensi digital dengan verifikasi GPS real-time",
   manifest: "/manifest.json",
+};
+
+export const viewport: Viewport = {
   themeColor: "#7FAF8B",
-  viewport: "minimum-scale=1, initial-scale=1, width=device-width, shrink-to-fit=no, user-scalable=no, viewport-fit=cover",
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 import { GoogleAuthProvider } from "@/components/GoogleAuthProvider";
+import { CompanyProvider } from "@/context/CompanyContext";
 
 export default function RootLayout({
   children,
@@ -25,11 +33,17 @@ export default function RootLayout({
   return (
     <html
       lang="id"
+      suppressHydrationWarning
       className={`${plusJakartaSans.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground max-w-md mx-auto shadow-sm border-x border-border/40 relative font-sans">
+      <body
+        suppressHydrationWarning
+        className="min-h-full flex flex-col bg-background text-foreground max-w-md mx-auto shadow-sm border-x border-border/40 relative font-sans"
+      >
         <GoogleAuthProvider>
-          {children}
+          <CompanyProvider>
+            {children}
+          </CompanyProvider>
         </GoogleAuthProvider>
       </body>
     </html>

@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Image as ImageIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { AdminBottomNav } from "@/components/admin-bottom-nav";
+import { useCompany } from "@/context/CompanyContext";
 
 type NewsItem = {
   id: string;
@@ -20,6 +21,7 @@ type NewsItem = {
 
 export default function KelolaBeritaPage() {
   const router = useRouter();
+  const { activeCompanyId, canCreate } = useCompany();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -30,8 +32,11 @@ export default function KelolaBeritaPage() {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       
+      const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news", {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers
       });
       const data = await res.json();
       if (data.success) {
@@ -46,7 +51,7 @@ export default function KelolaBeritaPage() {
 
   useEffect(() => {
     fetchNews();
-  }, []);
+  }, [activeCompanyId]);
 
   const handleOpenCreate = () => {
     router.push("/admin/buat-berita");
@@ -60,9 +65,12 @@ export default function KelolaBeritaPage() {
     if (!confirm("Apakah Anda yakin ingin menghapus berita ini?")) return;
     try {
       const token = localStorage.getItem("accessToken");
+      const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/news/${id}`, {
         method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
+        headers
       });
       if (res.ok) {
         setNews(news.filter(n => n.id !== id));

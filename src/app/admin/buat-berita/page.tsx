@@ -14,10 +14,13 @@ type Category = {
   name: string;
 };
 
+import { useCompany } from "@/context/CompanyContext";
+
 function BuatBeritaForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editingId = searchParams.get("id");
+  const { activeCompanyId, canCreate, activeRole } = useCompany();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -35,8 +38,11 @@ function BuatBeritaForm() {
     const fetchCategories = async () => {
       try {
         const token = localStorage.getItem("accessToken");
+        const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news/categories", {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers
         });
         const data = await res.json();
         if (data.success) {
@@ -48,15 +54,18 @@ function BuatBeritaForm() {
     };
 
     fetchCategories();
-  }, []);
+  }, [activeCompanyId]);
 
   useEffect(() => {
     if (editingId) {
       const fetchNewsItem = async () => {
         try {
           const token = localStorage.getItem("accessToken");
+          const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+          if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
           const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news", {
-            headers: { "Authorization": `Bearer ${token}` }
+            headers
           });
           const data = await res.json();
           if (data.success) {
@@ -76,7 +85,7 @@ function BuatBeritaForm() {
       };
       fetchNewsItem();
     }
-  }, [editingId]);
+  }, [editingId, activeCompanyId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -90,6 +99,11 @@ function BuatBeritaForm() {
   const handleSubmit = async () => {
     if (!title || !content) {
       alert("Judul dan Isi Berita wajib diisi");
+      return;
+    }
+
+    if (!canCreate("news")) {
+      alert("Hanya Owner/Admin/Manager yang berwenang mempublikasikan berita");
       return;
     }
     
@@ -124,19 +138,23 @@ function BuatBeritaForm() {
       const url = process.env.NEXT_PUBLIC_API_URL + (editingId ? `/news/${editingId}` : "/news");
       const method = editingId ? "PUT" : "POST";
       
-      const payload = {
+      const payload: any = {
         title,
         content,
         news_category_id: categoryId || null,
-        cover_image_url: finalImageUrl || null
+        cover_image_url: finalImageUrl || null,
+        company_id: activeCompanyId,
       };
+
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
       const res = await fetch(url, {
         method,
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
+        headers,
         body: JSON.stringify(payload)
       });
 

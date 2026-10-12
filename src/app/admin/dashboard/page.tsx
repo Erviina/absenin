@@ -19,9 +19,11 @@ import { AdminBottomNav } from "@/components/admin-bottom-nav";
 import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { useCompany } from "@/context/CompanyContext";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const { activeCompanyId, activeRole, isLoading: isCompanyLoading } = useCompany();
   
   const [company, setCompany] = useState<{ name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,6 +36,13 @@ export default function AdminDashboardPage() {
   const [isLeaveStatsLoading, setIsLeaveStatsLoading] = useState(true);
   const [isActivitiesLoading, setIsActivitiesLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("Semua");
+
+  // Guard: If activeRole is member, redirect back to dashboard immediately
+  useEffect(() => {
+    if (!isCompanyLoading && activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
+      router.replace("/dashboard");
+    }
+  }, [activeRole, isCompanyLoading, router]);
 
   const formatRelativeTime = (dateString: string) => {
     const diff = Date.now() - new Date(dateString).getTime();
@@ -55,10 +64,13 @@ export default function AdminDashboardPage() {
           return;
         }
 
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        if (activeCompanyId) {
+          headers["x-company-id"] = activeCompanyId;
+        }
+
         const resCompany = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
+          headers
         });
         const dataCompany = await resCompany.json();
         if (dataCompany.success) {
@@ -72,7 +84,7 @@ export default function AdminDashboardPage() {
         setIsLoading(false);
 
         const resStats = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/attendance-stats", {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers
         });
         const dataStats = await resStats.json();
         if (dataStats.success) {
@@ -81,7 +93,7 @@ export default function AdminDashboardPage() {
         setIsStatsLoading(false);
 
         const resLeave = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/leave-stats", {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers
         });
         const dataLeave = await resLeave.json();
         if (dataLeave.success) {
@@ -90,7 +102,7 @@ export default function AdminDashboardPage() {
         setIsLeaveStatsLoading(false);
 
         const resAct = await fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications", {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers
         });
         const dataAct = await resAct.json();
         if (dataAct.success) {
@@ -108,13 +120,13 @@ export default function AdminDashboardPage() {
       }
     };
     fetchDashboardData();
-  }, []);
+  }, [router, activeCompanyId]);
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       
       {/* Header */}
-      <TopBar title="Manajemen" onBack={() => router.push("/dashboard")} />
+      <TopBar title="Manajemen" onBack={() => router.push("/dashboard")} showCompanySwitcher={true} />
 
       {/* Main Content */}
       <div className="flex-1 px-5 py-5 flex flex-col gap-4 z-10 relative">

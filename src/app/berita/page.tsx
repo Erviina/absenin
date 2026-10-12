@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { ChevronLeft, Image as ImageIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
+import { useCompany } from "@/context/CompanyContext";
 
 type NewsItem = {
   id: string;
@@ -19,6 +20,7 @@ type NewsItem = {
 
 export default function BeritaPage() {
   const router = useRouter();
+  const { activeCompanyId } = useCompany();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -31,8 +33,13 @@ export default function BeritaPage() {
           return;
         }
         
+        const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+        if (activeCompanyId) {
+          headers["x-company-id"] = activeCompanyId;
+        }
+
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news", {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers
         });
         const data = await res.json();
         if (data.success) {
@@ -46,7 +53,7 @@ export default function BeritaPage() {
     };
     
     fetchNews();
-  }, [router]);
+  }, [router, activeCompanyId]);
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">

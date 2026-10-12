@@ -1,16 +1,32 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { Building2, Plus, Hourglass } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { Building2, Plus, Hourglass, ChevronLeft } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
 
-export default function CekPerusahaanPage() {
+function CekPerusahaanContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from");
+
   const [status, setStatus] = useState<'idle' | 'pending' | 'checking'>('checking');
   const [companyName, setCompanyName] = useState("");
   const [userName, setUserName] = useState("User");
+
+  const handleBack = () => {
+    if (from === "profil") {
+      if (typeof window !== "undefined" && window.history.length > 1) {
+        router.back();
+      } else {
+        router.replace("/profil");
+      }
+    } else {
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("user");
+      router.replace("/login");
+    }
+  };
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -30,7 +46,7 @@ export default function CekPerusahaanPage() {
           localStorage.setItem("user", JSON.stringify(meData.data.user));
           setUserName(meData.data.user.fullName || "User");
           
-          if (meData.data.user.company) {
+          if (meData.data.user.company && from !== "profil") {
             router.push("/dashboard");
             return;
           }
@@ -60,7 +76,7 @@ export default function CekPerusahaanPage() {
     };
     
     fetchStatus();
-  }, [router]);
+  }, [router, from]);
 
   if (status === 'checking') {
     return (
@@ -72,7 +88,16 @@ export default function CekPerusahaanPage() {
 
   if (status === 'pending') {
     return (
-      <div className="flex flex-col min-h-[100dvh] bg-white items-center justify-center px-6 text-center animate-in fade-in duration-300">
+      <div className="flex flex-col min-h-[100dvh] bg-white items-center justify-center px-6 text-center animate-in fade-in duration-300 relative">
+        {/* Back Button */}
+        <button
+          onClick={handleBack}
+          aria-label="Kembali"
+          className="absolute top-6 left-6 w-10 h-10 bg-[#f7fbf8] rounded-full flex items-center justify-center text-[#1E4738] shadow-sm border border-gray-100 hover:bg-gray-100 active:scale-95 transition-all"
+        >
+          <ChevronLeft className="w-5 h-5 text-[#1E4738]" strokeWidth={2.5} />
+        </button>
+
         <div className="relative flex items-center justify-center w-24 h-24 mb-6">
           <div className="absolute inset-0 border border-gray-100 rounded-full scale-110"></div>
           <div className="absolute inset-0 border border-gray-50 rounded-full scale-[1.3]"></div>
@@ -85,9 +110,16 @@ export default function CekPerusahaanPage() {
           <Building2 className="w-4 h-4 text-[#1E293B]" strokeWidth={2} />
           <span>{companyName}</span>
         </div>
-        <p className="text-gray-500 text-[14px] max-w-[260px] leading-relaxed">
+        <p className="text-gray-500 text-[14px] max-w-[260px] leading-relaxed mb-8">
           Permintaan bergabung Anda telah diteruskan ke Admin
         </p>
+
+        <button
+          onClick={handleBack}
+          className="px-6 py-2.5 rounded-full border border-[#1E4738] text-[#1E4738] text-[13px] font-semibold hover:bg-[#1E4738]/5 transition-colors"
+        >
+          {from === "profil" ? "Kembali ke Profil" : "Kembali ke Login"}
+        </button>
       </div>
     );
   }
@@ -95,15 +127,23 @@ export default function CekPerusahaanPage() {
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] relative px-6 py-8">
       
-      {/* Logo */}
-      <div className="flex items-center gap-1.5 mb-8">
-        {/* Placeholder for Logo, since we might not know exactly how Logo.png looks, let's use it */}
+      {/* Top Bar with Back Button & Logo */}
+      <div className="flex items-center justify-between mb-8">
+        <button
+          onClick={handleBack}
+          aria-label="Kembali"
+          className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-[#1E4738] shadow-[0_2px_12px_rgba(0,0,0,0.04)] border border-[#eef5f0] hover:bg-[#edf5f0] active:scale-95 transition-all"
+        >
+          <ChevronLeft className="w-5 h-5 text-[#1E4738]" strokeWidth={2.5} />
+        </button>
+
+        {/* Logo */}
         <div className="relative w-[100px] h-[30px]">
           <Image 
             src="/img/assets/Logo.png" 
-            alt="AbsenIN Logo"
+            alt="AbsenIN Logo" 
             fill
-            className="object-contain object-left"
+            className="object-contain object-right"
           />
         </div>
       </div>
@@ -112,7 +152,7 @@ export default function CekPerusahaanPage() {
       <div className="flex justify-center mb-8 relative w-full aspect-[4/3] max-h-[220px]">
         <Image 
           src="/img/assets/cekperusahaan.png" 
-          alt="Illustration"
+          alt="Illustration" 
           fill
           className="object-contain"
           priority
@@ -132,22 +172,22 @@ export default function CekPerusahaanPage() {
       {/* Action Cards */}
       <div className="flex flex-col gap-4">
         
-        {/* Card 1: Bergabung dengan Perusahaan */}
+        {/* Card 1: Bergabung dengan Perusahaan atau Organisasi */}
         <div 
-          onClick={() => router.push("/gabung-perusahaan")}
+          onClick={() => router.push(from ? `/gabung-perusahaan?from=${from}` : "/gabung-perusahaan")}
           className="bg-white rounded-[20px] p-5 flex items-center gap-5 shadow-[0_2px_16px_rgba(0,0,0,0.03)] border border-[#eef5f0] cursor-pointer active:scale-[0.98] transition-transform"
         >
           <div className="w-[50px] h-[50px] bg-[#e6f0ea] rounded-[16px] flex items-center justify-center shrink-0">
             <Building2 className="w-6 h-6 text-[#1E4738]" strokeWidth={1.5} />
           </div>
           <h2 className="text-[#1E293B] text-[15px] font-bold leading-tight">
-            Bergabung dengan<br />Perusahaan
+            Bergabung dengan<br />Perusahaan atau Organisasi
           </h2>
         </div>
 
         {/* Card 2: Buat Perusahaan atau Organisasi */}
         <div 
-          onClick={() => router.push("/buat-perusahaan")}
+          onClick={() => router.push(from ? `/buat-perusahaan?from=${from}` : "/buat-perusahaan")}
           className="bg-white rounded-[20px] p-5 flex items-center gap-5 shadow-[0_2px_16px_rgba(0,0,0,0.03)] border border-[#eef5f0] cursor-pointer active:scale-[0.98] transition-transform"
         >
           <div className="w-[50px] h-[50px] bg-[#e6f0ea] rounded-[16px] flex items-center justify-center shrink-0">
@@ -162,11 +202,36 @@ export default function CekPerusahaanPage() {
 
       {/* Bottom Link */}
       <div className="mt-auto pt-10 pb-4 text-center">
-        <Link href="/dashboard" className="text-[13px] text-[#64748B] font-semibold hover:text-[#1E4738] transition-colors">
+        <button 
+          onClick={() => {
+            if (from === "profil") {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                router.back();
+              } else {
+                router.replace("/profil");
+              }
+            } else {
+              router.replace("/dashboard");
+            }
+          }}
+          className="text-[13px] text-[#64748B] font-semibold hover:text-[#1E4738] transition-colors"
+        >
           Nanti saja
-        </Link>
+        </button>
       </div>
 
     </div>
+  );
+}
+
+export default function CekPerusahaanPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1E4738]"></div>
+      </div>
+    }>
+      <CekPerusahaanContent />
+    </Suspense>
   );
 }

@@ -34,10 +34,11 @@ function GabungPerusahaanContent() {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
-        if (data.success && data.data) {
+        if (data.success && data.data && data.data.status === 'pending') {
           setCompanyName(data.data.company_name || "Perusahaan");
-          if (data.data.status === 'pending') setStatus('pending');
-          if (data.data.status === 'approved') setStatus('accepted');
+          setStatus('pending');
+        } else {
+          setStatus('idle');
         }
       } catch (err) {
         console.error(err);
@@ -152,9 +153,26 @@ function GabungPerusahaanContent() {
     }
   };
 
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      const from = searchParams.get("from");
+      router.replace(from ? `/cek-perusahaan?from=${from}` : "/cek-perusahaan");
+    }
+  };
+
   if (status === 'pending') {
     return (
-      <div className="flex flex-col min-h-[100dvh] bg-white items-center justify-center px-6 text-center animate-in fade-in duration-300">
+      <div className="flex flex-col min-h-[100dvh] bg-white items-center justify-center px-6 text-center animate-in fade-in duration-300 relative">
+        {/* Back Button */}
+        <button
+          onClick={handleBack}
+          aria-label="Kembali"
+          className="absolute top-6 left-6 w-10 h-10 bg-[#f7fbf8] rounded-full flex items-center justify-center text-[#1E4738] shadow-sm border border-gray-100 hover:bg-gray-100 active:scale-95 transition-all"
+        >
+          <ChevronLeft className="w-5 h-5 text-[#1E4738]" strokeWidth={2.5} />
+        </button>
         
         {/* Hourglass Icon with concentric circles */}
         <div className="relative flex items-center justify-center w-24 h-24 mb-6">
@@ -271,7 +289,10 @@ function GabungPerusahaanContent() {
     <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] relative">
       
       {/* Header */}
-      <TopBar title="Gabung Perusahaan" />
+      <TopBar 
+        title="Gabung Perusahaan" 
+        onBack={handleBack} 
+      />
 
       {/* Main Content */}
       <div className="flex-1 px-6 py-8 flex flex-col items-center">

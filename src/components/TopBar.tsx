@@ -1,14 +1,24 @@
+"use client";
+
 import { ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { CompanySwitcher } from "./CompanySwitcher";
 
 interface TopBarProps {
   title: string;
   onBack?: () => void;
   rightAction?: React.ReactNode;
+  showCompanySwitcher?: boolean;
   bgColor?: string;
 }
 
-export function TopBar({ title, onBack, rightAction, bgColor = "bg-[#356E3B]" }: TopBarProps) {
+export function TopBar({ 
+  title, 
+  onBack, 
+  rightAction, 
+  showCompanySwitcher = false,
+  bgColor = "bg-[#356E3B]" 
+}: TopBarProps) {
   const router = useRouter();
 
   const handleBack = () => {
@@ -30,9 +40,11 @@ export function TopBar({ title, onBack, rightAction, bgColor = "bg-[#356E3B]" }:
       <h1 className="text-white text-[18px] font-bold absolute left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none">
         {title}
       </h1>
-      <div className="w-10 flex justify-end z-10">
+      <div className="flex items-center gap-2 justify-end z-10">
+        {showCompanySwitcher && <CompanySwitcher variant="dark" />}
         {rightAction}
       </div>
     </div>
   );
 }
+

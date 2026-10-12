@@ -1,16 +1,29 @@
 "use client";
 
-import { ChevronLeft, Search, Check, ChevronRight, ListFilter, QrCode, Building2, Copy, Users, Clock, UserPlus, Calendar, User, X } from "lucide-react";
+import { ChevronLeft, Search, Check, ChevronRight, ListFilter, QrCode, Building2, Copy, Users, Clock, UserPlus, Calendar, User, X, Trash2, AlertTriangle, LogOut, MessageSquare, CheckCircle2, XCircle, UserMinus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useMemo, useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
 import { QRCodeSVG } from "qrcode.react";
+import { useCompany } from "@/context/CompanyContext";
 
 export default function KelolaKaryawanPage() {
   const router = useRouter();
+  const { activeCompanyId, activeCompany, activeRole, isLoading: isCompanyLoading } = useCompany();
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
+    if (isCompanyLoading) return;
+
+    if (activeRole) {
+      if (["owner", "admin", "manager"].includes(activeRole)) {
+        setIsAuthorized(true);
+      } else {
+        router.replace("/dashboard");
+      }
+      return;
+    }
+
     const checkAuth = async () => {
       const token = localStorage.getItem("accessToken");
       if (!token) {
@@ -19,8 +32,11 @@ export default function KelolaKaryawanPage() {
       }
 
       try {
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
-          headers: { Authorization: `Bearer ${token}` }
+          headers
         });
         
         if (!res.ok) {
@@ -29,10 +45,15 @@ export default function KelolaKaryawanPage() {
         }
 
         const data = await res.json();
-        if (data.success && data.data?.user?.roles?.includes("Admin")) {
+        const userActiveRole = data.data?.user?.activeRole;
+        const isMgmt = userActiveRole 
+          ? ["owner", "admin", "manager"].includes(userActiveRole) 
+          : (data.data?.user?.isManagement || false);
+
+        if (data.success && isMgmt) {
           setIsAuthorized(true);
         } else {
-          router.push("/dashboard");
+          router.replace("/dashboard");
         }
       } catch (err) {
         router.push("/login");
@@ -40,7 +61,7 @@ export default function KelolaKaryawanPage() {
     };
     
     checkAuth();
-  }, [router]);
+  }, [router, activeRole, activeCompanyId, isCompanyLoading]);
 
   if (!isAuthorized) {
     return (
@@ -58,9 +79,56 @@ export default function KelolaKaryawanPage() {
 // ==========================================
 function AdminKaryawanView() {
   const router = useRouter();
+  const { activeCompanyId, activeCompany, activeRole } = useCompany();
+
+  // If user switches to a company where they are just a member, redirect back to dashboard
+  useEffect(() => {
+    if (activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
+      router.replace("/dashboard");
+    }
+  }, [activeRole, router]);
+
+  const [activeTab, setActiveTab] = useState<"semua" | "karyawan" | "keluar" | "masuk">("semua");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      setCurrentUserId(payload.sub || payload.id || payload.userId || null);
+    } catch {}
+  }, []);
+
+  const canRemoveEmployee = (emp: any) => {
+    if (!emp || emp.id === currentUserId) return false;
+    const targetRole = (emp.role || "").toLowerCase();
+    if (targetRole === "owner") return false;
+    if (activeRole === "owner") return true;
+    if (activeRole === "admin") return targetRole !== "owner" && targetRole !== "admin";
+    if (activeRole === "manager") return targetRole === "member";
+    return false;
+  };
+
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
   const [selectedEmployeeForRole, setSelectedEmployeeForRole] = useState<any>(null);
   const [selectedRole, setSelectedRole] = useState<"Admin" | "Manager" | "Employee">("Employee");
+
+  // Soft Delete Member State
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
+  const [deleteMemberError, setDeleteMemberError] = useState("");
+
+  // Exit Requests State
+  const [exitRequests, setExitRequests] = useState<any[]>([]);
+  const [isLoadingExitRequests, setIsLoadingExitRequests] = useState(true);
+  const [exitRequestsError, setExitRequestsError] = useState("");
+
+  // Exit Request Modal State (Approve / Reject)
+  const [selectedExitReqForAction, setSelectedExitReqForAction] = useState<any>(null);
+  const [exitActionType, setExitActionType] = useState<"approve" | "reject">("approve");
+  const [isProcessingExitReq, setIsProcessingExitReq] = useState(false);
+  const [exitActionError, setExitActionError] = useState("");
 
   // Karyawan State
   const [employees, setEmployees] = useState<any[]>([]);
@@ -77,8 +145,12 @@ function AdminKaryawanView() {
   const fetchEmployeesData = async (token: string) => {
     setIsLoadingEmployees(true);
     try {
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/employees", {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: { 
+          "Authorization": `Bearer ${token}`,
+          ...(activeCompanyId ? { "x-company-id": activeCompanyId } : {})
+        }
       });
       const data = await res.json();
       if (data.success) {
@@ -93,6 +165,103 @@ function AdminKaryawanView() {
       setIsLoadingEmployees(false);
     }
   };
+
+  const fetchExitRequestsData = async (token: string) => {
+    setIsLoadingExitRequests(true);
+    setExitRequestsError("");
+    try {
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/exit-requests", {
+        headers
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExitRequests(data.data || []);
+      } else {
+        setExitRequestsError(data.message || "Gagal memuat permohonan keluar");
+      }
+    } catch (err) {
+      setExitRequestsError("Terjadi kesalahan jaringan");
+    } finally {
+      setIsLoadingExitRequests(false);
+    }
+  };
+
+  const handleConfirmExitRequest = async () => {
+    if (!selectedExitReqForAction || isProcessingExitReq) return;
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+
+    setIsProcessingExitReq(true);
+    setExitActionError("");
+    try {
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      const headers: Record<string, string> = { 
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
+      const endpoint = exitActionType === "approve"
+        ? `/company/exit-requests/${selectedExitReqForAction.id}/approve`
+        : `/company/exit-requests/${selectedExitReqForAction.id}/reject`;
+
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + endpoint, {
+        method: "POST",
+        headers
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setSelectedExitReqForAction(null);
+        fetchExitRequestsData(token);
+        if (exitActionType === "approve") {
+          fetchEmployeesData(token);
+        }
+      } else {
+        setExitActionError(data.message || `Gagal ${exitActionType === 'approve' ? 'mengeluarkan' : 'menolak'} anggota`);
+      }
+    } catch (err) {
+      setExitActionError("Terjadi kesalahan koneksi");
+    } finally {
+      setIsProcessingExitReq(false);
+    }
+  };
+
+  const handleSoftDeleteMember = async () => {
+    if (!selectedEmployeeForRole || isDeletingMember) return;
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+
+    setIsDeletingMember(true);
+    setDeleteMemberError("");
+    try {
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/companies/employees/${selectedEmployeeForRole.id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          ...(activeCompanyId ? { "x-company-id": activeCompanyId } : {})
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsDeleteConfirmOpen(false);
+        setSelectedEmployeeForRole(null);
+        fetchEmployeesData(token);
+      } else {
+        setDeleteMemberError(data.message || "Gagal mengeluarkan anggota");
+      }
+    } catch (err) {
+      setDeleteMemberError("Terjadi kesalahan jaringan");
+    } finally {
+      setIsDeletingMember(false);
+    }
+  };
+
 
   const handleSimpanRole = async () => {
     if (!selectedEmployeeForRole || isSavingRole) return;
@@ -163,8 +332,11 @@ function AdminKaryawanView() {
       fetchEmployeesData(token);
 
       // Fetch Company
+      const compHeaders: Record<string, string> = { "Authorization": `Bearer ${token}` };
+      if (activeCompanyId) compHeaders["x-company-id"] = activeCompanyId;
+
       fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: compHeaders
       }).then(res => res.json()).then(data => {
         if (data.success) {
           setCompanyData(data.data);
@@ -174,16 +346,22 @@ function AdminKaryawanView() {
 
       // Fetch Join Requests
       fetchRequestsData(token);
+
+      // Fetch Exit Requests
+      fetchExitRequestsData(token);
     };
     fetchData();
-  }, []);
+  }, [activeCompanyId]);
 
   const fetchRequestsData = async (token: string) => {
     setIsLoadingRequests(true);
     setRequestsError("");
     try {
+      const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers
       });
       const data = await res.json();
       if (data.success) {
@@ -231,28 +409,28 @@ function AdminKaryawanView() {
 
     setIsProcessingReq(true);
     try {
+      const approveHeaders: Record<string, string> = { "Authorization": `Bearer ${token}` };
+      if (activeCompanyId) approveHeaders["x-company-id"] = activeCompanyId;
+
       for (const reqId of selectedRequests) {
-        await fetch(process.env.NEXT_PUBLIC_API_URL + `/company/join-requests/${reqId}/approve`, {
+        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/company/join-requests/${reqId}/approve`, {
           method: "POST",
-          headers: { "Authorization": `Bearer ${token}` }
+          headers: approveHeaders
         });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || "Gagal menyetujui permintaan");
+        }
       }
       setSelectedRequests([]);
       fetchRequestsData(token);
       
       // Refetch employees to update list
-      fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/employees", {
-        headers: { "Authorization": `Bearer ${token}` }
-      }).then(res => res.json()).then(data => {
-        if (data.success) {
-          setEmployees(data.data);
-          setTotalEmployees(data.meta?.total || data.data.length);
-        }
-      }).catch(console.error);
+      fetchEmployeesData(token);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Gagal menyetujui permintaan");
+      alert(err.message || "Gagal menyetujui permintaan");
     } finally {
       setIsProcessingReq(false);
     }
@@ -262,6 +440,7 @@ function AdminKaryawanView() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       <TopBar 
         title="Kelola Karyawan" 
+        showCompanySwitcher={true}
         rightAction={
           <button 
             onClick={() => setIsBarcodeModalOpen(true)} 
@@ -323,34 +502,216 @@ function AdminKaryawanView() {
         </div>
 
         {/* Stats */}
-        <div className="flex gap-3">
-          <div className="flex-[1.2] bg-white rounded-[20px] p-4 flex items-center gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-gray-50">
-            <div className="w-12 h-12 bg-[#f4f9f6] rounded-[14px] flex items-center justify-center shrink-0">
-              <Users className="w-6 h-6 text-[#356E3B]" strokeWidth={1.5} />
+        <div className="grid grid-cols-3 gap-2.5">
+          {/* Total Karyawan */}
+          <div 
+            onClick={() => setActiveTab("karyawan")}
+            className={`bg-white rounded-[20px] p-3.5 flex flex-col items-center text-center shadow-[0_2px_12px_rgba(0,0,0,0.02)] border cursor-pointer transition-all active:scale-95 ${
+              activeTab === "karyawan" ? "border-[#356E3B] bg-[#f4f9f6]/40" : "border-gray-50 hover:border-gray-200"
+            }`}
+          >
+            <div className="w-9 h-9 bg-[#f4f9f6] rounded-[12px] flex items-center justify-center shrink-0 mb-1.5">
+              <Users className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
             </div>
-            <div className="flex flex-col">
-              <span className="text-[#111827] text-[20px] font-bold leading-none mb-1">{totalEmployees}</span>
-              <span className="text-gray-400 text-[11px] font-medium leading-tight">Total Karyawan</span>
-            </div>
+            <span className="text-[#111827] text-[18px] font-bold leading-none mb-1">{totalEmployees}</span>
+            <span className="text-gray-400 text-[10px] font-medium leading-tight">Total Karyawan</span>
           </div>
 
-          <div className="flex-1 bg-white rounded-[20px] p-4 flex items-center justify-between shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-gray-50">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#fff8ef] rounded-[12px] flex items-center justify-center shrink-0">
-                <Clock className="w-5 h-5 text-[#f59e0b]" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[#111827] text-[20px] font-bold leading-none mb-1">{joinRequests.length}</span>
-                <span className="text-gray-400 text-[11px] font-medium leading-tight">Persetujuan</span>
-              </div>
+          {/* Permintaan Keluar */}
+          <div 
+            onClick={() => setActiveTab("keluar")}
+            className={`bg-white rounded-[20px] p-3.5 flex flex-col items-center text-center shadow-[0_2px_12px_rgba(0,0,0,0.02)] border cursor-pointer transition-all active:scale-95 relative ${
+              activeTab === "keluar" 
+                ? "border-red-500 bg-red-50/20" 
+                : (exitRequests.length > 0 ? "border-red-200 bg-[#fffdfd] hover:border-red-300" : "border-gray-50 hover:border-gray-200")
+            }`}
+          >
+            {exitRequests.length > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            )}
+            <div className="w-9 h-9 bg-red-50 rounded-[12px] flex items-center justify-center shrink-0 mb-1.5">
+              <LogOut className="w-4 h-4 text-red-600" strokeWidth={2} />
             </div>
-            <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+            <span className="text-[#111827] text-[18px] font-bold leading-none mb-1">{exitRequests.length}</span>
+            <span className="text-gray-400 text-[10px] font-medium leading-tight">Minta Keluar</span>
+          </div>
+
+          {/* Permintaan Bergabung */}
+          <div 
+            onClick={() => setActiveTab("masuk")}
+            className={`bg-white rounded-[20px] p-3.5 flex flex-col items-center text-center shadow-[0_2px_12px_rgba(0,0,0,0.02)] border cursor-pointer transition-all active:scale-95 ${
+              activeTab === "masuk" ? "border-amber-500 bg-amber-50/20" : "border-gray-50 hover:border-gray-200"
+            }`}
+          >
+            <div className="w-9 h-9 bg-[#fff8ef] rounded-[12px] flex items-center justify-center shrink-0 mb-1.5">
+              <Clock className="w-4 h-4 text-[#f59e0b]" strokeWidth={2} />
+            </div>
+            <span className="text-[#111827] text-[18px] font-bold leading-none mb-1">{joinRequests.length}</span>
+            <span className="text-gray-400 text-[10px] font-medium leading-tight">Minta Gabung</span>
           </div>
         </div>
 
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <button
+            onClick={() => setActiveTab("semua")}
+            className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all shrink-0 ${
+              activeTab === "semua"
+                ? "bg-[#1E4738] text-white shadow-sm"
+                : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
+            }`}
+          >
+            Semua
+          </button>
+          <button
+            onClick={() => setActiveTab("karyawan")}
+            className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              activeTab === "karyawan"
+                ? "bg-[#1E4738] text-white shadow-sm"
+                : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
+            }`}
+          >
+            <span>Karyawan</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              activeTab === "karyawan" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
+            }`}>
+              {filteredEmployees.length}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab("keluar")}
+            className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              activeTab === "keluar"
+                ? "bg-[#1E4738] text-white shadow-sm"
+                : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
+            }`}
+          >
+            <span>Permintaan Keluar</span>
+            {exitRequests.length > 0 && (
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                activeTab === "keluar" ? "bg-red-500 text-white" : "bg-red-100 text-red-600"
+              }`}>
+                {exitRequests.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("masuk")}
+            className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+              activeTab === "masuk"
+                ? "bg-[#1E4738] text-white shadow-sm"
+                : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
+            }`}
+          >
+            <span>Permintaan Gabung</span>
+            {joinRequests.length > 0 && (
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                activeTab === "masuk" ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-700"
+              }`}>
+                {joinRequests.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Permintaan Keluar Section */}
+        {(activeTab === "keluar" || (activeTab === "semua" && (isLoadingExitRequests || exitRequestsError || exitRequests.length > 0))) && (
+          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-red-100 p-5 flex flex-col gap-4 mt-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-red-50 text-red-600 rounded-lg flex items-center justify-center shrink-0 border border-red-100">
+                  <LogOut className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-[#111827] text-[13px] font-bold leading-tight">
+                    Permintaan Keluar ({exitRequests.length})
+                  </h3>
+                  <p className="text-gray-400 text-[11px] leading-tight">
+                    Karyawan yang mengajukan keluar dan menunggu konfirmasi Admin/Manager.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              {isLoadingExitRequests ? (
+                <div className="text-center py-5 text-gray-400 text-[13px]">Memuat permohonan keluar...</div>
+              ) : exitRequestsError ? (
+                <div className="text-center py-5 text-red-500 text-[13px]">{exitRequestsError}</div>
+              ) : exitRequests.length === 0 ? (
+                <div className="text-center py-5 text-gray-400 text-[13px]">Tidak ada permohonan keluar saat ini.</div>
+              ) : (
+                exitRequests.map((item) => (
+                  <div key={item.id} className="border border-red-100/80 bg-[#fffdfd] p-3.5 rounded-[18px] flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-[#f4f9f6] text-[#356E3B] border border-gray-100 rounded-full flex items-center justify-center shrink-0 overflow-hidden relative">
+                        {item.avatar_url && (
+                          <img 
+                            src={item.avatar_url} 
+                            alt={item.full_name} 
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        )}
+                        <User className={`w-5 h-5 absolute ${item.avatar_url ? 'hidden' : ''}`} strokeWidth={2.5} />
+                      </div>
+                      <div className="flex flex-col flex-1 overflow-hidden">
+                        <span className="text-[#111827] text-[13px] font-bold truncate">{item.full_name}</span>
+                        <span className="text-gray-400 text-[11px] truncate">{item.email}</span>
+                      </div>
+                      <span className="text-amber-700 border border-amber-300 bg-[#fff8ef] text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
+                        Menunggu Konfirmasi
+                      </span>
+                    </div>
+
+                    {item.reason && (
+                      <div className="bg-white border border-gray-100 rounded-[12px] p-2.5 text-[12px] text-gray-600 flex items-start gap-2">
+                        <MessageSquare className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                        <span className="italic leading-relaxed">"{item.reason}"</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                      <span className="text-[10px] text-gray-400">
+                        Diajukan: {new Date(item.created_at).toLocaleDateString("id-ID", { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedExitReqForAction(item);
+                            setExitActionType("reject");
+                            setExitActionError("");
+                          }}
+                          className="px-3 py-1.5 border border-gray-200 hover:bg-gray-100 text-gray-600 rounded-full text-[11px] font-bold transition-all active:scale-95"
+                        >
+                          Tolak
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedExitReqForAction(item);
+                            setExitActionType("approve");
+                            setExitActionError("");
+                          }}
+                          className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full text-[11px] font-bold transition-all active:scale-95 shadow-sm shadow-red-600/20 flex items-center gap-1"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Konfirmasi Keluarkan</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Permintaan Bergabung */}
-        {(isLoadingRequests || requestsError || joinRequests.length > 0) && (
-        <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-5 flex flex-col gap-4 mt-2">
+        {(activeTab === "masuk" || (activeTab === "semua" && (isLoadingRequests || requestsError || joinRequests.length > 0))) && (
+        <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-5 flex flex-col gap-4 mt-1">
           {/* Header */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2.5">
@@ -385,6 +746,8 @@ function AdminKaryawanView() {
               <div className="text-center py-5 text-[#7d998c] text-[13px]">Memuat permintaan bergabung...</div>
             ) : requestsError ? (
               <div className="text-center py-5 text-red-500 text-[13px]">{requestsError}</div>
+            ) : joinRequests.length === 0 ? (
+              <div className="text-center py-5 text-gray-400 text-[13px]">Tidak ada permintaan bergabung saat ini.</div>
             ) : (
               joinRequests.map((item) => (
                <div key={item.id} className="flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] cursor-pointer" onClick={() => toggleReqItem(item.id)}>
@@ -421,6 +784,7 @@ function AdminKaryawanView() {
         )}
 
         {/* Daftar Karyawan */}
+        {(activeTab === "semua" || activeTab === "karyawan") && (
         <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-5 flex flex-col gap-4">
           <div className="flex justify-between items-center mb-1">
             <div className="flex items-center gap-2.5">
@@ -455,10 +819,13 @@ function AdminKaryawanView() {
                   roleColorClass = 'bg-[#eef5f0] text-[#356E3B]';
                 }
 
+                const isSelf = item.id === currentUserId;
+                const canRemove = canRemoveEmployee(item);
+
                 return (
                  <div 
                    key={item.id} 
-                   className="flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] cursor-pointer hover:border-[#dce9df] transition-colors"
+                   className="flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] cursor-pointer hover:border-[#dce9df] transition-colors bg-white hover:bg-gray-50/50"
                    onClick={() => {
                      setSelectedEmployeeForRole(item);
                      if (item.roles?.includes('Admin')) setSelectedRole('Admin');
@@ -481,7 +848,14 @@ function AdminKaryawanView() {
                      <User className={`w-5 h-5 absolute ${item.avatar_url ? 'hidden' : ''}`} strokeWidth={2.5} />
                    </div>
                    <div className="flex flex-col flex-1 gap-1 overflow-hidden">
-                     <span className="text-[#111827] text-[14px] font-bold leading-none truncate">{item.full_name}</span>
+                     <div className="flex items-center gap-1.5 overflow-hidden">
+                       <span className="text-[#111827] text-[14px] font-bold leading-none truncate">{item.full_name}</span>
+                       {isSelf && (
+                         <span className="text-[10px] font-bold text-[#356E3B] bg-[#eef5f0] px-1.5 py-0.5 rounded-[6px] shrink-0">
+                           (Anda)
+                         </span>
+                       )}
+                     </div>
                      <span className="text-gray-400 text-[11px] leading-none mb-1 truncate">{item.email}</span>
                      <div className="flex items-center gap-2">
                         <span className={`text-[9px] font-bold px-2 py-0.5 rounded-[6px] ${roleColorClass}`}>
@@ -490,13 +864,44 @@ function AdminKaryawanView() {
                      </div>
                    </div>
 
-                   <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+                   {/* Direct Action Buttons */}
+                   <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                     {canRemove && (
+                       <button
+                         type="button"
+                         onClick={() => {
+                           setSelectedEmployeeForRole(item);
+                           setDeleteMemberError("");
+                           setIsDeleteConfirmOpen(true);
+                         }}
+                         className="px-2.5 py-1.5 rounded-[10px] bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/70 text-[11px] font-semibold flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+                         title="Keluarkan dari perusahaan"
+                       >
+                         <UserMinus className="w-3.5 h-3.5" />
+                         <span>Keluarkan</span>
+                       </button>
+                     )}
+                     <button
+                       type="button"
+                       onClick={() => {
+                         setSelectedEmployeeForRole(item);
+                         if (item.roles?.includes('Admin')) setSelectedRole('Admin');
+                         else if (item.roles?.includes('Manager')) setSelectedRole('Manager');
+                         else setSelectedRole('Employee');
+                       }}
+                       className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-[#356E3B] hover:bg-gray-100 transition-colors"
+                       title="Pengaturan akses"
+                     >
+                       <ChevronRight className="w-4 h-4" />
+                     </button>
+                   </div>
                  </div>
                 );
               })
             )}
           </div>
         </div>
+        )}
 
       </div>
 
@@ -568,7 +973,7 @@ function AdminKaryawanView() {
         <div className="fixed inset-0 z-[100] flex justify-end flex-col sm:justify-center sm:items-center bg-black/60">
           <div className="w-full max-w-md bg-white rounded-t-[24px] sm:rounded-[24px] p-6 flex flex-col gap-4 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0">
             <div className="flex justify-between items-center mb-2">
-              <h2 className="text-[16px] font-bold text-[#111827]">Pengaturan Akses Karyawan</h2>
+              <h2 className="text-[16px] font-bold text-[#111827]">Kelola Karyawan</h2>
               <button onClick={() => { setSelectedEmployeeForRole(null); setSaveRoleError(""); }} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200 active:scale-95 transition-colors">
                 <X className="w-4 h-4" />
               </button>
@@ -653,13 +1058,141 @@ function AdminKaryawanView() {
               </div>
             )}
             
-            <button 
-              onClick={handleSimpanRole}
-              disabled={isSavingRole}
-              className="w-full py-3.5 bg-[#356E3B] text-white rounded-[16px] font-bold text-[14px] mt-4 active:scale-95 transition-transform shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSavingRole ? "Menyimpan..." : "Simpan Perubahan"}
-            </button>
+            <div className="flex flex-col gap-2 mt-4">
+              <button 
+                onClick={handleSimpanRole}
+                disabled={isSavingRole}
+                className="w-full py-3.5 bg-[#356E3B] text-white rounded-[16px] font-bold text-[14px] active:scale-95 transition-transform shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSavingRole ? "Menyimpan..." : "Simpan Perubahan Role"}
+              </button>
+
+              {/* Opsi Keluarkan Karyawan */}
+              {canRemoveEmployee(selectedEmployeeForRole) && (
+                <div className="pt-2 border-t border-gray-100 flex flex-col gap-2 mt-1">
+                  <button 
+                    onClick={() => {
+                      setDeleteMemberError("");
+                      setIsDeleteConfirmOpen(true);
+                    }}
+                    type="button"
+                    className="w-full py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-[16px] font-bold text-[13px] flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
+                  >
+                    <UserMinus className="w-4 h-4" />
+                    <span>Keluarkan dari Perusahaan</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog Soft Delete Member */}
+      {isDeleteConfirmOpen && selectedEmployeeForRole && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-5">
+          <div className="w-full max-w-sm bg-white rounded-[24px] p-6 flex flex-col items-center text-center gap-4 animate-in fade-in zoom-in-95 duration-200 shadow-2xl">
+            <div className="w-14 h-14 rounded-full bg-red-50 border border-red-100 text-red-600 flex items-center justify-center">
+              <UserMinus className="w-7 h-7" />
+            </div>
+            
+            <div className="flex flex-col gap-1.5">
+              <h3 className="text-[17px] font-bold text-[#111827]">Keluarkan Karyawan?</h3>
+              <p className="text-[13px] text-gray-500 leading-relaxed px-2">
+                Apakah Anda yakin ingin mengeluarkan <span className="font-semibold text-gray-800">{selectedEmployeeForRole.full_name}</span> dari <span className="font-semibold text-gray-800">{activeCompany?.name || "perusahaan"}</span>? Akses karyawan ini akan dinonaktifkan.
+              </p>
+            </div>
+
+            {deleteMemberError && (
+              <div className="w-full text-red-600 text-[12px] bg-red-50 p-2.5 rounded-[12px] border border-red-200 text-center font-medium">
+                {deleteMemberError}
+              </div>
+            )}
+
+            <div className="flex gap-3 w-full mt-2">
+              <button 
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                disabled={isDeletingMember}
+                className="flex-1 py-3 rounded-full border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-[13px] transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleSoftDeleteMember}
+                disabled={isDeletingMember}
+                className="flex-1 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
+              >
+                {isDeletingMember ? "Mengeluarkan..." : "Ya, Keluarkan Karyawan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog Exit Request (Approve / Reject) */}
+      {selectedExitReqForAction && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-5">
+          <div className="w-full max-w-sm bg-white rounded-[24px] p-6 flex flex-col items-center text-center gap-4 animate-in fade-in zoom-in-95 duration-200 shadow-2xl">
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center ${
+              exitActionType === 'approve' 
+                ? 'bg-red-50 border border-red-100 text-red-600' 
+                : 'bg-gray-100 border border-gray-200 text-gray-600'
+            }`}>
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            
+            <div className="flex flex-col gap-1.5">
+              <h3 className="text-[17px] font-bold text-[#111827]">
+                {exitActionType === "approve" ? "Konfirmasi Keluarkan Karyawan?" : "Tolak Permintaan Keluar?"}
+              </h3>
+              <p className="text-[13px] text-gray-500 leading-relaxed px-1">
+                {exitActionType === "approve" ? (
+                  <>
+                    Apakah Anda yakin ingin menyetujui permohonan keluar dari <span className="font-semibold text-gray-800">{selectedExitReqForAction.full_name}</span>? Karyawan ini akan resmi dikeluarkan dari <span className="font-semibold text-gray-800">{activeCompany?.name || 'organisasi'}</span>.
+                  </>
+                ) : (
+                  <>
+                    Apakah Anda yakin ingin menolak permohonan keluar dari <span className="font-semibold text-gray-800">{selectedExitReqForAction.full_name}</span>? Karyawan tetap berstatus sebagai anggota aktif.
+                  </>
+                )}
+              </p>
+
+              {selectedExitReqForAction.reason && (
+                <div className="mt-2 bg-gray-50 border border-gray-100 p-2.5 rounded-[12px] text-left text-[12px] text-gray-600 w-full">
+                  <span className="font-semibold text-gray-700 block mb-0.5">Alasan pengajuan:</span>
+                  <span className="italic leading-relaxed">"{selectedExitReqForAction.reason}"</span>
+                </div>
+              )}
+            </div>
+
+            {exitActionError && (
+              <div className="w-full text-red-600 text-[12px] bg-red-50 p-2.5 rounded-[12px] border border-red-200 text-center font-medium">
+                {exitActionError}
+              </div>
+            )}
+
+            <div className="flex gap-3 w-full mt-2">
+              <button 
+                onClick={() => setSelectedExitReqForAction(null)}
+                disabled={isProcessingExitReq}
+                className="flex-1 py-3 rounded-full border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-[13px] transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleConfirmExitRequest}
+                disabled={isProcessingExitReq}
+                className={`flex-1 py-3 rounded-full text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md disabled:opacity-50 ${
+                  exitActionType === 'approve' 
+                    ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20' 
+                    : 'bg-gray-800 hover:bg-gray-900 shadow-gray-800/20'
+                }`}
+              >
+                {isProcessingExitReq 
+                  ? "Memproses..." 
+                  : (exitActionType === "approve" ? "Ya, Keluarkan" : "Tolak Permohonan")}
+              </button>
+            </div>
           </div>
         </div>
       )}

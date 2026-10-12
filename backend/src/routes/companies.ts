@@ -7,6 +7,7 @@ import { authenticate } from "../middleware/auth";
 import { companies, profiles } from "../db/schema";
 import multer from "multer";
 import { uploadCompanyPhoto } from "../utils/storage";
+import { resolveTenant } from "../utils/tenant";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -15,6 +16,8 @@ const router = Router();
 const createCompanySchema = z.object({
   name: z.string().min(1, "Nama perusahaan wajib diisi"),
   address: z.string().min(1, "Alamat wajib diisi"),
+  category_id: z.string().uuid().optional().nullable(),
+  category_code: z.enum(["community", "organization", "business"]).optional(),
 });
 
 const updateCompanySchema = z.object({
@@ -43,6 +46,117 @@ const roleUpdateSchema = z.object({
   message: "Role Employee wajib disertakan"
 });
 
+// GET /api/companies/categories
+router.get("/categories", async (req: Request, res: Response): Promise<any> => {
+  try {
+    const catsRes = await db.execute(sql`
+      SELECT id, code, name, description 
+      FROM company_categories 
+      ORDER BY name ASC
+    `);
+    return res.status(200).json({
+      success: true,
+      data: catsRes.rows
+    });
+  } catch (error: any) {
+    console.error("Get company categories error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// GET /api/companies/memberships - Get all active company memberships for current user
+router.get("/memberships", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+
+    // 1. Auto-sync legacy profile company_id into company_members if not exists yet
+    await db.execute(sql`
+      INSERT INTO company_members (id, company_id, profile_id, role, status, joined_at)
+      SELECT 
+        gen_random_uuid(), 
+        p.company_id, 
+        p.id, 
+        CASE 
+          WHEN EXISTS (SELECT 1 FROM companies c WHERE c.id = p.company_id AND c.created_by = p.id) THEN 'owner'
+          WHEN EXISTS (SELECT 1 FROM profile_roles pr WHERE pr.profile_id = p.id AND pr.role = 'Admin') THEN 'admin'
+          WHEN EXISTS (SELECT 1 FROM profile_roles pr WHERE pr.profile_id = p.id AND pr.role = 'Manager') THEN 'manager'
+          ELSE 'member'
+        END,
+        'active', 
+        now()
+      FROM profiles p
+      WHERE p.id = ${user.id} 
+        AND p.company_id IS NOT NULL 
+        AND p.deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM company_members cm 
+          WHERE cm.company_id = p.company_id AND cm.profile_id = p.id
+        )
+      ON CONFLICT (company_id, profile_id) DO NOTHING
+    `);
+
+    // 2. Fetch all active memberships
+    const membersRes = await db.execute(sql`
+      SELECT 
+        cm.id,
+        cm.company_id,
+        cm.profile_id,
+        cm.role,
+        cm.status,
+        cm.joined_at,
+        cm.deleted_at,
+        c.id as comp_id,
+        c.name as comp_name,
+        c.category_id as comp_category_id,
+        c.avatar_company_url as comp_avatar_url,
+        c.join_code as comp_join_code,
+        cc.id as cat_id,
+        cc.code as cat_code,
+        cc.name as cat_name,
+        cc.description as cat_description
+      FROM company_members cm
+      JOIN companies c ON c.id = cm.company_id
+      LEFT JOIN company_categories cc ON cc.id = c.category_id
+      WHERE cm.profile_id = ${user.id} 
+        AND cm.status = 'active' 
+        AND cm.deleted_at IS NULL
+        AND c.deleted_at IS NULL
+      ORDER BY cm.joined_at DESC
+    `);
+
+    const formatted = membersRes.rows.map((row: any) => ({
+      id: row.id,
+      company_id: row.company_id,
+      profile_id: row.profile_id,
+      role: (row.role || "member").toLowerCase(),
+      status: row.status,
+      joined_at: row.joined_at,
+      deleted_at: row.deleted_at,
+      company: {
+        id: row.comp_id,
+        name: row.comp_name,
+        category_id: row.comp_category_id,
+        avatar_company_url: row.comp_avatar_url,
+        join_code: row.comp_join_code,
+        category: row.cat_id ? {
+          id: row.cat_id,
+          code: row.cat_code,
+          name: row.cat_name,
+          description: row.cat_description,
+        } : null
+      }
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil daftar membership perusahaan",
+      data: formatted
+    });
+  } catch (error: any) {
+    console.error("Get company memberships error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error", errors: [error.message] });
+  }
+});
 
 router.post("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
@@ -57,7 +171,17 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
       });
     }
 
-    const { name, address } = parseResult.data;
+    const { name, address, category_id, category_code } = parseResult.data;
+
+    let targetCategoryId = category_id;
+    if (!targetCategoryId && category_code) {
+      const catRes = await db.execute(sql`
+        SELECT id FROM company_categories WHERE code = ${category_code} LIMIT 1
+      `);
+      if (catRes.rows.length > 0) {
+        targetCategoryId = catRes.rows[0].id as string;
+      }
+    }
 
     // Generate unique join_code (6 uppercase alphanumeric characters)
     const generateJoinCode = () => {
@@ -74,20 +198,28 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
     const result = await db.transaction(async (tx) => {
       // 1. Insert company
       const newCompanyRes = await tx.execute(sql`
-        INSERT INTO companies (id, name, address, join_code, created_by)
-        VALUES (gen_random_uuid(), ${name}, ${address}, ${joinCode}, ${user.id})
+        INSERT INTO companies (id, name, address, join_code, category_id, created_by)
+        VALUES (gen_random_uuid(), ${name}, ${address}, ${joinCode}, ${targetCategoryId || null}, ${user.id})
         RETURNING *
       `);
       const newCompany = newCompanyRes.rows[0];
 
-      // 2. Set profiles.company_id
+      // 2. Insert creator into company_members as 'owner'
+      await tx.execute(sql`
+        INSERT INTO company_members (id, company_id, profile_id, role, status, joined_at)
+        VALUES (gen_random_uuid(), ${newCompany.id}, ${user.id}, 'owner', 'active', now())
+        ON CONFLICT (company_id, profile_id) 
+        DO UPDATE SET role = 'owner', status = 'active', deleted_at = NULL
+      `);
+
+      // 3. Set profiles.company_id for backward compatibility
       await tx.execute(sql`
         UPDATE profiles
         SET company_id = ${newCompany.id}
         WHERE id = ${user.id}
       `);
 
-      // 3. Add Employee and Admin roles
+      // 4. Add Employee and Admin roles
       await tx.execute(sql`
         INSERT INTO profile_roles (profile_id, role)
         SELECT ${user.id}, 'Employee'
@@ -130,22 +262,22 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
 router.get("/me", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
+    const tenant = await resolveTenant(req, user.id);
 
-    const profileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${user.id}
-    `);
-    
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    if (!tenant) {
       return res.status(404).json({
         success: false,
         message: "Perusahaan tidak ditemukan",
       });
     }
 
-    const companyId = profileRes.rows[0].company_id;
+    const companyId = tenant.companyId;
 
     const companyRes = await db.execute(sql`
-      SELECT * FROM companies WHERE id = ${companyId}
+      SELECT c.*, cc.name as category_name, cc.code as category_code
+      FROM companies c
+      LEFT JOIN company_categories cc ON cc.id = c.category_id
+      WHERE c.id = ${companyId} AND c.deleted_at IS NULL
     `);
 
     if (companyRes.rows.length === 0) {
@@ -158,7 +290,9 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
     const company = companyRes.rows[0];
 
     const memberCountRes = await db.execute(sql`
-      SELECT count(*) as count FROM profiles WHERE company_id = ${companyId}
+      SELECT count(*) as count 
+      FROM company_members 
+      WHERE company_id = ${companyId} AND status = 'active' AND deleted_at IS NULL
     `);
     
     const memberCount = parseInt(memberCountRes.rows[0].count as string) || 0;
@@ -168,6 +302,7 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
       message: "Berhasil mendapatkan data perusahaan",
       data: {
         ...company,
+        role: tenant.role,
         memberCount,
       }
     });
@@ -182,67 +317,54 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
   }
 });
 
-
 router.get("/employees", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
+    const tenant = await resolveTenant(req, user.id);
 
-    const profileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${user.id}
-    `);
-    
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    if (!tenant) {
       return res.status(404).json({
         success: false,
         message: "Perusahaan tidak ditemukan atau Anda belum bergabung dengan perusahaan",
       });
     }
 
-    const companyId = profileRes.rows[0].company_id;
-
-    const roleRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${user.id} AND role = 'Admin'
-    `);
-
-    if (roleRes.rows.length === 0) {
+    if (!tenant.isManagement) {
       return res.status(403).json({
         success: false,
-        message: "Forbidden: Akses ditolak. Hanya Admin yang dapat melihat daftar karyawan.",
+        message: "Forbidden: Akses ditolak. Hanya Owner/Admin/Manager yang dapat melihat daftar karyawan.",
       });
     }
 
-    const employeesRes = await db.execute(sql`
-      SELECT id, full_name, email, avatar_url
-      FROM profiles
-      WHERE company_id = ${companyId}
+    const companyId = tenant.companyId;
+
+    // Fetch members from company_members where deleted_at IS NULL
+    const membersRes = await db.execute(sql`
+      SELECT 
+        p.id, 
+        p.full_name, 
+        p.email, 
+        p.avatar_url,
+        cm.role,
+        cm.status,
+        cm.joined_at
+      FROM company_members cm
+      JOIN profiles p ON p.id = cm.profile_id
+      WHERE cm.company_id = ${companyId}
+        AND cm.status = 'active'
+        AND cm.deleted_at IS NULL
+      ORDER BY cm.joined_at ASC
     `);
     
-    const rolesRes = await db.execute(sql`
-      SELECT pr.profile_id, pr.role
-      FROM profile_roles pr
-      JOIN profiles p ON p.id = pr.profile_id
-      WHERE p.company_id = ${companyId}
-    `);
-    
-    const rolesMap: Record<string, string[]> = {};
-    for (const row of rolesRes.rows) {
-      const pid = row.profile_id as string;
-      if (!rolesMap[pid]) {
-        rolesMap[pid] = [];
-      }
-      rolesMap[pid].push(row.role as string);
-    }
-    
-    const employees = employeesRes.rows.map((row: any) => {
-      const userRoles = rolesMap[row.id] || [];
-      if (!userRoles.includes('Employee')) {
-        userRoles.unshift('Employee');
-      }
+    const employees = membersRes.rows.map((row: any) => {
+      const userRoles = [row.role ? row.role.charAt(0).toUpperCase() + row.role.slice(1) : "Employee"];
+      if (!userRoles.includes("Employee")) userRoles.push("Employee");
       return {
         id: row.id,
         full_name: row.full_name,
         email: row.email,
         avatar_url: row.avatar_url,
+        role: row.role,
         roles: userRoles
       };
     });
@@ -265,6 +387,108 @@ router.get("/employees", authenticate, async (req: Request, res: Response): Prom
     });
   }
 });
+
+// Soft Delete a member from the company
+router.delete("/employees/:employeeId", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+    const { employeeId } = req.params;
+    const tenant = await resolveTenant(req, user.id);
+
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+    }
+
+    if (!tenant.isManagement) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Hanya Owner, Admin, atau Manager yang dapat menghapus/mengeluarkan anggota.",
+      });
+    }
+
+    if (user.id === employeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "Anda tidak dapat menghapus akun Anda sendiri dari perusahaan.",
+      });
+    }
+
+    const companyId = tenant.companyId;
+
+    // Check target member
+    const targetRes = await db.execute(sql`
+      SELECT role FROM company_members
+      WHERE company_id = ${companyId} AND profile_id = ${employeeId} AND deleted_at IS NULL
+    `);
+
+    if (targetRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Anggota tidak ditemukan atau sudah dihapus." });
+    }
+
+    const targetRole = (targetRes.rows[0].role as string || "member").toLowerCase();
+
+    // Role hierarchy checks
+    if (tenant.role === "admin" && (targetRole === "owner" || targetRole === "admin")) {
+      return res.status(403).json({ success: false, message: "Admin tidak dapat mengeluarkan Owner atau sesama Admin." });
+    }
+    if (tenant.role === "manager" && (targetRole === "owner" || targetRole === "admin" || targetRole === "manager")) {
+      return res.status(403).json({ success: false, message: "Manager hanya dapat mengeluarkan anggota (karyawan)." });
+    }
+
+    // Soft delete member: set deleted_at = now()
+    const nowIso = new Date().toISOString();
+    await db.execute(sql`
+      UPDATE company_members
+      SET deleted_at = ${nowIso}, status = 'inactive'
+      WHERE company_id = ${companyId} AND profile_id = ${employeeId}
+    `);
+
+    // Clear legacy profile company_id if it matched
+    await db.execute(sql`
+      UPDATE profiles
+      SET company_id = NULL
+      WHERE id = ${employeeId} AND company_id = ${companyId}
+    `);
+
+    // Clear any join requests for this employee in this company
+    await db.execute(sql`
+      UPDATE company_join_requests
+      SET deleted_at = ${nowIso}
+      WHERE company_id = ${companyId} AND profile_id = ${employeeId} AND deleted_at IS NULL
+    `);
+
+    // Send notification to the removed member
+    try {
+      await db.execute(sql`
+        INSERT INTO notifications (
+          id, company_id, recipient_id, type, title, message, is_read, created_at
+        )
+        VALUES (
+          gen_random_uuid(),
+          ${companyId},
+          ${employeeId},
+          'member_removed',
+          'Pemberitahuan Keanggotaan',
+          'Anda telah dikeluarkan dari organisasi/perusahaan ini oleh manajemen.',
+          false,
+          now()
+        )
+      `);
+    } catch (notifErr) {
+      console.error("Gagal mengirim notifikasi pengeluaran:", notifErr);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Anggota berhasil dikeluarkan dari perusahaan (soft delete)",
+      data: { employee_id: employeeId, deleted_at: nowIso }
+    });
+  } catch (error: any) {
+    console.error("Delete employee error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Internal server error", errors: [error.message] });
+  }
+});
+
 
 
 router.patch("/me", authenticate, async (req: Request, res: Response): Promise<any> => {
@@ -290,29 +514,22 @@ router.patch("/me", authenticate, async (req: Request, res: Response): Promise<a
       work_end_time = work_end_time.split(':').slice(0, 2).join(':');
     }
 
-    const profileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${user.id}
-    `);
-    
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    const tenant = await resolveTenant(req, user.id);
+    if (!tenant) {
       return res.status(404).json({
         success: false,
         message: "Perusahaan tidak ditemukan atau Anda belum bergabung dengan perusahaan",
       });
     }
 
-    const companyId = profileRes.rows[0].company_id;
-
-    const roleRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${user.id} AND role = 'Admin'
-    `);
-
-    if (roleRes.rows.length === 0) {
+    if (!tenant.isManagement || tenant.role === "member") {
       return res.status(403).json({
         success: false,
         message: "Forbidden: Anda tidak memiliki akses untuk mengubah pengaturan perusahaan",
       });
     }
+
+    const companyId = tenant.companyId;
 
     const updates = [];
     if (name !== undefined) updates.push(sql`name = ${name}`);

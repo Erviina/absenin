@@ -9,9 +9,11 @@ import { TopBar } from "@/components/TopBar";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { useCompany } from "@/context/CompanyContext";
 
 export default function KehadiranPage() {
   const router = useRouter();
+  const { activeCompanyId } = useCompany();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeCalendar, setActiveCalendar] = useState<"start" | "end" | null>(null);
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
@@ -89,10 +91,15 @@ export default function KehadiranPage() {
       const qString = queryParams.toString();
       if (qString) url += `?${qString}`;
       
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`
+      };
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
+
       const res = await fetch(url, {
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
+        headers
       });
       
       const data = await res.json();
@@ -110,7 +117,7 @@ export default function KehadiranPage() {
 
   useEffect(() => {
     fetchAttendances();
-  }, [appliedStartDate, appliedEndDate]);
+  }, [appliedStartDate, appliedEndDate, activeCompanyId]);
 
   const searchedAttendances = attendances.filter(item => {
     if (!searchQuery) return true;

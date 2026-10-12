@@ -46,8 +46,12 @@ export default function AdminAgendaPage() {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(`${apiUrl}/agendas/categories`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers
       });
       const data = await res.json();
       if (data.success) {
@@ -71,8 +75,12 @@ export default function AdminAgendaPage() {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL;
         if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        const activeCompanyId = localStorage.getItem("activeCompanyId");
+        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
         const res = await fetch(`${apiUrl}/agendas`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers
         });
         
         const data = await res.json();
@@ -202,11 +210,15 @@ export default function AdminAgendaPage() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`
+      };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(`${apiUrl}/agendas/${id}`, {
         method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
+        headers
       });
 
       const data = await res.json();
@@ -253,12 +265,16 @@ export default function AdminAgendaPage() {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL;
         if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
+        const headers: Record<string, string> = {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        };
+        const activeCompanyId = localStorage.getItem("activeCompanyId");
+        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
         const res = await fetch(`${apiUrl}/agendas/${editingAgendaId}`, {
           method: "PATCH",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json"
-          },
+          headers,
           body: JSON.stringify({
             title: formKegiatan,
             notes: formCatatan || "",
@@ -309,12 +325,16 @@ export default function AdminAgendaPage() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(`${apiUrl}/agendas`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
+        headers,
         body: JSON.stringify({
           title: formKegiatan,
           notes: formCatatan || "",

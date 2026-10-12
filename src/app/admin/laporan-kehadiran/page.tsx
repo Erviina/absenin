@@ -43,8 +43,12 @@ export default function LaporanKehadiranPage() {
         const monthNum = monthNames.indexOf(monthName) + 1;
         const yearNum = parseInt(yearString);
 
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        const activeCompanyId = localStorage.getItem("activeCompanyId");
+        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/management/summary?month=${monthNum}&year=${yearNum}`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers
         });
         
         const data = await res.json();

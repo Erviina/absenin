@@ -6,6 +6,7 @@ import { authenticate } from "../middleware/auth";
 import multer from "multer";
 import { calculateHaversineDistance } from "../utils/haversine";
 import { uploadAttendancePhoto } from "../utils/storage";
+import { resolveTenant } from "../utils/tenant";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -18,15 +19,12 @@ router.post("/check-in", authenticate, upload.single("photo"), async (req: AuthR
   try {
     const userId = req.user.id;
 
-    // 1. Get profile and company
-    const profile = await db.select().from(profiles).where(eq(profiles.id, userId)).limit(1);
-    if (!profile.length) {
-      return res.status(404).json({ success: false, message: "Profile not found" });
+    // 1. Get profile and company via resolveTenant
+    const tenant = await resolveTenant(req, userId);
+    if (!tenant) {
+      return res.status(400).json({ success: false, message: "User does not belong to any active company or tenant" });
     }
-    const companyId = profile[0].company_id;
-    if (!companyId) {
-      return res.status(400).json({ success: false, message: "User does not belong to any company" });
-    }
+    const companyId = tenant.companyId;
 
     const { work_mode, latitude, longitude, address } = req.body;
     const file = req.file;
@@ -51,32 +49,14 @@ router.post("/check-in", authenticate, upload.single("photo"), async (req: AuthR
       return res.status(400).json({ success: false, message: "Invalid coordinates." });
     }
 
-    // 3. Validate WFO (GEOFENCING DISABLED/PENDING)
-    /*
-    if (work_mode === "WFO") {
-      const company = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
-      if (!company.length || !company[0].latitude || !company[0].longitude) {
-        return res.status(400).json({ success: false, message: "Company location is not configured." });
-      }
-
-      const compLat = parseFloat(company[0].latitude as any);
-      const compLon = parseFloat(company[0].longitude as any);
-
-      const distance = calculateHaversineDistance(latNum, lonNum, compLat, compLon);
-      
-      if (distance > 100) {
-        return res.status(400).json({ success: false, message: "You are outside the 100m radius of the office." });
-      }
-    }
-    */
-
-    // 4. Check for active attendance today
+    // 4. Check for active attendance today in this company
     const activeAttendance = await db
       .select()
       .from(attendances)
       .where(
         and(
           eq(attendances.profile_id, userId),
+          eq(attendances.company_id, companyId),
           isNull(attendances.check_out_time),
           isNull(attendances.deleted_at),
           sql`DATE(check_in_time AT TIME ZONE 'Asia/Jakarta') = DATE(now() AT TIME ZONE 'Asia/Jakarta')`
@@ -134,15 +114,12 @@ router.post("/check-out", authenticate, upload.single("photo"), async (req: Auth
   try {
     const userId = req.user.id;
 
-    // 1. Get profile and company
-    const profile = await db.select().from(profiles).where(eq(profiles.id, userId)).limit(1);
-    if (!profile.length) {
-      return res.status(404).json({ success: false, message: "Profile not found" });
+    // 1. Get profile and company via resolveTenant
+    const tenant = await resolveTenant(req, userId);
+    if (!tenant) {
+      return res.status(400).json({ success: false, message: "User does not belong to any active company or tenant" });
     }
-    const companyId = profile[0].company_id;
-    if (!companyId) {
-      return res.status(400).json({ success: false, message: "User does not belong to any company" });
-    }
+    const companyId = tenant.companyId;
 
     // 2. Look for active attendance today
     const activeAttendanceList = await db
@@ -151,11 +128,13 @@ router.post("/check-out", authenticate, upload.single("photo"), async (req: Auth
       .where(
         and(
           eq(attendances.profile_id, userId),
+          eq(attendances.company_id, companyId),
           isNull(attendances.deleted_at),
           sql`DATE(check_in_time AT TIME ZONE 'Asia/Jakarta') = DATE(now() AT TIME ZONE 'Asia/Jakarta')`
         )
       )
       .limit(1);
+
 
     if (activeAttendanceList.length === 0) {
       return res.status(400).json({ success: false, message: "Tidak ada check-in aktif untuk hari ini." });
@@ -224,17 +203,22 @@ router.post("/check-out", authenticate, upload.single("photo"), async (req: Auth
 router.get("/today", authenticate, async (req: AuthRequest, res: Response): Promise<any> => {
   try {
     const userId = req.user.id;
+    const tenant = await resolveTenant(req, userId);
+
+    const conditions = [
+      eq(attendances.profile_id, userId),
+      isNull(attendances.deleted_at),
+      sql`DATE(check_in_time AT TIME ZONE 'Asia/Jakarta') = DATE(now() AT TIME ZONE 'Asia/Jakarta')`
+    ];
+
+    if (tenant) {
+      conditions.push(eq(attendances.company_id, tenant.companyId));
+    }
 
     const todayAttendance = await db
       .select()
       .from(attendances)
-      .where(
-        and(
-          eq(attendances.profile_id, userId),
-          isNull(attendances.deleted_at),
-          sql`DATE(check_in_time AT TIME ZONE 'Asia/Jakarta') = DATE(now() AT TIME ZONE 'Asia/Jakarta')`
-        )
-      )
+      .where(and(...conditions))
       .limit(1);
 
     if (todayAttendance.length === 0) {
@@ -276,12 +260,18 @@ router.get("/today", authenticate, async (req: AuthRequest, res: Response): Prom
 router.get("/", authenticate, async (req: AuthRequest, res: Response): Promise<any> => {
   try {
     const userId = req.user.id;
+    const tenant = await resolveTenant(req, userId);
     const { start_date, end_date } = req.query;
 
     const conditions = [
       eq(attendances.profile_id, userId),
       isNull(attendances.deleted_at)
     ];
+
+    if (tenant) {
+      conditions.push(eq(attendances.company_id, tenant.companyId));
+    }
+
 
     if (start_date && typeof start_date === 'string') {
       conditions.push(sql`DATE(check_in_time AT TIME ZONE 'Asia/Jakarta') >= ${start_date}`);
@@ -377,47 +367,34 @@ router.get("/management/summary", authenticate, async (req: AuthRequest, res: Re
       return res.status(400).json({ success: false, message: "Month and year are required." });
     }
 
-    // 1. Get Admin/Manager's company_id
-    const profileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${userId}
-    `);
-    
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    // 1. Resolve tenant
+    const tenant = await resolveTenant(req, userId);
+    if (!tenant) {
       return res.status(404).json({ success: false, message: "Anda tidak terhubung ke perusahaan manapun" });
     }
-    const companyId = profileRes.rows[0].company_id as string;
-
-    // 2. Verify if user is an Admin or Manager
-    const roleRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${userId} AND role IN ('Admin', 'Manager')
-    `);
-    if (roleRes.rows.length === 0) {
+    if (!tenant.isManagement) {
       return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses laporan" });
     }
+    const companyId = tenant.companyId;
 
-    // 3. Get all profiles in the company
+    // 2. Get all active members in the company
     const employeesRes = await db.execute(sql`
-      SELECT id, full_name
-      FROM profiles
-      WHERE company_id = ${companyId}
+      SELECT p.id, p.full_name, cm.role
+      FROM company_members cm
+      JOIN profiles p ON p.id = cm.profile_id
+      WHERE cm.company_id = ${companyId}
+        AND cm.status = 'active'
+        AND cm.deleted_at IS NULL
     `);
 
-    // 4. Get roles for these profiles
-    const rolesRes = await db.execute(sql`
-      SELECT pr.profile_id, pr.role
-      FROM profile_roles pr
-      JOIN profiles p ON p.id = pr.profile_id
-      WHERE p.company_id = ${companyId}
-    `);
-    
     const rolesMap: Record<string, string> = {};
-    for (const row of rolesRes.rows) {
-      const pid = row.profile_id as string;
-      const role = row.role as string;
-      // Prioritize Admin > Manager > Employee
-      if (role === 'Admin') rolesMap[pid] = 'Admin';
-      else if (role === 'Manager' && rolesMap[pid] !== 'Admin') rolesMap[pid] = 'Manager';
-      else if (!rolesMap[pid]) rolesMap[pid] = 'Employee';
+    for (const row of employeesRes.rows) {
+      const pid = row.id as string;
+      const rawRole = (row.role as string || "").toLowerCase();
+      if (rawRole === 'owner') rolesMap[pid] = 'Admin';
+      else if (rawRole === 'admin') rolesMap[pid] = 'Admin';
+      else if (rawRole === 'manager') rolesMap[pid] = 'Manager';
+      else rolesMap[pid] = 'Employee';
     }
 
     // 5. Get attendances for the given month and year
@@ -524,30 +501,26 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
       return res.status(400).json({ success: false, message: "Month and year are required." });
     }
 
-    // 1. Get Admin/Manager's company_id
-    const profileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${userId}
-    `);
-    
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    // 1. Resolve tenant
+    const tenant = await resolveTenant(req, userId);
+    if (!tenant) {
       return res.status(404).json({ success: false, message: "Anda tidak terhubung ke perusahaan manapun" });
     }
-    const companyId = profileRes.rows[0].company_id as string;
-
-    // 2. Verify if user is an Admin or Manager
-    const roleRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${userId} AND role IN ('Admin', 'Manager')
-    `);
-    if (roleRes.rows.length === 0) {
+    if (!tenant.isManagement) {
       return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses." });
     }
+    const companyId = tenant.companyId;
 
-    // 3. Get Employee info & Verify company
+    // 2. Get Employee info & Verify membership in this company
     const employeeRes = await db.execute(sql`
-      SELECT p.id, p.full_name, p.email, p.avatar_url, pr.role
-      FROM profiles p
-      LEFT JOIN profile_roles pr ON pr.profile_id = p.id
-      WHERE p.id = ${employeeId} AND p.company_id = ${companyId}
+      SELECT p.id, p.full_name, p.email, p.avatar_url, cm.role
+      FROM company_members cm
+      JOIN profiles p ON p.id = cm.profile_id
+      WHERE cm.company_id = ${companyId}
+        AND cm.profile_id = ${employeeId}
+        AND cm.status = 'active'
+        AND cm.deleted_at IS NULL
+      LIMIT 1
     `);
 
     if (employeeRes.rows.length === 0) {

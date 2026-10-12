@@ -4,6 +4,7 @@ import { tasks, profiles } from "../db/schema";
 import { eq, desc, or, and, isNull } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import crypto from "crypto";
+import { resolveTenant } from "../utils/tenant";
 
 const router = Router();
 
@@ -16,14 +17,14 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    const profileRes = await db.select().from(profiles).where(eq(profiles.id, profileId));
-    const companyId = profileRes[0]?.company_id;
+    const tenant = await resolveTenant(req, profileId);
+    const companyId = tenant?.companyId;
 
     const conditions = [];
-    conditions.push(and(eq(tasks.profile_id, profileId), isNull(tasks.company_id)));
+    conditions.push(and(eq(tasks.profile_id, profileId), isNull(tasks.company_id), isNull(tasks.deleted_at)));
     
     if (companyId) {
-      conditions.push(eq(tasks.company_id, companyId));
+      conditions.push(and(eq(tasks.company_id, companyId), isNull(tasks.deleted_at)));
     }
 
     const userTasks = await db.select().from(tasks).where(or(...conditions)).orderBy(desc(tasks.created_at));
@@ -38,6 +39,7 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
         note: t.notes || "",
         completed: t.is_completed,
         type: t.company_id ? "group" : "personal",
+        company_id: t.company_id,
         created_at: t.created_at
       };
     });
@@ -65,12 +67,12 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
       return;
     }
 
+    const tenant = await resolveTenant(req, profileId);
     let companyId = null;
     if (type === "group") {
-      const profileRes = await db.select().from(profiles).where(eq(profiles.id, profileId));
-      companyId = profileRes[0]?.company_id;
+      companyId = tenant?.companyId || null;
       if (!companyId) {
-        res.status(400).json({ error: "Cannot create group task: No company associated" });
+        res.status(400).json({ error: "Cannot create group task: No active company associated" });
         return;
       }
     }
@@ -93,6 +95,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
         created_by: profileId
       })
       .returning();
+
 
     const d = newTask.deadline ? new Date(newTask.deadline) : null;
     res.status(201).json({
@@ -181,7 +184,7 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
   }
 });
 
-// Delete a task
+// Delete a task (Soft delete)
 router.delete("/:id", authenticate, async (req: Request, res: Response): Promise<void> => {
   try {
     const profileId = (req as any).user?.id;
@@ -192,27 +195,27 @@ router.delete("/:id", authenticate, async (req: Request, res: Response): Promise
 
     const taskId = String(req.params.id);
 
-    const existingTask = await db.select().from(tasks).where(eq(tasks.id, taskId));
+    const existingTask = await db.select().from(tasks).where(and(eq(tasks.id, taskId), isNull(tasks.deleted_at)));
 
     if (existingTask.length === 0) {
       res.status(404).json({ error: "Task not found" });
       return;
     }
 
-    const profileRes = await db.select().from(profiles).where(eq(profiles.id, profileId));
-    const companyId = profileRes[0]?.company_id;
+    const tenant = await resolveTenant(req, profileId);
+    const companyId = tenant?.companyId;
 
     const isGroup = existingTask[0].company_id !== null;
 
     if (!isGroup && existingTask[0].profile_id !== profileId) {
       res.status(403).json({ error: "Forbidden" });
       return;
-    } else if (isGroup && existingTask[0].company_id !== companyId) {
+    } else if (isGroup && existingTask[0].company_id !== companyId && existingTask[0].profile_id !== profileId) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
 
-    await db.delete(tasks).where(eq(tasks.id, taskId));
+    await db.update(tasks).set({ deleted_at: new Date(), updated_at: new Date() }).where(eq(tasks.id, taskId));
 
     res.status(204).send();
   } catch (error: any) {

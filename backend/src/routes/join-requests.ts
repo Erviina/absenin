@@ -5,6 +5,7 @@ import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import { notifications } from "../db/schema";
+import { resolveTenant } from "../utils/tenant";
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
 
     // 1. Check if company exists
     const companyRes = await db.execute(sql`
-      SELECT id FROM companies WHERE join_code = ${join_code}
+      SELECT id, name FROM companies WHERE join_code = ${join_code} AND deleted_at IS NULL
     `);
 
     if (companyRes.rows.length === 0) {
@@ -45,32 +46,34 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
 
     const companyId = companyRes.rows[0].id as string;
 
-    // 2. Check if user already has a company
-    const profileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${user.id}
+    // 2. Check if user is already an active member of THIS company
+    const memberCheckRes = await db.execute(sql`
+      SELECT id FROM company_members 
+      WHERE profile_id = ${user.id} AND company_id = ${companyId} AND status = 'active' AND deleted_at IS NULL
     `);
 
-    if (profileRes.rows.length > 0 && profileRes.rows[0].company_id) {
+    if (memberCheckRes.rows.length > 0) {
       return res.status(400).json({
         success: false,
-        message: "Anda sudah tergabung dalam sebuah perusahaan",
+        message: "Anda sudah tergabung dalam organisasi / perusahaan ini",
         errors: [],
       });
     }
 
-    // 3. Check if user already has a pending request
+    // 3. Check if user already has a pending request for THIS company
     const pendingRes = await db.execute(sql`
       SELECT id FROM company_join_requests 
-      WHERE profile_id = ${user.id} AND status = 'pending' AND deleted_at IS NULL
+      WHERE profile_id = ${user.id} AND company_id = ${companyId} AND status = 'pending' AND deleted_at IS NULL
     `);
 
     if (pendingRes.rows.length > 0) {
       return res.status(400).json({
         success: false,
-        message: "Anda sudah memiliki request yang masih pending",
+        message: "Anda sudah memiliki permintaan bergabung yang masih menunggu persetujuan",
         errors: [],
       });
     }
+
 
     // 4. Create the join request
     const insertRes = await db.execute(sql`
@@ -141,7 +144,7 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
       SELECT cjr.id, cjr.status, cjr.created_at, c.name as company_name 
       FROM company_join_requests cjr
       JOIN companies c ON c.id = cjr.company_id
-      WHERE cjr.profile_id = ${user.id} AND cjr.deleted_at IS NULL
+      WHERE cjr.profile_id = ${user.id} AND cjr.status = 'pending' AND cjr.deleted_at IS NULL
       ORDER BY cjr.created_at DESC
       LIMIT 1
     `);
@@ -174,18 +177,9 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
 router.get("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
+    const tenant = await resolveTenant(req, user.id);
 
-    // 1. Get user profile and company_id
-    const profileRes = await db.execute(sql`
-      SELECT id, company_id FROM profiles WHERE id = ${user.id}
-    `);
-
-    console.log("=== RUNTIME VERIFICATION ===");
-    console.log("1. req.user.id (JWT):", user.id);
-    console.log("2. profiles query result:", profileRes.rows);
-    console.log("============================");
-
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    if (!tenant) {
       return res.status(403).json({
         success: false,
         message: "Forbidden",
@@ -193,22 +187,15 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
       });
     }
 
-    const companyId = profileRes.rows[0].company_id as string;
-
-    // 2. Verify if user is an Admin
-    const roleRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${user.id} AND role = 'Admin'
-    `);
-
-    console.log("3. role query result:", roleRes.rows);
-
-    if (roleRes.rows.length === 0) {
+    if (!tenant.isManagement) {
       return res.status(403).json({
         success: false,
         message: "Forbidden",
-        errors: ["Hanya Admin yang diizinkan untuk mengakses daftar request bergabung"],
+        errors: ["Hanya Owner/Admin/Manager yang diizinkan untuk mengakses daftar request bergabung"],
       });
     }
+
+    const companyId = tenant.companyId;
 
     // 3. Fetch the join requests for the company
     const requestsRes = await db.execute(sql`
@@ -250,13 +237,9 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
   try {
     const user = (req as any).user;
     const { requestId } = req.params;
+    const tenant = await resolveTenant(req, user.id);
 
-    // 1. Get user profile and company_id
-    const profileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${user.id}
-    `);
-
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    if (!tenant) {
       return res.status(403).json({
         success: false,
         message: "Forbidden",
@@ -264,20 +247,15 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
       });
     }
 
-    const companyId = profileRes.rows[0].company_id as string;
-
-    // 2. Verify if user is an Admin
-    const roleRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${user.id} AND role = 'Admin'
-    `);
-
-    if (roleRes.rows.length === 0) {
+    if (!tenant.isManagement) {
       return res.status(403).json({
         success: false,
         message: "Forbidden",
-        errors: ["Hanya Admin yang diizinkan untuk melakukan aksi ini"],
+        errors: ["Hanya Owner/Admin/Manager yang diizinkan untuk melakukan aksi ini"],
       });
     }
+
+    const companyId = tenant.companyId;
 
     // 3. Find the join request
     const requestRes = await db.execute(sql`
@@ -322,7 +300,15 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
         WHERE id = ${requestId}
       `);
 
-      // Update user profile
+      // Add to company_members
+      await tx.execute(sql`
+        INSERT INTO company_members (id, company_id, profile_id, role, status, joined_at)
+        VALUES (gen_random_uuid(), ${companyId}, ${joinRequest.profile_id}, 'member', 'active', now())
+        ON CONFLICT (company_id, profile_id) 
+        DO UPDATE SET role = 'member', status = 'active', deleted_at = NULL
+      `);
+
+      // Update user profile for backward compatibility
       await tx.execute(sql`
         UPDATE profiles
         SET company_id = ${companyId}
@@ -337,14 +323,18 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
       `);
 
       // Create notification
-      await tx.insert(notifications).values({
-        company_id: companyId,
-        recipient_id: joinRequest.profile_id as string,
-        type: "JOIN_REQUEST_APPROVED",
-        title: "Permintaan Bergabung Disetujui",
-        message: "Permintaan bergabung Anda telah disetujui. Selamat datang di perusahaan!",
-        reference_id: joinRequest.id as string,
-      });
+      try {
+        await tx.insert(notifications).values({
+          company_id: companyId,
+          recipient_id: joinRequest.profile_id as string,
+          type: "JOIN_REQUEST_APPROVED",
+          title: "Permintaan Bergabung Disetujui",
+          message: "Permintaan bergabung Anda telah disetujui. Selamat datang di organisasi / perusahaan!",
+          reference_id: joinRequest.id as string,
+        });
+      } catch (notifErr) {
+        console.error("Gagal mengirim notifikasi persetujuan bergabung:", notifErr);
+      }
     });
 
     return res.status(200).json({
@@ -353,11 +343,12 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
       data: null,
     });
 
+
   } catch (error: any) {
     console.error("Approve join request error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: error.message || "Internal server error",
       errors: [error.message],
     });
   }
@@ -368,12 +359,9 @@ router.post("/:requestId/reject", authenticate, async (req: Request, res: Respon
   try {
     const user = (req as any).user;
     const { requestId } = req.params;
+    const tenant = await resolveTenant(req, user.id);
 
-    const profileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${user.id}
-    `);
-
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    if (!tenant) {
       return res.status(403).json({
         success: false,
         message: "Forbidden",
@@ -381,19 +369,15 @@ router.post("/:requestId/reject", authenticate, async (req: Request, res: Respon
       });
     }
 
-    const companyId = profileRes.rows[0].company_id as string;
-
-    const roleRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${user.id} AND role = 'Admin'
-    `);
-
-    if (roleRes.rows.length === 0) {
+    if (!tenant.isManagement) {
       return res.status(403).json({
         success: false,
         message: "Forbidden",
-        errors: ["Hanya Admin yang diizinkan untuk melakukan aksi ini"],
+        errors: ["Hanya Owner/Admin/Manager yang diizinkan untuk melakukan aksi ini"],
       });
     }
+
+    const companyId = tenant.companyId;
 
     const requestRes = await db.execute(sql`
       SELECT id, profile_id, company_id, status 
@@ -434,14 +418,18 @@ router.post("/:requestId/reject", authenticate, async (req: Request, res: Respon
         WHERE id = ${requestId}
       `);
 
-      await tx.insert(notifications).values({
-        company_id: companyId,
-        recipient_id: joinRequest.profile_id as string,
-        type: "JOIN_REQUEST_REJECTED",
-        title: "Permintaan Bergabung Ditolak",
-        message: "Maaf, permintaan bergabung Anda telah ditolak oleh admin.",
-        reference_id: joinRequest.id as string,
-      });
+      try {
+        await tx.insert(notifications).values({
+          company_id: companyId,
+          recipient_id: joinRequest.profile_id as string,
+          type: "JOIN_REQUEST_REJECTED",
+          title: "Permintaan Bergabung Ditolak",
+          message: "Maaf, permintaan bergabung Anda telah ditolak oleh manajemen.",
+          reference_id: joinRequest.id as string,
+        });
+      } catch (notifErr) {
+        console.error("Gagal mengirim notifikasi penolakan bergabung:", notifErr);
+      }
     });
 
     return res.status(200).json({
@@ -454,7 +442,7 @@ router.post("/:requestId/reject", authenticate, async (req: Request, res: Respon
     console.error("Reject join request error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
+      message: error.message || "Internal server error",
       errors: [error.message],
     });
   }

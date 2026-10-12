@@ -3,6 +3,7 @@ import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import { z } from "zod";
+import { resolveTenant } from "../utils/tenant";
 
 const router = Router();
 
@@ -26,12 +27,10 @@ const patchSchema = patchBaseSchema.refine(data => new Date(data.end_time) > new
   path: ["end_time"]
 });
 
-const getProfileAndCompany = async (userId: string): Promise<{ profileId: string, companyId: string } | null> => {
-  const profileRes = await db.execute(sql`SELECT id, company_id FROM profiles WHERE id = ${userId} AND deleted_at IS NULL`);
-  if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
-    return null;
-  }
-  return { profileId: profileRes.rows[0].id as string, companyId: profileRes.rows[0].company_id as string };
+const getProfileAndCompany = async (req: Request, userId: string): Promise<{ profileId: string, companyId: string, role: string, isManagement: boolean } | null> => {
+  const tenant = await resolveTenant(req, userId);
+  if (!tenant) return null;
+  return { profileId: userId, companyId: tenant.companyId, role: tenant.role, isManagement: tenant.isManagement };
 };
 
 const getUserRoles = async (profileId: string) => {
@@ -60,7 +59,7 @@ router.get("/categories", authenticate, async (req: Request, res: Response): Pro
 router.get("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
-    const profileData = await getProfileAndCompany(user.id);
+    const profileData = await getProfileAndCompany(req, user.id);
     if (!profileData) return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
 
     const agendasRes = await db.execute(sql`
@@ -112,11 +111,9 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
 router.post("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
-    const profileData = await getProfileAndCompany(user.id);
+    const profileData = await getProfileAndCompany(req, user.id);
     if (!profileData) return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
 
-    const roles = await getUserRoles(profileData.profileId);
-    
     const parseResult = agendaSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ success: false, message: "Data tidak valid", errors: parseResult.error.issues });
@@ -125,10 +122,11 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
     const data = parseResult.data;
     
     if (data.type === "COMPANY") {
-      if (!roles.includes("Admin") && !roles.includes("Manager")) {
-        return res.status(403).json({ success: false, message: "Akses ditolak. Hanya Admin/Manager yang dapat membuat agenda perusahaan" });
+      if (!profileData.isManagement) {
+        return res.status(403).json({ success: false, message: "Akses ditolak. Hanya Owner/Admin/Manager yang dapat membuat agenda organisasi atau perusahaan" });
       }
     }
+
 
     const insertRes = await db.execute(sql`
       INSERT INTO agendas (
@@ -156,11 +154,9 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
     const user = (req as any).user;
     const agendaId = req.params.id;
     
-    const profileData = await getProfileAndCompany(user.id);
+    const profileData = await getProfileAndCompany(req, user.id);
     if (!profileData) return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
 
-    const roles = await getUserRoles(profileData.profileId);
-    
     // Type tidak boleh diubah melalui PATCH, jadi kita omit dari validasi
     
     const parseResult = patchSchema.safeParse(req.body);
@@ -183,8 +179,8 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
 
     // Validasi otorisasi edit berdasarkan type
     if (existingAgenda.type === "COMPANY") {
-      if (!roles.includes("Admin") && !roles.includes("Manager")) {
-        return res.status(403).json({ success: false, message: "Hanya Admin/Manager yang dapat mengubah agenda perusahaan" });
+      if (!profileData.isManagement) {
+        return res.status(403).json({ success: false, message: "Hanya Owner/Admin/Manager yang dapat mengubah agenda organisasi atau perusahaan" });
       }
     } else if (existingAgenda.type === "PERSONAL") {
       if (existingAgenda.profile_id !== profileData.profileId) {
@@ -213,7 +209,6 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
     });
   } catch (error: any) {
     console.error("Update agenda error:", error);
-    require("fs").writeFileSync("error.log", error.stack || error.message);
     return res.status(500).json({ success: false, message: "Internal server error", errors: [error.message] });
   }
 });
@@ -223,11 +218,9 @@ router.delete("/:id", authenticate, async (req: Request, res: Response): Promise
     const user = (req as any).user;
     const agendaId = req.params.id;
     
-    const profileData = await getProfileAndCompany(user.id);
+    const profileData = await getProfileAndCompany(req, user.id);
     if (!profileData) return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
 
-    const roles = await getUserRoles(profileData.profileId);
-    
     const checkRes = await db.execute(sql`
       SELECT id, type, profile_id FROM agendas 
       WHERE id = ${agendaId} AND company_id = ${profileData.companyId} AND deleted_at IS NULL
@@ -241,8 +234,8 @@ router.delete("/:id", authenticate, async (req: Request, res: Response): Promise
 
     // Validasi otorisasi hapus berdasarkan type
     if (existingAgenda.type === "COMPANY") {
-      if (!roles.includes("Admin") && !roles.includes("Manager")) {
-        return res.status(403).json({ success: false, message: "Hanya Admin/Manager yang dapat menghapus agenda perusahaan" });
+      if (!profileData.isManagement) {
+        return res.status(403).json({ success: false, message: "Hanya Owner/Admin/Manager yang dapat menghapus agenda perusahaan" });
       }
     } else if (existingAgenda.type === "PERSONAL") {
       if (existingAgenda.profile_id !== profileData.profileId) {

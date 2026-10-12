@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import { z } from "zod";
 import crypto from "crypto";
+import { resolveTenant } from "../utils/tenant";
 
 const router = Router();
 
@@ -29,14 +30,13 @@ router.get("/categories", authenticate, async (req: Request, res: Response): Pro
 router.get("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
-
-    const profileRes = await db.execute(sql`SELECT company_id FROM profiles WHERE id = ${user.id} AND deleted_at IS NULL`);
+    const tenant = await resolveTenant(req, user.id);
     
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    if (!tenant) {
       return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
     }
     
-    const companyId = profileRes.rows[0].company_id;
+    const companyId = tenant.companyId;
 
     const newsRes = await db.execute(sql`
       SELECT 
@@ -52,7 +52,7 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
       WHERE n.company_id = ${companyId} 
         AND n.deleted_at IS NULL
       ORDER BY n.created_at DESC 
-      LIMIT 5
+      LIMIT 10
     `);
 
     const formattedNews = newsRes.rows.map((row: any) => ({
@@ -83,20 +83,17 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
 router.post("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
+    const tenant = await resolveTenant(req, user.id);
     
-    // Check if user is Admin or Manager
-    const profileRes = await db.execute(sql`
-      SELECT p.company_id, pr.role 
-      FROM profiles p
-      LEFT JOIN profile_roles pr ON pr.profile_id = p.id
-      WHERE p.id = ${user.id} AND (pr.role = 'Admin' OR pr.role = 'Manager')
-    `);
-    
-    if (profileRes.rows.length === 0) {
-      return res.status(403).json({ success: false, message: "Akses ditolak" });
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+    }
+
+    if (!tenant.isManagement) {
+      return res.status(403).json({ success: false, message: "Akses ditolak: Hanya Owner, Admin, atau Manager yang dapat menerbitkan berita" });
     }
     
-    const companyId = profileRes.rows[0].company_id;
+    const companyId = tenant.companyId;
     const validatedData = newsSchema.parse(req.body);
     
     const newNews = await db.insert(news).values({
@@ -108,12 +105,15 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
       cover_image_url: validatedData.cover_image_url || null,
       news_category_id: validatedData.news_category_id || null,
       created_by: user.id,
-      updated_by: user.id,
+      profile_id: user.id,
+      created_at: new Date(),
+      updated_at: new Date()
     }).returning();
-    
+
+    // Broadcast notifications to all members of this company
     const allProfilesRes = await db.execute(sql`
-      SELECT id FROM profiles 
-      WHERE company_id = ${companyId} AND deleted_at IS NULL
+      SELECT profile_id as id FROM company_members 
+      WHERE company_id = ${companyId} AND status = 'active' AND deleted_at IS NULL AND profile_id != ${user.id}
     `);
 
     if (allProfilesRes.rows.length > 0) {
@@ -147,20 +147,17 @@ router.put("/:id", authenticate, async (req: Request, res: Response): Promise<an
   try {
     const user = (req as any).user;
     const newsId = req.params.id;
+    const tenant = await resolveTenant(req, user.id);
     
-    // Check if user is Admin or Manager
-    const profileRes = await db.execute(sql`
-      SELECT p.company_id, pr.role 
-      FROM profiles p
-      LEFT JOIN profile_roles pr ON pr.profile_id = p.id
-      WHERE p.id = ${user.id} AND (pr.role = 'Admin' OR pr.role = 'Manager')
-    `);
-    
-    if (profileRes.rows.length === 0) {
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+    }
+
+    if (!tenant.isManagement) {
       return res.status(403).json({ success: false, message: "Akses ditolak" });
     }
     
-    const companyId = profileRes.rows[0].company_id;
+    const companyId = tenant.companyId;
     const validatedData = newsSchema.parse(req.body);
     
     const updatedNews = await db.update(news)
@@ -172,7 +169,7 @@ router.put("/:id", authenticate, async (req: Request, res: Response): Promise<an
         updated_by: user.id,
         updated_at: new Date()
       })
-      .where(sql`id = ${newsId} AND company_id = ${companyId}`)
+      .where(sql`id = ${newsId} AND company_id = ${companyId} AND deleted_at IS NULL`)
       .returning();
       
     if (updatedNews.length === 0) {
@@ -194,27 +191,24 @@ router.delete("/:id", authenticate, async (req: Request, res: Response): Promise
   try {
     const user = (req as any).user;
     const newsId = req.params.id;
+    const tenant = await resolveTenant(req, user.id);
     
-    // Check if user is Admin or Manager
-    const profileRes = await db.execute(sql`
-      SELECT p.company_id, pr.role 
-      FROM profiles p
-      LEFT JOIN profile_roles pr ON pr.profile_id = p.id
-      WHERE p.id = ${user.id} AND (pr.role = 'Admin' OR pr.role = 'Manager')
-    `);
-    
-    if (profileRes.rows.length === 0) {
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+    }
+
+    if (!tenant.isManagement) {
       return res.status(403).json({ success: false, message: "Akses ditolak" });
     }
     
-    const companyId = profileRes.rows[0].company_id;
+    const companyId = tenant.companyId;
     
     const deletedNews = await db.update(news)
       .set({
         deleted_at: new Date(),
         deleted_by: user.id
       })
-      .where(sql`id = ${newsId} AND company_id = ${companyId}`)
+      .where(sql`id = ${newsId} AND company_id = ${companyId} AND deleted_at IS NULL`)
       .returning();
       
     if (deletedNews.length === 0) {

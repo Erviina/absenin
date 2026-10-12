@@ -2,16 +2,17 @@ import express, { Request, Response } from "express";
 import { db } from "../db";
 import { leaveRequests, leaveCategories, notifications } from "../db/schema";
 import { authenticate } from "../middleware/auth";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
+import { resolveTenant } from "../utils/tenant";
 
 const router = express.Router();
 
 // Get all leave categories
 router.get("/categories", async (req: Request, res: Response) => {
   try {
-    const categories = await db.select().from(leaveCategories);
+    const categories = await db.select().from(leaveCategories).where(sql`deleted_at IS NULL`);
     res.json({ success: true, data: categories });
   } catch (error) {
     console.error("Error fetching leave categories:", error);
@@ -23,11 +24,17 @@ router.get("/categories", async (req: Request, res: Response) => {
 router.get("/", authenticate, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
+    const tenant = await resolveTenant(req, user.id);
+
+    const conditions = [eq(leaveRequests.profile_id, user.id), isNull(leaveRequests.deleted_at)];
+    if (tenant) {
+      conditions.push(eq(leaveRequests.company_id, tenant.companyId));
+    }
     
     // Fetch leave requests for this user, ordered by created_at desc
     const userLeaves = await db.select()
       .from(leaveRequests)
-      .where(eq(leaveRequests.profile_id, user.id))
+      .where(and(...conditions))
       .orderBy(desc(leaveRequests.created_at));
       
     res.json({ success: true, data: userLeaves });
@@ -50,13 +57,12 @@ const createLeaveSchema = z.object({
 router.post("/", authenticate, async (req: Request, res: Response) => {
   try {
     const userAuth = (req as any).user;
+    const tenant = await resolveTenant(req, userAuth.id);
     
-    // Fetch full profile from db to get company_id
-    const profileRes = await db.execute(sql`SELECT company_id FROM profiles WHERE id = ${userAuth.id}`);
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
-      return res.status(400).json({ success: false, message: "User is not assigned to a company." });
+    if (!tenant) {
+      return res.status(400).json({ success: false, message: "User is not assigned to an active company or tenant." });
     }
-    const companyId = profileRes.rows[0].company_id;
+    const companyId = tenant.companyId;
 
     // Validate request body
     const validatedData = createLeaveSchema.parse(req.body);
@@ -81,12 +87,13 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
     const requesterName = requesterRes.rows[0]?.full_name || requesterRes.rows[0]?.email || "Employee";
 
     const managersAdminsRes = await db.execute(sql`
-      SELECT pr.profile_id
-      FROM profile_roles pr
-      JOIN profiles p ON p.id = pr.profile_id
-      WHERE p.company_id = ${companyId} 
-        AND pr.role IN ('Admin', 'Manager')
-        AND pr.profile_id != ${userAuth.id}
+      SELECT profile_id
+      FROM company_members
+      WHERE company_id = ${companyId} 
+        AND role IN ('owner', 'admin', 'manager')
+        AND profile_id != ${userAuth.id}
+        AND status = 'active'
+        AND deleted_at IS NULL
     `);
 
     if (managersAdminsRes.rows.length > 0) {
@@ -102,6 +109,7 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
     }
 
     res.status(201).json({ success: true, data: newLeave[0] });
+
   } catch (error) {
     console.error("Error creating leave request:", error);
     if (error instanceof z.ZodError) {
@@ -116,23 +124,15 @@ router.get("/admin", authenticate, async (req: Request, res: Response): Promise<
   try {
     const userAuth = (req as any).user;
     
-    // Check if user is admin and get company_id
-    const profileRes = await db.execute(sql`
-      SELECT p.company_id, pr.role 
-      FROM profiles p
-      LEFT JOIN profile_roles pr ON pr.profile_id = p.id AND pr.role = 'Admin'
-      WHERE p.id = ${userAuth.id}
-    `);
-    
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
-      return res.status(403).json({ success: false, message: "User is not assigned to a company." });
+    // Check management role and get active company_id via resolveTenant
+    const tenant = await resolveTenant(req, userAuth.id);
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: "User is not assigned to a company." });
     }
-    
-    if (!profileRes.rows[0].role) {
-      return res.status(403).json({ success: false, message: "Only Admins can access this." });
+    if (!tenant.isManagement) {
+      return res.status(403).json({ success: false, message: "Only Admins or Managers can access this." });
     }
-    
-    const companyId = profileRes.rows[0].company_id;
+    const companyId = tenant.companyId;
 
     // Fetch leaves for this company
     const companyLeaves = await db.execute(sql`
@@ -165,23 +165,15 @@ router.put("/:id/status", authenticate, async (req: Request, res: Response): Pro
       return res.status(400).json({ success: false, message: "Invalid status." });
     }
     
-    // Check if user is admin and get company_id
-    const profileRes = await db.execute(sql`
-      SELECT p.company_id, pr.role 
-      FROM profiles p
-      LEFT JOIN profile_roles pr ON pr.profile_id = p.id AND pr.role = 'Admin'
-      WHERE p.id = ${userAuth.id}
-    `);
-    
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
-      return res.status(403).json({ success: false, message: "User is not assigned to a company." });
+    // Check management role and get active company_id via resolveTenant
+    const tenant = await resolveTenant(req, userAuth.id);
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: "User is not assigned to a company." });
     }
-    
-    if (!profileRes.rows[0].role) {
-      return res.status(403).json({ success: false, message: "Only Admins can access this." });
+    if (!tenant.isManagement) {
+      return res.status(403).json({ success: false, message: "Only Admins or Managers can access this." });
     }
-    
-    const companyId = profileRes.rows[0].company_id as string;
+    const companyId = tenant.companyId;
 
     // Update status and create notification in a transaction
     const updateRes = await db.transaction(async (tx) => {

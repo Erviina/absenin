@@ -6,6 +6,7 @@ import { profiles, companies, profileRoles } from "../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { supabaseAdmin } from "../lib/supabase";
 import { authenticate } from "../middleware/auth";
+import { resolveTenant } from "../utils/tenant";
 
 const router = Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -100,10 +101,36 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       profile = profileResultRaw.rows[0] as any;
     }
 
-    // Fetch company if available
+    // Fetch active company
     let company = null;
-    if (profile.company_id) {
-      const companyResult = await db.select().from(companies).where(eq(companies.id, profile.company_id));
+    let targetCompanyId: string | null = null;
+    const activeMemRes = await db.execute(sql`
+      SELECT company_id, role
+      FROM company_members
+      WHERE profile_id = ${profile.id}
+        AND status = 'active'
+        AND deleted_at IS NULL
+      ORDER BY joined_at DESC
+      LIMIT 1
+    `);
+    if (activeMemRes.rows.length > 0) {
+      targetCompanyId = activeMemRes.rows[0].company_id as string;
+    } else if (profile.company_id) {
+      const checkInactive = await db.execute(sql`
+        SELECT status, deleted_at FROM company_members
+        WHERE profile_id = ${profile.id} AND company_id = ${profile.company_id}
+        LIMIT 1
+      `);
+      if (checkInactive.rows.length === 0) {
+        targetCompanyId = profile.company_id;
+      } else {
+        await db.execute(sql`UPDATE profiles SET company_id = NULL WHERE id = ${profile.id}`);
+        targetCompanyId = null;
+      }
+    }
+
+    if (targetCompanyId) {
+      const companyResult = await db.select().from(companies).where(eq(companies.id, targetCompanyId));
       if (companyResult.length > 0) {
         company = companyResult[0];
       }
@@ -173,18 +200,43 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
       });
     }
 
+    // Resolve tenant for multi-tenancy
+    const tenant = await resolveTenant(req, userId);
+    let targetCompanyId = tenant?.companyId || null;
+
+    if (!targetCompanyId && profile.company_id) {
+      await db.execute(sql`UPDATE profiles SET company_id = NULL WHERE id = ${userId}`);
+    }
+
     // Fetch company if available
     let company = null;
-    if (profile.company_id) {
-      const companyResult = await db.select().from(companies).where(eq(companies.id, profile.company_id));
+    if (targetCompanyId) {
+      const companyResult = await db.select().from(companies).where(eq(companies.id, targetCompanyId));
       if (companyResult.length > 0) {
         company = companyResult[0];
       }
     }
 
-    // Fetch roles
-    const rolesResult = await db.select().from(profileRoles).where(eq(profileRoles.profile_id, profile.id));
-    const roles = rolesResult.map((r) => r.role) || [];
+    // Scoped roles based on active tenant
+    let activeRole: string = "member";
+    let roles: string[] = ["Employee"];
+
+    if (tenant) {
+      activeRole = tenant.role;
+      if (tenant.role === "owner" || tenant.role === "admin") {
+        roles = ["Admin", "Employee"];
+      } else if (tenant.role === "manager") {
+        roles = ["Manager", "Employee"];
+      } else {
+        roles = ["Employee"];
+      }
+    } else {
+      // Fallback to profileRoles
+      const rolesResult = await db.select().from(profileRoles).where(eq(profileRoles.profile_id, profile.id));
+      roles = rolesResult.map((r) => r.role).filter((r): r is string => Boolean(r));
+      if (roles.includes("Admin")) activeRole = "admin";
+      else if (roles.includes("Manager")) activeRole = "manager";
+    }
 
     res.json({
       success: true,
@@ -197,6 +249,8 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
           avatarUrl: profile.avatar_url,
           company: company,
           roles: roles,
+          activeRole: activeRole,
+          isManagement: ["owner", "admin", "manager"].includes(activeRole),
         },
       },
     });

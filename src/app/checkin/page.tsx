@@ -9,6 +9,7 @@ import {
 import dynamic from 'next/dynamic';
 
 import { TopBar } from '@/components/TopBar';
+import { useCompany } from "@/context/CompanyContext";
 const LeafletMap = dynamic(() => import('@/components/MapLocation'), { 
   ssr: false,
   loading: () => <div className="w-full h-full bg-[#e6eedc] animate-pulse" />
@@ -16,6 +17,7 @@ const LeafletMap = dynamic(() => import('@/components/MapLocation'), {
 
 export default function CheckinPage() {
   const router = useRouter();
+  const { activeCompanyId } = useCompany();
   const [step, setStep] = useState(1);
   const [workMode, setWorkMode] = useState<"WFO" | "WFH">("WFO");
 
@@ -182,10 +184,15 @@ export default function CheckinPage() {
           router.push("/login");
           return;
         }
+        const headers: Record<string, string> = {
+          "Authorization": `Bearer ${token}`
+        };
+        if (activeCompanyId) {
+          headers["x-company-id"] = activeCompanyId;
+        }
+
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/today`, {
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
+          headers
         });
         const data = await res.json();
         if (res.ok) {
@@ -203,7 +210,7 @@ export default function CheckinPage() {
     fetchLocation();
     fetchUser();
     fetchAttendanceStatus();
-  }, []);
+  }, [activeCompanyId]);
 
   const formatDateTime = (date: Date) => {
     const d = date.getDate().toString().padStart(2, '0');
@@ -239,6 +246,9 @@ export default function CheckinPage() {
     if (attendanceStatus === "NOT_CHECKED_IN") {
       formData.append("work_mode", workMode);
     }
+    if (activeCompanyId) {
+      formData.append("company_id", activeCompanyId);
+    }
     formData.append("latitude", location.lat.toString());
     formData.append("longitude", location.lng.toString());
     formData.append("address", location.address);
@@ -247,11 +257,16 @@ export default function CheckinPage() {
     const endpoint = attendanceStatus === "CHECKED_IN" ? "/attendances/check-out" : "/attendances/check-in";
 
     try {
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`
+      };
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        },
+        headers,
         body: formData
       });
 

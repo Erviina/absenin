@@ -8,6 +8,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { CustomSelect } from "@/components/CustomSelect";
 import { createClient } from "@supabase/supabase-js";
+import { useCompany } from "@/context/CompanyContext";
 
 // Tipe Data untuk Pengajuan Izin
 type IzinRequest = {
@@ -20,6 +21,7 @@ type IzinRequest = {
 
 export default function IzinPage() {
   const router = useRouter();
+  const { activeCompanyId } = useCompany();
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -58,10 +60,13 @@ export default function IzinPage() {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
-      const headers = {
+      const headers: Record<string, string> = {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
       };
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
 
       // Fetch Categories
       const catRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/categories", { headers });
@@ -84,7 +89,7 @@ export default function IzinPage() {
 
   useEffect(() => {
     fetchCategoriesAndLeaves();
-  }, []);
+  }, [activeCompanyId]);
 
   // Handler hitung durasi kasaran
   const calculateDuration = () => {
@@ -135,18 +140,24 @@ export default function IzinPage() {
       }
 
       const token = localStorage.getItem("accessToken");
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
+        headers,
         body: JSON.stringify({
           leave_category_id: kategori,
           start_date: startDate,
           end_date: endDate || startDate,
           description: noteText || "Tanpa Keterangan",
           attachment_url: finalAttachmentUrl,
+          company_id: activeCompanyId,
         })
       });
 

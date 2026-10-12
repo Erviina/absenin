@@ -20,26 +20,37 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken: credentialResponse.credential }),
       });
-      const data = await res.json();
+
+      const contentType = res.headers.get("content-type");
+      let data: any = null;
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      }
+
+      if (!res.ok) {
+        console.error("Login failed with status:", res.status, data);
+        alert(data?.message || `Gagal login (Error ${res.status})`);
+        return;
+      }
       
-      if (data.success) {
+      if (data?.success) {
         localStorage.setItem("accessToken", data.data.accessToken);
         localStorage.setItem("user", JSON.stringify(data.data.user));
         
         // redirect according to PRD condition
         const user = data.data.user;
         if (!user.company) {
-          router.push("/cek-perusahaan"); // "Halaman belum terdaftar"
+          router.replace("/cek-perusahaan"); // "Halaman belum terdaftar"
         } else {
-          router.push("/dashboard");
+          router.replace("/dashboard");
         }
       } else {
-        console.error("Login failed:", data.message);
-        alert(data.message || "Login failed");
+        console.error("Login failed:", data?.message);
+        alert(data?.message || "Login failed");
       }
     } catch (err) {
       console.error("Login error:", err);
-      alert("Network error");
+      alert("Terjadi kesalahan jaringan saat login");
     } finally {
       setIsLoading(false);
     }

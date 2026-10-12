@@ -8,8 +8,11 @@ import { SwipeableTaskItem } from "@/components/SwipeableTaskItem";
 import { TopBar } from "@/components/TopBar";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
 
+import { useCompany } from "@/context/CompanyContext";
+
 export default function TugasPage() {
   const router = useRouter();
+  const { activeCompanyId, activeCompany } = useCompany();
   
   const [activeTab, setActiveTab] = useState<"personal" | "group">("personal");
   const [isAddingTask, setIsAddingTask] = useState(false);
@@ -28,17 +31,24 @@ export default function TugasPage() {
     { id: "dummy-3", title: "Belanja perlengkapan pantry kantor", time: "14:00", completed: false, type: "personal", date: "2026-12-25", note: "" },
     { id: "dummy-4", title: "Meeting mingguan bersama Klien", time: "09:00", completed: false, type: "group", date: "2026-12-26", note: "" },
   ]);
+
   useEffect(() => {
     const fetchTasks = async () => {
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) return;
+        const headers: Record<string, string> = {
+          "Authorization": "Bearer " + token,
+        };
+        if (activeCompanyId) {
+          headers["x-company-id"] = activeCompanyId;
+        }
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", {
-          headers: { "Authorization": "Bearer " + token }
+          headers
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.length > 0) {
+          if (Array.isArray(data)) {
             setTasks(data);
           }
         }
@@ -47,7 +57,7 @@ export default function TugasPage() {
       }
     };
     fetchTasks();
-  }, []);
+  }, [activeCompanyId]);
 
   const toggleTask = async (id: string) => {
     const t = tasks.find(x => x.id === id);
@@ -57,12 +67,16 @@ export default function TugasPage() {
     setTasks(tasks.map(x => x.id === id ? { ...x, completed: !x.completed } : x));
 
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + localStorage.getItem("accessToken")
+      };
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
       await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + localStorage.getItem("accessToken")
-        },
+        headers,
         body: JSON.stringify({ completed: !t.completed })
       });
     } catch (err) {
@@ -94,11 +108,15 @@ export default function TugasPage() {
   const handleDeleteTask = async (id: string) => {
     setTasks(tasks.filter(t => t.id !== id));
     try {
+      const headers: Record<string, string> = {
+        "Authorization": "Bearer " + localStorage.getItem("accessToken")
+      };
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
       await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
         method: "DELETE",
-        headers: {
-          "Authorization": "Bearer " + localStorage.getItem("accessToken")
-        }
+        headers
       });
     } catch (err) {
       console.error(err);
@@ -111,7 +129,7 @@ export default function TugasPage() {
     const method = editingTaskId ? "PATCH" : "POST";
     const url = editingTaskId ? `/tasks/${editingTaskId}` : "/tasks";
 
-    const payload = {
+    const payload: any = {
       title: taskTitle,
       date: taskDate,
       time: taskTime,
@@ -119,13 +137,22 @@ export default function TugasPage() {
       type: activeTab, // Use current tab
     };
 
+    if (activeTab === "group" && activeCompanyId) {
+      payload.company_id = activeCompanyId;
+    }
+
     try {
+      const headers: Record<string, string> = { 
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + localStorage.getItem("accessToken")
+      };
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + url, {
         method,
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + localStorage.getItem("accessToken")
-        },
+        headers,
         body: JSON.stringify(payload)
       });
       

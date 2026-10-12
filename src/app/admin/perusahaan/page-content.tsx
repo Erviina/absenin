@@ -110,8 +110,12 @@ export default function KelolaPerusahaanPage() {
           router.push("/login");
           return;
         }
+        const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+        const activeCompanyId = localStorage.getItem("activeCompanyId");
+        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers
         });
         const data = await res.json();
         
@@ -171,9 +175,13 @@ export default function KelolaPerusahaanPage() {
     setIsSaving(true);
     try {
       const token = localStorage.getItem("accessToken");
+      const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        headers,
         body: JSON.stringify({ name: companyData.name, address: companyData.address })
       });
       const data = await res.json();
@@ -221,11 +229,15 @@ export default function KelolaPerusahaanPage() {
       const formData = new FormData();
       formData.append("avatar", file);
 
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`
+      };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/avatar", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: formData
       });
 
@@ -277,9 +289,13 @@ export default function KelolaPerusahaanPage() {
         work_end_time: jadwalForm.work_end_time
       };
 
+      const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        headers,
         body: JSON.stringify(requestBody)
       });
       const data = await res.json();
@@ -319,9 +335,13 @@ export default function KelolaPerusahaanPage() {
         ...(searchQuery ? { address: searchQuery } : {})
       };
 
+      const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        headers,
         body: JSON.stringify(requestBody)
       });
       const data = await res.json();
