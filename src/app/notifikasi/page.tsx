@@ -8,9 +8,12 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useCompany } from "@/context/CompanyContext";
+import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 
 export default function NotifikasiPage() {
   const router = useRouter();
+  const { activeCompanyId, activeRole, memberships, switchCompany } = useCompany();
   const [activeCategory, setActiveCategory] = useState("Semua");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -84,19 +87,12 @@ export default function NotifikasiPage() {
   };
 
   const handleNotificationClick = async (notif: any) => {
-    if (!notif.is_read) {
-      try {
-        const token = localStorage.getItem("accessToken");
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/${notif.id}/read`, {
-          method: "PATCH",
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n));
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    router.push(`/notifikasi/${notif.id}`);
+    await handleNotificationNavigation(
+      notif,
+      { activeCompanyId, activeRole, memberships, switchCompany },
+      router,
+      (id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+    );
   };
 
   // Filtering Logic (Category, Search, and Date)

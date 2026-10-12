@@ -11,7 +11,8 @@ import {
   Plus, 
   X, 
   ShieldCheck,
-  ArrowRightLeft
+  ArrowRightLeft,
+  LogOut
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
@@ -313,6 +314,19 @@ export function AccountContextDrawer({
               <Plus className="w-4 h-4" />
               <span>Gabung atau Daftarkan Organisasi Baru</span>
             </button>
+
+            {activeCompany && activeRole !== "owner" && (
+              <button
+                onClick={() => {
+                  onClose();
+                  router.push("/profil");
+                }}
+                className="mt-2 w-full py-2 px-3 text-red-600 hover:bg-red-50 rounded-[14px] text-[12px] font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer active:scale-[0.99]"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Ajukan Keluar Organisasi</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

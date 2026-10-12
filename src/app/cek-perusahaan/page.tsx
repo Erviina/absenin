@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Building2, Plus, Hourglass, ChevronLeft } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
+import { setPersonalModePreference } from "@/lib/personalMode";
 
 function CekPerusahaanContent() {
   const router = useRouter();
@@ -24,6 +25,8 @@ function CekPerusahaanContent() {
     } else {
       localStorage.removeItem("accessToken");
       localStorage.removeItem("user");
+      localStorage.removeItem("activeCompanyId");
+      localStorage.removeItem("companyMemberships");
       router.replace("/login");
     }
   };
@@ -204,6 +207,7 @@ function CekPerusahaanContent() {
       <div className="mt-auto pt-10 pb-4 text-center">
         <button 
           onClick={() => {
+            setPersonalModePreference();
             if (from === "profil") {
               if (typeof window !== "undefined" && window.history.length > 1) {
                 router.back();

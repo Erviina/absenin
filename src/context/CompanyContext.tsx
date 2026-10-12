@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { clearPersonalModePreference } from "@/lib/personalMode";
 
 export type CompanyCategoryCode = "community" | "organization" | "business";
 
@@ -98,6 +99,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
     try {
       let formatted: CompanyMembership[] = [];
+      let backendLoaded = false;
 
       // 1. Try Backend API first (handles auto-sync and bypasses client RLS limitations)
       if (token) {
@@ -106,16 +108,17 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
             headers: { Authorization: `Bearer ${token}` }
           });
           const json = await res.json();
-          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          if (json.success && Array.isArray(json.data)) {
             formatted = json.data;
+            backendLoaded = true;
           }
         } catch (apiErr) {
           console.warn("Backend /companies/memberships failed, trying direct Supabase:", apiErr);
         }
       }
 
-      // 2. Direct Supabase query fallback
-      if (formatted.length === 0 && profileId) {
+      // 2. Direct Supabase query fallback (only if backend API failed or unavailable)
+      if (!backendLoaded && profileId) {
         const { data, error } = await supabase
           .from("company_members")
           .select(`
@@ -204,6 +207,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined") {
         if (formatted.length > 0) {
           localStorage.setItem(MEMBERSHIPS_CACHE_KEY, JSON.stringify(formatted));
+          clearPersonalModePreference(profileId);
         } else {
           localStorage.removeItem(MEMBERSHIPS_CACHE_KEY);
         }

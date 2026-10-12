@@ -112,6 +112,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
         AND role IN ('owner', 'admin', 'manager')
         AND status = 'active'
         AND deleted_at IS NULL
+        AND profile_id != ${user.id}
     `);
 
     const requesterRes = await db.execute(sql`
@@ -352,6 +353,14 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
     const targetProfileId = exitReq.profile_id as string;
     const targetRole = (exitReq.target_role as string || "member").toLowerCase();
 
+    // Prevent approving own exit request
+    if (user.id === targetProfileId) {
+      return res.status(400).json({
+        success: false,
+        message: "Anda tidak dapat menyetujui permohonan keluar Anda sendiri.",
+      });
+    }
+
     // Role hierarchy check
     if (tenant.role === "admin" && (targetRole === "owner" || targetRole === "admin")) {
       return res.status(403).json({
@@ -490,6 +499,15 @@ router.post("/:requestId/reject", authenticate, async (req: Request, res: Respon
 
     const exitReq = reqRes.rows[0];
     const targetProfileId = exitReq.profile_id as string;
+
+    // Prevent rejecting own exit request
+    if (user.id === targetProfileId) {
+      return res.status(400).json({
+        success: false,
+        message: "Anda tidak dapat menolak permohonan keluar Anda sendiri. Gunakan tombol batalkan.",
+      });
+    }
+
     const nowIso = new Date().toISOString();
 
     // 1. Update exit request to 'rejected'

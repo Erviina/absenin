@@ -44,6 +44,7 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
 
     const results = await db.select({
       id: notifications.id,
+      company_id: notifications.company_id,
       type: notifications.type,
       title: notifications.title,
       message: notifications.message,

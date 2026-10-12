@@ -294,11 +294,16 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
     // 5. Execute transaction to approve
     await db.transaction(async (tx) => {
       // Update join request
-      await tx.execute(sql`
+      const updateResult = await tx.execute(sql`
         UPDATE company_join_requests 
-        SET status = 'approved', reviewed_at = now(), reviewed_by = ${user.id}, updated_at = now()
-        WHERE id = ${requestId}
+        SET status = 'approved', reviewed_at = now(), reviewed_by = ${user.id}, updated_by = ${user.id}, updated_at = now()
+        WHERE id = ${requestId} AND status = 'pending'
+        RETURNING id
       `);
+
+      if (updateResult.rows.length === 0) {
+        throw new Error("Request ini sudah diproses sebelumnya");
+      }
 
       // Add to company_members
       await tx.execute(sql`
@@ -345,6 +350,14 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
 
 
   } catch (error: any) {
+    if (error.message === "Request ini sudah diproses sebelumnya") {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+        errors: [],
+      });
+    }
+
     console.error("Approve join request error:", error);
     return res.status(500).json({
       success: false,
@@ -380,9 +393,10 @@ router.post("/:requestId/reject", authenticate, async (req: Request, res: Respon
     const companyId = tenant.companyId;
 
     const requestRes = await db.execute(sql`
-      SELECT id, profile_id, company_id, status 
-      FROM company_join_requests 
-      WHERE id = ${requestId} AND deleted_at IS NULL
+      SELECT cjr.id, cjr.profile_id, cjr.company_id, cjr.status, c.name as company_name 
+      FROM company_join_requests cjr
+      LEFT JOIN companies c ON c.id = cjr.company_id
+      WHERE cjr.id = ${requestId} AND cjr.deleted_at IS NULL
     `);
 
     if (requestRes.rows.length === 0) {
@@ -412,19 +426,38 @@ router.post("/:requestId/reject", authenticate, async (req: Request, res: Respon
     }
 
     await db.transaction(async (tx) => {
-      await tx.execute(sql`
+      const updateResult = await tx.execute(sql`
         UPDATE company_join_requests 
-        SET status = 'rejected', reviewed_at = now(), reviewed_by = ${user.id}, updated_at = now()
-        WHERE id = ${requestId}
+        SET status = 'rejected', reviewed_at = now(), reviewed_by = ${user.id}, updated_by = ${user.id}, updated_at = now()
+        WHERE id = ${requestId} AND status = 'pending'
+        RETURNING id
+      `);
+
+      if (updateResult.rows.length === 0) {
+        throw new Error("Request ini sudah diproses sebelumnya");
+      }
+
+      // Pastikan pengguna tidak memiliki atau mempertahankan keanggotaan aktif di perusahaan ini
+      await tx.execute(sql`
+        UPDATE company_members 
+        SET status = 'inactive', deleted_at = now()
+        WHERE company_id = ${companyId} AND profile_id = ${joinRequest.profile_id} AND status = 'active'
+      `);
+
+      await tx.execute(sql`
+        UPDATE profiles
+        SET company_id = NULL
+        WHERE id = ${joinRequest.profile_id} AND company_id = ${companyId}
       `);
 
       try {
+        const companyName = (joinRequest.company_name as string) || "perusahaan";
         await tx.insert(notifications).values({
           company_id: companyId,
           recipient_id: joinRequest.profile_id as string,
           type: "JOIN_REQUEST_REJECTED",
           title: "Permintaan Bergabung Ditolak",
-          message: "Maaf, permintaan bergabung Anda telah ditolak oleh manajemen.",
+          message: `Maaf, permintaan bergabung Anda ke ${companyName} telah ditolak oleh manajemen.`,
           reference_id: joinRequest.id as string,
         });
       } catch (notifErr) {
@@ -439,6 +472,14 @@ router.post("/:requestId/reject", authenticate, async (req: Request, res: Respon
     });
 
   } catch (error: any) {
+    if (error.message === "Request ini sudah diproses sebelumnya") {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+        errors: [],
+      });
+    }
+
     console.error("Reject join request error:", error);
     return res.status(500).json({
       success: false,

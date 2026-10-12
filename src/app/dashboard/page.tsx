@@ -7,18 +7,25 @@ import {
   ChevronDown, 
   Briefcase,
   Users,
-  Building2
+  Building2,
+  User
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { useCompany } from "@/context/CompanyContext";
-import { evaluateSchedule, CompanyScheduleData } from "@/lib/schedule";
-// import { AccountContextDrawer } from "@/components/AccountContextDrawer";
+import { AccountContextDrawer } from "@/components/AccountContextDrawer";
+import { getPersonalModePreference } from "@/lib/personalMode";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { activeCompanyId, activeRole } = useCompany();
+  const { 
+    activeCompanyId, 
+    activeCompany, 
+    activeRole, 
+    memberships, 
+    switchCompany 
+  } = useCompany();
 
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
 
@@ -30,8 +37,6 @@ export default function DashboardPage() {
   const [isAttendanceLoading, setIsAttendanceLoading] = useState(true);
   const [attendanceError, setAttendanceError] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
-  const [companySchedule, setCompanySchedule] = useState<CompanyScheduleData | null>(null);
-  const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
 
   // Close drawer whenever active company or active role changes
   useEffect(() => {
@@ -63,14 +68,11 @@ export default function DashboardPage() {
         try {
           const authData = await authRes.json();
           if (authData.success) {
-            const userData = authData.data.user;
-            setUser(userData);
-            if (!userData?.company && !activeCompanyId) {
+            setUser(authData.data.user);
+            const skipCompanyPrompt = getPersonalModePreference(authData.data.user?.id);
+            if (!authData.data.user?.company && !activeCompanyId && !skipCompanyPrompt) {
               router.push("/cek-perusahaan");
               return;
-            }
-            if (userData?.activeRole && activeRole && userData.activeRole !== activeRole) {
-              refreshMemberships().catch(console.error);
             }
           }
         } catch (e) {
@@ -100,15 +102,6 @@ export default function DashboardPage() {
           if (attendData.success && attendData.data) {
             setAttendanceStatus(attendData.data.status);
             setAttendanceError(false);
-            if (attendData.data.company) {
-              setCompanySchedule(attendData.data.company);
-              if (attendData.data.company.server_time) {
-                const serverMs = new Date(attendData.data.company.server_time).getTime();
-                if (!isNaN(serverMs)) {
-                  setServerOffsetMs(serverMs - Date.now());
-                }
-              }
-            }
           } else {
             setAttendanceError(true);
           }
@@ -127,6 +120,35 @@ export default function DashboardPage() {
     fetchData();
   }, [router, activeCompanyId]);
 
+  const isManagement = activeRole 
+    ? ["owner", "admin", "manager"].includes(activeRole) 
+    : Boolean(user?.isManagement || (user?.roles?.includes("Admin") || user?.roles?.includes("Manager")));
+
+  const getCategoryIcon = (categoryCode?: string | null) => {
+    switch (categoryCode) {
+      case "business":
+        return Briefcase;
+      case "community":
+        return Users;
+      case "organization":
+      default:
+        return Building2;
+    }
+  };
+
+  const getRoleBadgeStyle = (role?: string | null) => {
+    switch (role) {
+      case "owner":
+        return "bg-amber-50 text-amber-800 border-amber-200/80 font-bold";
+      case "admin":
+        return "bg-emerald-50 text-emerald-800 border-emerald-200/80 font-semibold";
+      case "manager":
+        return "bg-sky-50 text-sky-800 border-sky-200/80 font-semibold";
+      case "member":
+      default:
+        return "bg-slate-50 text-slate-700 border-slate-200/60 font-medium";
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
@@ -155,94 +177,14 @@ export default function DashboardPage() {
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a859] border-2 border-white rounded-full"></div>
           </div>
 
-          {/* Name & Dropdown Toggle */}
-          {(() => {
-            const isManagement = activeRole 
-              ? ["owner", "admin", "manager"].includes(activeRole) 
-              : Boolean(user?.isManagement || (user?.roles?.includes("Admin") || user?.roles?.includes("Manager")));
-
-            return (
-              <>
-                <div 
-                  className="flex flex-col cursor-pointer select-none"
-                  onClick={() => {
-                    if (isManagement) {
-                      setIsProfileDropdownOpen(!isProfileDropdownOpen);
-                    } else {
-                      router.push("/profil");
-                    }
-                  }}
-                >
-                  <span className="text-[#5C786C] text-[12px] font-medium leading-tight">
-                    Selamat datang,
-                  </span>
-
-                  <span className="text-[#1E4738] text-[17px] font-bold leading-tight flex items-center gap-1">
-                    {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
-
-                    {isManagement && (
-                      isProfileDropdownOpen ? (
-                        <ChevronUp
-                          className="w-4 h-4 text-[#1E4738]"
-                          strokeWidth={2.5}
-                        />
-                      ) : (
-                        <ChevronDown
-                          className="w-4 h-4 text-[#1E4738]"
-                          strokeWidth={2.5}
-                        />
-                      )
-                    )}
-                  </span>
-                </div>
-
-                {/* Dropdown Profile */}
-                {isManagement && isProfileDropdownOpen && (
-                  <div className="absolute top-[calc(100%+8px)] left-0 w-[270px] bg-white rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-2 z-50 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-                    <div className="px-3 pt-2 pb-1.5">
-                      <span className="text-[10px] font-bold text-[#9CA3AF] tracking-[0.05em] uppercase">Pilih Mode Akun</span>
-                    </div>
-                    
-                    <div className="flex flex-col gap-1">
-                      {/* Personal Mode (Active) */}
-                      <div 
-                        className="flex items-center justify-between p-2 bg-[#F0FDF4] rounded-[16px] cursor-pointer hover:bg-[#E8F3EB] transition-colors"
-                        onClick={() => router.push("/profil")}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-[42px] h-[42px] rounded-[14px] bg-[#2D5A3F] flex items-center justify-center shrink-0">
-                            <User className="w-5 h-5 text-white" strokeWidth={2} />
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-[#111827] text-[14px] font-bold leading-tight">Mode Personal</span>
-                            <span className="text-[#356E3B] text-[12px] font-medium mt-0.5">Aktif saat ini</span>
-                          </div>
-                        </div>
-                        <Check className="w-5 h-5 text-[#356E3B] mr-2" strokeWidth={3} />
-                      </div>
-
-                      {/* Management Mode */}
-                      <div 
-                        className="flex items-center justify-between p-2 hover:bg-[#F3F4F6] rounded-[16px] cursor-pointer transition-colors"
-                        onClick={() => router.push("/admin/dashboard")}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-[42px] h-[42px] rounded-[14px] bg-[#F3F4F6] flex items-center justify-center shrink-0 border border-[#E5E7EB]">
-                            <Building2 className="w-5 h-5 text-[#4B5563]" strokeWidth={2} />
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-[#111827] text-[14px] font-bold leading-tight">Mode Manajemen</span>
-                            <span className="text-[#9CA3AF] text-[12px] font-medium mt-0.5">Beralih peran</span>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-[#9CA3AF] mr-2" strokeWidth={2.5} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            );
-          })()}
+          <div className="flex flex-col min-w-0">
+            <span className="text-[#5C786C] text-[12px] font-medium leading-none mb-1">
+              Selamat datang,
+            </span>
+            <h1 className="text-[#1E4738] text-[17px] font-bold leading-tight truncate">
+              {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
+            </h1>
+          </div>
         </div>
 
         {/* Notifikasi Button */}
@@ -269,21 +211,21 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-10 h-10 rounded-[14px] bg-[#1E4738] text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
               {(() => {
-                const CatIcon = getCategoryIcon(activeCompany?.category?.code);
+                const CatIcon = activeCompany ? getCategoryIcon(activeCompany?.category?.code) : User;
                 return <CatIcon className="w-5 h-5" />;
               })()}
             </div>
             <div className="flex flex-col min-w-0 text-left">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="text-[14px] font-bold text-[#111827] truncate group-hover:text-[#1E4738] transition-colors">
-                  {activeCompany?.name || "Pilih Perusahaan"}
+                  {activeCompany?.name || "Mode Personal"}
                 </span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border capitalize shrink-0 font-bold ${getRoleBadgeStyle(activeRole)}`}>
-                  {activeRole || "Member"}
+                  {activeCompany ? (activeRole || "Member") : "Personal"}
                 </span>
               </div>
               <span className="text-[11.5px] text-[#5C786C] font-medium leading-none mt-1 truncate">
-                {activeCompany?.category?.name || "Organisasi"}
+                {activeCompany?.category?.name || "Belum terhubung organisasi"}
               </span>
             </div>
           </div>
@@ -330,17 +272,9 @@ export default function DashboardPage() {
           {/* CTA Check In Overlapping at Bottom Right (Half Pill) */}
           <div className="absolute bottom-0 right-0 z-20 flex items-end">
             <button 
-              onClick={() => {
-                if (!isCtaDisabled) {
-                  window.location.href = '/checkin';
-                }
-              }}
-              disabled={isCtaDisabled}
-              className={`rounded-l-full pl-5 pr-4 py-3 flex items-center gap-2 shadow-sm border-[4px] border-r-0 border-white transition-all ${
-                isCtaDisabled
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed border-gray-200 shadow-none opacity-90'
-                  : 'bg-[#1E4738] hover:bg-[#153428] text-white active:scale-95'
-              }`}
+              onClick={() => window.location.href = '/checkin'}
+              disabled={isAttendanceLoading || attendanceError}
+              className="bg-[#1E4738] hover:bg-[#153428] text-white rounded-l-full pl-5 pr-4 py-3 flex items-center gap-2 shadow-sm border-[4px] border-r-0 border-white transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               <MapPin className="w-[18px] h-[18px]" strokeWidth={2.5} />
               <span className="font-bold text-[14px]">
@@ -348,7 +282,7 @@ export default function DashboardPage() {
                   ? "Memuat..." 
                   : attendanceError 
                     ? "Gagal Memuat" 
-                    : (attendanceStatus === "CHECKED_IN" ? "Check Out" : "Check In")}
+                    : (attendanceStatus === "CHECKED_IN" ? "Keluar" : "Masuk")}
               </span>
               <ArrowRight className="w-5 h-5 ml-1" strokeWidth={2.5} />
             </button>

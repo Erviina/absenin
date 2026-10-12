@@ -20,10 +20,11 @@ import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useCompany } from "@/context/CompanyContext";
+import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const { activeCompanyId, activeRole, isLoading: isCompanyLoading } = useCompany();
+  const { activeCompanyId, activeRole, memberships, switchCompany, isLoading: isCompanyLoading } = useCompany();
   
   const [company, setCompany] = useState<{ name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -343,7 +344,7 @@ export default function AdminDashboardPage() {
                 return (
                   <div 
                     key={act.id} 
-                    onClick={() => router.push(`/notifikasi/${act.id}`)}
+                    onClick={() => handleNotificationNavigation(act, { activeCompanyId, activeRole, memberships, switchCompany }, router, (id) => setActivities(prev => prev.map(a => a.id === id ? { ...a, is_read: true } : a)))}
                     className={`p-4 flex gap-3.5 items-center cursor-pointer active:bg-gray-50 transition-colors ${idx !== filteredActivities.length - 1 ? 'border-b border-gray-100' : ''}`}
                   >
                     <div className={`w-[42px] h-[42px] rounded-xl ${bgIcon} flex items-center justify-center shrink-0`}>

@@ -19,7 +19,6 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
-import { CompanySwitcher } from "@/components/CompanySwitcher";
 
 export default function ProfilPage() {
   const router = useRouter();
@@ -170,12 +169,18 @@ export default function ProfilPage() {
   };
 
   useEffect(() => {
+    refreshMemberships();
+  }, [refreshMemberships]);
+
+  useEffect(() => {
     fetchUser();
   }, [activeCompany?.id]);
 
   useEffect(() => {
     if (activeCompany?.id) {
       fetchExitRequestMe();
+    } else {
+      setMyExitRequest(null);
     }
   }, [activeCompany?.id]);
 
@@ -190,11 +195,15 @@ export default function ProfilPage() {
     if (user?.activeRole === "member") return "Karyawan";
     if (user?.roles?.includes("Admin")) return "Admin";
     if (user?.roles?.includes("Manager")) return "Manajemen";
+    if (!activeCompany && !user?.company) return "Personal";
     return "Karyawan";
   };
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
+    localStorage.removeItem("activeCompanyId");
+    localStorage.removeItem("companyMemberships");
     router.push("/login");
   };
 
@@ -310,67 +319,6 @@ export default function ProfilPage() {
           </div>
         </div>
 
-        {/* Card Organisasi / Company Switcher */}
-        <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-[#356E3B]" />
-              <span className="text-[#6B7280] text-[11px] font-bold uppercase tracking-wider">Organisasi / Komunitas Aktif</span>
-            </div>
-          </div>
-          <CompanySwitcher />
-
-          {/* Status Permohonan Keluar atau Tombol Keluar Organisasi */}
-          {activeCompany && (
-            <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
-              {myExitRequest ? (
-                <div className="bg-[#fff8ef] border border-amber-200 rounded-[16px] p-3.5 flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                      <Clock className="w-4 h-4 text-amber-600" />
-                    </div>
-                    <div className="flex flex-col flex-1">
-                      <span className="text-[12px] font-bold text-amber-900 leading-tight">Permohonan Keluar Sedang Diproses</span>
-                      <span className="text-[11px] text-amber-700 leading-tight">Menunggu konfirmasi Admin atau Manager di Kelola Karyawan</span>
-                    </div>
-                  </div>
-
-                  {myExitRequest.reason && (
-                    <div className="bg-white/80 border border-amber-200/60 rounded-[10px] p-2 text-[11px] text-amber-900 italic">
-                      "{myExitRequest.reason}"
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleCancelExitRequest}
-                    disabled={isCancellingExit}
-                    className="w-full py-2 px-3 border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-[10px] text-[11px] font-bold transition-all active:scale-95 text-center disabled:opacity-50"
-                  >
-                    {isCancellingExit ? "Membatalkan..." : "Batalkan Permohonan Keluar"}
-                  </button>
-                </div>
-              ) : activeRole !== "owner" ? (
-                <button
-                  onClick={() => {
-                    setExitError("");
-                    setExitReason("");
-                    setIsExitModalOpen(true);
-                  }}
-                  className="w-full py-2.5 px-3 border border-red-200 hover:bg-red-50 text-red-600 rounded-[14px] text-[12px] font-bold flex items-center justify-center gap-2 active:scale-95 transition-all mt-1"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Ajukan Keluar dari Organisasi</span>
-                </button>
-              ) : (
-                <div className="bg-[#f4f9f6] text-[#356E3B] text-[11px] font-medium p-2.5 rounded-[12px] flex items-center gap-2">
-                  <Shield className="w-4 h-4 shrink-0" />
-                  <span>Anda adalah Pemilik (Owner) organisasi ini.</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* Informasi Pribadi Card */}
         <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
           <div className="p-5 flex items-center gap-3 border-b border-[#F3F4F6]">
@@ -392,7 +340,6 @@ export default function ProfilPage() {
                   <span className="text-[#111827] text-[14px] font-bold">{user.fullName}</span>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
             </div>
 
             {/* Email */}
@@ -409,10 +356,59 @@ export default function ProfilPage() {
                   </div>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
             </div>
           </div>
         </div>
+
+        {/* Card Ajukan Keluar dari Organisasi */}
+        {activeCompany && (
+          <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-4 flex flex-col gap-2">
+            {myExitRequest ? (
+              <div className="bg-[#fff8ef] border border-amber-200 rounded-[16px] p-3.5 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                    <Clock className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <span className="text-[12px] font-bold text-amber-900 leading-tight">Permohonan Keluar Sedang Diproses</span>
+                    <span className="text-[11px] text-amber-700 leading-tight">Menunggu konfirmasi Admin atau Manager di Kelola Karyawan</span>
+                  </div>
+                </div>
+
+                {myExitRequest.reason && (
+                  <div className="bg-white/80 border border-amber-200/60 rounded-[10px] p-2 text-[11px] text-amber-900 italic">
+                    "{myExitRequest.reason}"
+                  </div>
+                )}
+
+                <button
+                  onClick={handleCancelExitRequest}
+                  disabled={isCancellingExit}
+                  className="w-full py-2 px-3 border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-[10px] text-[11px] font-bold transition-all active:scale-95 text-center disabled:opacity-50"
+                >
+                  {isCancellingExit ? "Membatalkan..." : "Batalkan Permohonan Keluar"}
+                </button>
+              </div>
+            ) : activeRole !== "owner" ? (
+              <button
+                onClick={() => {
+                  setExitError("");
+                  setExitReason("");
+                  setIsExitModalOpen(true);
+                }}
+                className="w-full py-2.5 px-3 border border-red-200 hover:bg-red-50 text-red-600 rounded-[14px] text-[12px] font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Ajukan Keluar dari Organisasi</span>
+              </button>
+            ) : (
+              <div className="bg-[#f4f9f6] text-[#356E3B] text-[11px] font-medium p-2.5 rounded-[12px] flex items-center gap-2">
+                <Shield className="w-4 h-4 shrink-0" />
+                <span>Anda adalah Pemilik (Owner) organisasi ini.</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Keluar dari Akun Card */}
         <div 

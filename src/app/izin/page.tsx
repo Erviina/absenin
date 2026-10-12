@@ -94,6 +94,16 @@ export default function IzinPage() {
     fetchCategoriesAndLeaves();
   }, [activeCompanyId]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const leaveId = params.get("id");
+      if (leaveId) {
+        setSelectedIzinId(leaveId);
+      }
+    }
+  }, [pengajuanList]);
+
   // Handler hitung durasi kasaran
   const calculateDuration = () => {
     if (!startDate || !endDate) return "-";

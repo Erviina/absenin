@@ -6,6 +6,8 @@ import { useState } from "react";
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
 import { Loader2 } from "lucide-react";
 
+import { getPersonalModePreference } from "@/lib/personalMode";
+
 export default function LoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +41,8 @@ export default function LoginPage() {
         
         // redirect according to PRD condition
         const user = data.data.user;
-        if (!user.company) {
+        const skipCompany = getPersonalModePreference(user.id);
+        if (!user.company && !skipCompany) {
           router.replace("/cek-perusahaan"); // "Halaman belum terdaftar"
         } else {
           router.replace("/dashboard");

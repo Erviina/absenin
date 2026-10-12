@@ -92,6 +92,15 @@ function AdminKaryawanView() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const tabParam = new URLSearchParams(window.location.search).get("tab");
+      if (tabParam === "masuk" || tabParam === "keluar" || tabParam === "karyawan" || tabParam === "semua") {
+        setActiveTab(tabParam as "semua" | "karyawan" | "keluar" | "masuk");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     const token = localStorage.getItem("accessToken");
     if (!token) return;
     try {
@@ -385,6 +394,11 @@ function AdminKaryawanView() {
   const [isLoadingRequests, setIsLoadingRequests] = useState(true);
   const [requestsError, setRequestsError] = useState("");
   const [isProcessingReq, setIsProcessingReq] = useState(false);
+
+  // Reject Join Request State
+  const [selectedJoinReqForReject, setSelectedJoinReqForReject] = useState<any>(null);
+  const [isProcessingRejectReq, setIsProcessingRejectReq] = useState(false);
+  const [rejectJoinReqError, setRejectJoinReqError] = useState("");
   
   const [companyData, setCompanyData] = useState<any>(null);
   const [isLoadingCompany, setIsLoadingCompany] = useState(true);
@@ -406,17 +420,19 @@ function AdminKaryawanView() {
     }
   };
 
-  const handleTerimaReq = async () => {
-    if (selectedRequests.length === 0 || isProcessingReq) return;
+  const handleTerimaReq = async (overrideIds?: string[]) => {
+    const targetIds = overrideIds && overrideIds.length > 0 ? overrideIds : selectedRequests;
+    if (targetIds.length === 0 || isProcessingReq) return;
     const token = localStorage.getItem("accessToken");
     if (!token) return;
 
     setIsProcessingReq(true);
     try {
+      const currentCompId = activeCompanyId || localStorage.getItem("activeCompanyId");
       const approveHeaders: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (activeCompanyId) approveHeaders["x-company-id"] = activeCompanyId;
+      if (currentCompId) approveHeaders["x-company-id"] = currentCompId;
 
-      for (const reqId of selectedRequests) {
+      for (const reqId of targetIds) {
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/company/join-requests/${reqId}/approve`, {
           method: "POST",
           headers: approveHeaders
@@ -426,7 +442,7 @@ function AdminKaryawanView() {
           throw new Error(data.message || "Gagal menyetujui permintaan");
         }
       }
-      setSelectedRequests([]);
+      setSelectedRequests(prev => prev.filter(id => !targetIds.includes(id)));
       fetchRequestsData(token);
       
       // Refetch employees to update list
@@ -437,6 +453,43 @@ function AdminKaryawanView() {
       alert(err.message || "Gagal menyetujui permintaan");
     } finally {
       setIsProcessingReq(false);
+    }
+  };
+
+  const handleConfirmRejectJoinRequest = async () => {
+    if (!selectedJoinReqForReject || isProcessingRejectReq) return;
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+
+    setIsProcessingRejectReq(true);
+    setRejectJoinReqError("");
+
+    try {
+      const currentCompId = activeCompanyId || localStorage.getItem("activeCompanyId");
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+      if (currentCompId) headers["x-company-id"] = currentCompId;
+
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/company/join-requests/${selectedJoinReqForReject.id}/reject`, {
+        method: "POST",
+        headers
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        const rejectedId = selectedJoinReqForReject.id;
+        setSelectedJoinReqForReject(null);
+        setSelectedRequests(prev => prev.filter(id => id !== rejectedId));
+        fetchRequestsData(token);
+      } else {
+        setRejectJoinReqError(data.message || "Gagal menolak permintaan bergabung");
+      }
+    } catch (err) {
+      setRejectJoinReqError("Terjadi kesalahan jaringan atau server");
+    } finally {
+      setIsProcessingRejectReq(false);
     }
   };
 
@@ -735,9 +788,9 @@ function AdminKaryawanView() {
                  <span className="text-[12px] text-[#111827] font-medium" onClick={toggleSelectAllReq}>Pilih Semua</span>
                </label>
                <button 
-                 onClick={handleTerimaReq}
-                 disabled={selectedRequests.length === 0 || isProcessingReq}
-                 className={`text-white text-[11px] font-bold px-4 py-1.5 rounded-full transition-all ${selectedRequests.length > 0 && !isProcessingReq ? 'bg-[#356E3B] active:scale-95' : 'bg-gray-300 cursor-not-allowed'}`}
+                 onClick={() => handleTerimaReq()}
+                 disabled={selectedRequests.length === 0 || isProcessingReq || isProcessingRejectReq}
+                 className={`text-white text-[11px] font-bold px-4 py-1.5 rounded-full transition-all ${selectedRequests.length > 0 && !isProcessingReq && !isProcessingRejectReq ? 'bg-[#356E3B] active:scale-95' : 'bg-gray-300 cursor-not-allowed'}`}
                >
                  {isProcessingReq ? "Memproses..." : `Terima (${selectedRequests.length})`}
                </button>
@@ -745,7 +798,7 @@ function AdminKaryawanView() {
           </div>
           
           {/* Items */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             {isLoadingRequests ? (
               <div className="text-center py-5 text-[#7d998c] text-[13px]">Memuat permintaan bergabung...</div>
             ) : requestsError ? (
@@ -754,32 +807,64 @@ function AdminKaryawanView() {
               <div className="text-center py-5 text-gray-400 text-[13px]">Tidak ada permintaan bergabung saat ini.</div>
             ) : (
               joinRequests.map((item) => (
-               <div key={item.id} className="flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] cursor-pointer" onClick={() => toggleReqItem(item.id)}>
-                 <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-colors shrink-0 ${selectedRequests.includes(item.id) ? 'bg-[#356E3B] border-[#356E3B]' : 'bg-white border-gray-300'}`}>
-                   {selectedRequests.includes(item.id) && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+               <div key={item.id} className="border border-gray-100 p-3.5 rounded-[18px] bg-white flex flex-col gap-3">
+                 <div className="flex items-center gap-3">
+                   <div 
+                     onClick={() => toggleReqItem(item.id)}
+                     className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-colors shrink-0 cursor-pointer ${selectedRequests.includes(item.id) ? 'bg-[#356E3B] border-[#356E3B]' : 'bg-white border-gray-300'}`}
+                   >
+                     {selectedRequests.includes(item.id) && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                   </div>
+                   <div className="w-10 h-10 bg-[#f4f9f6] text-[#356E3B] border border-[#eef5f0] rounded-full flex items-center justify-center shrink-0 overflow-hidden relative">
+                     {item.avatar_url && (
+                       <img 
+                         src={item.avatar_url} 
+                         alt={item.full_name} 
+                         className="w-full h-full object-cover"
+                         onError={(e) => {
+                           (e.target as HTMLImageElement).style.display = 'none';
+                           (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                         }}
+                       />
+                     )}
+                     <User className={`w-5 h-5 absolute ${item.avatar_url ? 'hidden' : ''}`} strokeWidth={2.5} />
+                   </div>
+                   <div className="flex flex-col flex-1 overflow-hidden">
+                     <span className="text-[#111827] text-[13px] font-bold truncate">{item.full_name}</span>
+                     <span className="text-gray-400 text-[11px] truncate">{item.email}</span>
+                   </div>
+                   <span className="text-amber-700 border border-amber-300 bg-[#fff8ef] text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
+                     Menunggu
+                   </span>
                  </div>
-                 <div className="w-10 h-10 bg-[#f4f9f6] text-[#356E3B] border border-[#eef5f0] rounded-full flex items-center justify-center shrink-0 overflow-hidden relative">
-                   {item.avatar_url && (
-                     <img 
-                       src={item.avatar_url} 
-                       alt={item.full_name} 
-                       className="w-full h-full object-cover"
-                       onError={(e) => {
-                         (e.target as HTMLImageElement).style.display = 'none';
-                         (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+
+                 <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                   <span className="text-[10px] text-gray-400">
+                     {item.created_at ? `Diajukan: ${new Date(item.created_at).toLocaleDateString("id-ID", { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                   </span>
+                   <div className="flex items-center gap-2">
+                     <button
+                       type="button"
+                       onClick={() => {
+                         setSelectedJoinReqForReject(item);
+                         setRejectJoinReqError("");
                        }}
-                     />
-                   )}
-                   <User className={`w-5 h-5 absolute ${item.avatar_url ? 'hidden' : ''}`} strokeWidth={2.5} />
+                       disabled={isProcessingReq || isProcessingRejectReq}
+                       className="px-3.5 py-1.5 border border-red-200 hover:bg-red-50 text-red-600 rounded-full text-[11px] font-bold transition-all active:scale-95 disabled:opacity-50"
+                     >
+                       Tolak
+                     </button>
+                     <button
+                       type="button"
+                       onClick={() => handleTerimaReq([item.id])}
+                       disabled={isProcessingReq || isProcessingRejectReq}
+                       className="px-3.5 py-1.5 bg-[#356E3B] hover:bg-[#2b5930] text-white rounded-full text-[11px] font-bold transition-all active:scale-95 shadow-sm shadow-[#356E3B]/20 flex items-center gap-1 disabled:opacity-50"
+                     >
+                       <Check className="w-3.5 h-3.5" />
+                       <span>Terima</span>
+                     </button>
+                   </div>
                  </div>
-                 <div className="flex flex-col flex-1 overflow-hidden">
-                   <span className="text-[#111827] text-[13px] font-bold truncate">{item.full_name}</span>
-                   <span className="text-gray-400 text-[11px] truncate">{item.email}</span>
-                 </div>
-                 <span className="text-[#f59e0b] border border-[#f59e0b]/30 bg-[#fff8ef] text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
-                   Pending
-                 </span>
-                 <ChevronRight className="w-4 h-4 text-gray-300 ml-1 shrink-0" />
                </div>
               ))
             )}
@@ -1202,6 +1287,49 @@ function AdminKaryawanView() {
                 {isProcessingExitReq 
                   ? "Memproses..." 
                   : (exitActionType === "approve" ? "Ya, Keluarkan" : "Tolak Permohonan")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog Reject Join Request */}
+      {selectedJoinReqForReject && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-5">
+          <div className="w-full max-w-sm bg-white rounded-[24px] p-6 flex flex-col items-center text-center gap-4 animate-in fade-in zoom-in-95 duration-200 shadow-2xl">
+            <div className="w-14 h-14 rounded-full bg-red-50 border border-red-100 text-red-600 flex items-center justify-center">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            
+            <div className="flex flex-col gap-1.5">
+              <h3 className="text-[17px] font-bold text-[#111827]">
+                Tolak Permintaan Bergabung?
+              </h3>
+              <p className="text-[13px] text-gray-500 leading-relaxed px-1">
+                Apakah Anda yakin ingin menolak permintaan bergabung dari <span className="font-semibold text-gray-800">{selectedJoinReqForReject.full_name}</span>? Pengguna tidak akan ditambahkan sebagai karyawan di <span className="font-semibold text-gray-800">{activeCompany?.name || 'perusahaan'}</span>.
+              </p>
+            </div>
+
+            {rejectJoinReqError && (
+              <div className="w-full text-red-600 text-[12px] bg-red-50 p-2.5 rounded-[12px] border border-red-200 text-center font-medium">
+                {rejectJoinReqError}
+              </div>
+            )}
+
+            <div className="flex gap-3 w-full mt-2">
+              <button 
+                onClick={() => setSelectedJoinReqForReject(null)}
+                disabled={isProcessingRejectReq}
+                className="flex-1 py-3 rounded-full border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-[13px] transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleConfirmRejectJoinRequest}
+                disabled={isProcessingRejectReq}
+                className="flex-1 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
+              >
+                {isProcessingRejectReq ? "Memproses..." : "Ya, Tolak Permintaan"}
               </button>
             </div>
           </div>
