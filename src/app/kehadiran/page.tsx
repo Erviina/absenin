@@ -194,7 +194,8 @@ export default function KehadiranPage() {
           <div className="relative">
             <button 
               onClick={() => setIsDownloadOpen(!isDownloadOpen)}
-              className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"
+              className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all z-10"
+              aria-label="Unduh Rekap Kehadiran"
             >
               <Download className="w-5 h-5 text-white" />
             </button>

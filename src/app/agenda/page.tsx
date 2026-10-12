@@ -337,9 +337,10 @@ export default function AgendaPage() {
         rightAction={
           <button 
             onClick={handleOpenAddModal}
-            className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30"
+            className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all z-10"
+            aria-label="Tambah Agenda"
           >
-            <Plus className="w-6 h-6" />
+            <Plus className="w-6 h-6 text-white" />
           </button>
         }
       />
