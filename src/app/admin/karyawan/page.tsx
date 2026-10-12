@@ -440,7 +440,6 @@ function AdminKaryawanView() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       <TopBar 
         title="Kelola Karyawan" 
-        showCompanySwitcher={true}
         rightAction={
           <button 
             onClick={() => setIsBarcodeModalOpen(true)} 

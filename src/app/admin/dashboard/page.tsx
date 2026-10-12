@@ -126,7 +126,7 @@ export default function AdminDashboardPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       
       {/* Header */}
-      <TopBar title="Manajemen" onBack={() => router.push("/dashboard")} showCompanySwitcher={true} />
+      <TopBar title="Manajemen" onBack={() => router.push("/dashboard")} />
 
       {/* Main Content */}
       <div className="flex-1 px-5 py-5 flex flex-col gap-4 z-10 relative">

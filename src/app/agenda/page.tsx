@@ -1,13 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, Calendar as CalendarIcon, Clock, MapPin, Info, Plus, Edit2, Trash2, X, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { 
+  ChevronLeft, 
+  Calendar as CalendarIcon, 
+  Clock, 
+  MapPin, 
+  Info, 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  X, 
+  ChevronsUpDown, 
+  CheckCircle2,
+  ExternalLink 
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { TopBar } from "@/components/TopBar";
-import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { CustomSelect } from "@/components/CustomSelect";
-import { CustomTimePicker } from "@/components/CustomTimePicker";
+import { DateTimeRollerPicker } from "@/components/DateTimeRollerPicker";
 import { useCompany } from "@/context/CompanyContext";
 
 // Tipe Data untuk Agenda
@@ -16,44 +28,67 @@ type AgendaItem = {
   title: string;
   time: string;
   location: string;
+  link_or_location?: string | null;
+  notes?: string | null;
   type: string;
   category_id?: string | null;
-  link?: string;
+  link?: string | null;
   scope: "COMPANY" | "PERSONAL";
   start_time: string;
   end_time: string;
+  is_all_day?: boolean;
 };
+
+const FULL_DAY_NAMES = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const FULL_MONTH_NAMES = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+];
+const SHORT_MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun", 
+  "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
+];
+
+function formatAgendaDateTime(d: Date, isAllDay: boolean = false): string {
+  const dayName = FULL_DAY_NAMES[d.getDay()];
+  const dayNum = d.getDate();
+  const monthName = FULL_MONTH_NAMES[d.getMonth()];
+  if (isAllDay) {
+    return `${dayName}, ${dayNum} ${monthName}`;
+  }
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${dayName}, ${dayNum} ${monthName} ${hours}.${minutes}`;
+}
+
+export function isAgendaUrl(str?: string | null): boolean {
+  if (!str) return false;
+  const trimmed = str.trim();
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (/^www\./i.test(trimmed)) return true;
+  if (/^(meet\.google\.com|zoom\.us|teams\.microsoft\.com|maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(trimmed)) return true;
+  if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/[^\s]*)?$/i.test(trimmed)) return true;
+  return false;
+}
+
+export function formatAgendaUrl(str: string): string {
+  const trimmed = str.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
 
 export default function AgendaPage() {
   const router = useRouter();
-  const { activeCompanyId, activeCompany, activeRole, canCreate } = useCompany();
+  const { activeCompanyId, activeCompany, canCreate } = useCompany();
   
   // State Data
   const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
-  
   const [categories, setCategories] = useState<any[]>([]);
 
-  const fetchCategories = useCallback(async () => {
-    try {
-      const token = localStorage.getItem("accessToken");
-      if (!token) return;
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
-      const res = await fetch(`${apiUrl}/agendas/categories`, {
-        headers
-      });
-      const data = await res.json();
-      if (data.success) {
-        setCategories(data.data);
-      }
-    } catch (err) {
-      console.error("Fetch categories error:", err);
-    }
-  }, [activeCompanyId]);
-  
   // State Kalender
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
@@ -69,12 +104,30 @@ export default function AgendaPage() {
   const [formScope, setFormScope] = useState<"PERSONAL" | "COMPANY">("PERSONAL");
   const [formKegiatan, setFormKegiatan] = useState("");
   const [formKategoriId, setFormKategoriId] = useState("");
-  const [formTanggal, setFormTanggal] = useState("");
-  const [formWaktuMulai, setFormWaktuMulai] = useState("");
-  const [formWaktuSelesai, setFormWaktuSelesai] = useState("");
+  const [isAllDay, setIsAllDay] = useState(false);
+  const [startTime, setStartTime] = useState<Date>(() => new Date());
+  const [endTime, setEndTime] = useState<Date>(() => new Date(Date.now() + 3600000));
+  const [expandedPicker, setExpandedPicker] = useState<"start" | "end" | null>(null);
   const [formCatatan, setFormCatatan] = useState("");
   const [formLink, setFormLink] = useState("");
   const [submitError, setSubmitError] = useState("");
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const res = await fetch(`${apiUrl}/agendas/categories`, { headers });
+      const data = await res.json();
+      if (data.success) {
+        setCategories(data.data);
+      }
+    } catch (err) {
+      console.error("Fetch categories error:", err);
+    }
+  }, [activeCompanyId]);
 
   const fetchAgendas = useCallback(async () => {
     try {
@@ -92,10 +145,7 @@ export default function AgendaPage() {
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      const res = await fetch(`${apiUrl}/agendas`, {
-        headers
-      });
-      
+      const res = await fetch(`${apiUrl}/agendas`, { headers });
       const data = await res.json();
       
       if (!res.ok || !data.success) {
@@ -108,26 +158,52 @@ export default function AgendaPage() {
         const startDate = new Date(item.start_time);
         const endDate = new Date(item.end_time);
         
-        const dateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+        const startTimeStr = `${String(startDate.getHours()).padStart(2, '0')}.${String(startDate.getMinutes()).padStart(2, '0')}`;
+        const endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}.${String(endDate.getMinutes()).padStart(2, '0')}`;
         
-        const startTimeStr = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
-        const endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
-        
-        if (!newMap[dateStr]) {
-          newMap[dateStr] = [];
-        }
-        
-        newMap[dateStr].push({
+        const isSameDay = startDate.getFullYear() === endDate.getFullYear() &&
+                          startDate.getMonth() === endDate.getMonth() &&
+                          startDate.getDate() === endDate.getDate();
+
+        const sDay = startDate.getDate();
+        const sMonth = SHORT_MONTH_NAMES[startDate.getMonth()];
+        const eDay = endDate.getDate();
+        const eMonth = SHORT_MONTH_NAMES[endDate.getMonth()];
+
+        const timeDisplay = isSameDay 
+          ? `${startTimeStr} - ${endTimeStr} WIB`
+          : `${sDay} ${sMonth} ${startTimeStr} - ${eDay} ${eMonth} ${endTimeStr} WIB`;
+
+        const linkOrLoc = item.link_or_location || item.link || null;
+        const agendaNotes = item.notes || null;
+
+        const agendaObj: AgendaItem = {
           id: item.id,
           title: item.title,
-          time: `${startTimeStr} - ${endTimeStr} WIB`,
-          location: item.notes || "Tanpa Keterangan",
-          type: item.category?.name || "Lainnya",
+          time: timeDisplay,
+          location: linkOrLoc || agendaNotes || "Tanpa Keterangan",
+          link_or_location: linkOrLoc,
+          notes: agendaNotes,
+          type: item.category?.name || "Acara",
           category_id: item.category?.id || null,
           scope: item.type === "COMPANY" ? "COMPANY" : "PERSONAL",
           start_time: item.start_time,
           end_time: item.end_time,
-        });
+          link: linkOrLoc
+        };
+
+        // Populate every single day in the date range
+        const curr = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+        const endLimit = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+        
+        while (curr <= endLimit) {
+          const dateStr = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-${String(curr.getDate()).padStart(2, '0')}`;
+          if (!newMap[dateStr]) {
+            newMap[dateStr] = [];
+          }
+          newMap[dateStr].push(agendaObj);
+          curr.setDate(curr.getDate() + 1);
+        }
       });
       
       setAgendasMap(newMap);
@@ -166,14 +242,23 @@ export default function AgendaPage() {
     setFormId("");
     setFormScope("PERSONAL");
     setFormKegiatan("");
-    if (categories.length > 0) {
-      setFormKategoriId(categories[0].id);
-    } else {
-      setFormKategoriId("");
+    setFormKategoriId(categories.length > 0 ? categories[0].id : "");
+    setIsAllDay(false);
+    
+    const now = new Date();
+    if (selectedDateStr) {
+      const [y, m, d] = selectedDateStr.split("-").map(Number);
+      now.setFullYear(y, m - 1, d);
     }
-    setFormTanggal(selectedDateStr || "");
-    setFormWaktuMulai("");
-    setFormWaktuSelesai("");
+    now.setSeconds(0, 0);
+
+    const start = new Date(now);
+    const end = new Date(now);
+    end.setHours(end.getHours() + 1);
+
+    setStartTime(start);
+    setEndTime(end);
+    setExpandedPicker("start"); // Langsung buka roller waktu mulai persis seperti di gambar
     setFormCatatan("");
     setFormLink("");
     setSubmitError("");
@@ -186,21 +271,14 @@ export default function AgendaPage() {
     setFormKegiatan(agenda.title);
     setFormKategoriId(agenda.category_id || (categories.length > 0 ? categories[0].id : ""));
     
-    const timeMatch = agenda.time.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
-    if (timeMatch) {
-      setFormWaktuMulai(timeMatch[1]);
-      setFormWaktuSelesai(timeMatch[2]);
-    } else {
-      setFormWaktuMulai("");
-      setFormWaktuSelesai("");
-    }
-    
-    const d = new Date(agenda.start_time);
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    setFormTanggal(dateStr);
-    
-    setFormCatatan(agenda.location !== "Tanpa Keterangan" ? agenda.location : "");
-    setFormLink(agenda.link || "");
+    const start = new Date(agenda.start_time);
+    const end = new Date(agenda.end_time);
+    setStartTime(start);
+    setEndTime(end);
+    setIsAllDay(Boolean(agenda.is_all_day));
+    setExpandedPicker(null);
+    setFormCatatan(agenda.notes || "");
+    setFormLink(agenda.link_or_location || agenda.link || "");
     setSubmitError("");
     
     setSelectedAgendaDetail(null);
@@ -213,15 +291,8 @@ export default function AgendaPage() {
       setSubmitError("Judul agenda wajib diisi");
       return;
     }
-    if (!formTanggal || !formWaktuMulai || !formWaktuSelesai) {
-      setSubmitError("Waktu pelaksanaan wajib diisi lengkap");
-      return;
-    }
 
-    const startDateTime = new Date(`${formTanggal}T${formWaktuMulai}:00`);
-    const endDateTime = new Date(`${formTanggal}T${formWaktuSelesai}:00`);
-
-    if (endDateTime <= startDateTime) {
+    if (endTime <= startTime) {
       setSubmitError("Waktu selesai harus setelah waktu mulai");
       return;
     }
@@ -239,8 +310,10 @@ export default function AgendaPage() {
       const payload: any = {
         title: formKegiatan,
         notes: formCatatan || "",
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime.toISOString(),
+        link_or_location: formLink.trim() || null,
+        link: formLink.trim() || null,
+        start_time: startTime.toISOString(),
+        end_time: endTime.toISOString(),
         agenda_category_id: formKategoriId || null,
         company_id: activeCompanyId,
       };
@@ -307,25 +380,65 @@ export default function AgendaPage() {
     }
   };
 
+  // List of unique agendas to compute range display
+  const uniqueAgendas = useMemo(() => {
+    const map = new Map<string, AgendaItem>();
+    Object.values(agendasMap).forEach(arr => {
+      arr.forEach(a => {
+        if (!map.has(a.id)) map.set(a.id, a);
+      });
+    });
+    return Array.from(map.values());
+  }, [agendasMap]);
+
+  // Check if a day is part of a multi-day range
+  const getRangeInfo = (day: number) => {
+    const currentDayTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), day).getTime();
+    
+    let inRange = false;
+    let isStart = false;
+    let isEnd = false;
+
+    for (const agenda of uniqueAgendas) {
+      const s = new Date(agenda.start_time);
+      const sTime = new Date(s.getFullYear(), s.getMonth(), s.getDate()).getTime();
+      const e = new Date(agenda.end_time);
+      const eTime = new Date(e.getFullYear(), e.getMonth(), e.getDate()).getTime();
+
+      // Only multi-day ranges show the connected visual strip
+      if (sTime < eTime && currentDayTime >= sTime && currentDayTime <= eTime) {
+        inRange = true;
+        if (currentDayTime === sTime) isStart = true;
+        if (currentDayTime === eTime) isEnd = true;
+      }
+    }
+
+    return { inRange, isStart, isEnd };
+  };
+
   // Logika Menampilkan Agenda
   let displayedAgendas: { agenda: AgendaItem, dateStr: string }[] = [];
   if (selectedDateStr) {
     const list = agendasMap[selectedDateStr] || [];
     displayedAgendas = list.map(a => ({ agenda: a, dateStr: selectedDateStr }));
   } else {
+    const seen = new Set<string>();
     Object.keys(agendasMap).forEach(dateStr => {
       const [y, m] = dateStr.split('-');
       if (parseInt(y) === currentDate.getFullYear() && parseInt(m) === currentDate.getMonth() + 1) {
         agendasMap[dateStr].forEach(a => {
-          displayedAgendas.push({ agenda: a, dateStr });
+          if (!seen.has(a.id)) {
+            seen.add(a.id);
+            displayedAgendas.push({ agenda: a, dateStr });
+          }
         });
       }
     });
-    displayedAgendas.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+    displayedAgendas.sort((a, b) => new Date(a.agenda.start_time).getTime() - new Date(b.agenda.start_time).getTime());
   }
 
   if (activeFilter !== "Semua") {
-    displayedAgendas = displayedAgendas.filter(a => a.agenda.type === activeFilter);
+    displayedAgendas = displayedAgendas.filter(a => a.agenda.type.toLowerCase() === activeFilter.toLowerCase());
   }
 
   return (
@@ -374,7 +487,7 @@ export default function AgendaPage() {
               </p>
             </div>
 
-            {/* Kalender Card */}
+            {/* Kalender Card dengan Rentang Waktu (Date Range) */}
             <div className="mb-6 px-1">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-[16px] font-bold text-[#111827]">
@@ -390,9 +503,9 @@ export default function AgendaPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-7 gap-y-4 gap-x-2 text-center">
+              <div className="grid grid-cols-7 gap-y-2 text-center select-none">
                 {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((day) => (
-                  <div key={day} className="text-[12px] font-bold text-[#6B7280]">
+                  <div key={day} className="text-[12px] font-bold text-[#6B7280] pb-2">
                     {day}
                   </div>
                 ))}
@@ -406,19 +519,48 @@ export default function AgendaPage() {
                   const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                   const hasAgenda = agendasMap[dateStr] && agendasMap[dateStr].length > 0;
                   const isSelected = selectedDateStr === dateStr;
+                  const { inRange, isStart, isEnd } = getRangeInfo(day);
+                  const dayOfWeek = (firstDayOfMonth + i) % 7; // 0 = Min, 6 = Sab
+
+                  let rangeStripClass = "";
+                  if (inRange) {
+                    if (isStart && isEnd) {
+                      rangeStripClass = "rounded-full bg-[#E8F3EB]";
+                    } else if (isStart) {
+                      rangeStripClass = "rounded-l-full bg-[#E8F3EB]";
+                    } else if (isEnd) {
+                      rangeStripClass = "rounded-r-full bg-[#E8F3EB]";
+                    } else {
+                      const roundL = dayOfWeek === 0 ? "rounded-l-full" : "";
+                      const roundR = dayOfWeek === 6 ? "rounded-r-full" : "";
+                      rangeStripClass = `bg-[#E8F3EB] ${roundL} ${roundR}`;
+                    }
+                  }
 
                   return (
                     <div 
                       key={day} 
                       onClick={() => handleDateClick(day)}
-                      className={`h-9 flex flex-col items-center justify-center relative cursor-pointer rounded-full transition-all ${
-                        isSelected ? "bg-[#356E3B] text-white font-bold shadow-md" : "text-[#374151] hover:bg-[#F3F4F6] font-medium"
-                      }`}
+                      className="h-10 flex flex-col items-center justify-center relative cursor-pointer"
                     >
-                      <span className="text-[14px]">{day}</span>
-                      {hasAgenda && (
-                        <div className={`w-1 h-1 rounded-full absolute bottom-1 ${isSelected ? 'bg-white' : 'bg-[#EF4444]'}`} />
+                      {/* Visual Strip Rentang Waktu */}
+                      {inRange && (
+                        <div className={`absolute inset-y-1.5 inset-x-0 ${rangeStripClass} transition-all pointer-events-none`} />
                       )}
+
+                      {/* Bulatan Tanggal */}
+                      <div className={`w-8 h-8 flex flex-col items-center justify-center rounded-full relative z-10 transition-all ${
+                        isSelected 
+                          ? "bg-[#356E3B] text-white font-bold shadow-md scale-105" 
+                          : inRange 
+                            ? "text-[#1E4738] font-bold" 
+                            : "text-[#374151] hover:bg-gray-100 font-medium"
+                      }`}>
+                        <span className="text-[13px]">{day}</span>
+                        {hasAgenda && !inRange && (
+                          <div className={`w-1 h-1 rounded-full absolute bottom-1 ${isSelected ? 'bg-white' : 'bg-[#EF4444]'}`} />
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -453,7 +595,7 @@ export default function AgendaPage() {
                     key={kat.id}
                     onClick={() => setActiveFilter(kat.name)}
                     className={`px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[13px] font-bold transition-all border ${
-                      activeFilter === kat.name 
+                      activeFilter.toLowerCase() === kat.name.toLowerCase()
                         ? "bg-[#356E3B] text-white border-[#356E3B] shadow-md" 
                         : "bg-white text-[#4B5563] border-[#E5E7EB] hover:bg-gray-50"
                     }`}
@@ -477,8 +619,8 @@ export default function AgendaPage() {
                         <div className="flex items-center gap-2">
                           <div className={`px-2.5 py-1 w-fit rounded-full flex items-center border ${
                             agenda.type === "Rapat" ? "bg-[#E8F3EB] border-[#D1E5D5] text-[#356E3B]" :
-                            agenda.type === "Acara" ? "bg-[#FFFBEB] border-[#FEF3C7] text-[#D97706]" :
-                            agenda.type === "Review" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
+                            agenda.type === "Acara" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
+                            agenda.type === "Hari Penting" ? "bg-[#FAF5FF] border-[#E9D5FF] text-[#9333EA]" :
                             agenda.type === "Tenggat" ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]" :
                             "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]"
                           }`}>
@@ -495,20 +637,46 @@ export default function AgendaPage() {
                     </div>
                     
                     <div className="flex flex-col gap-2 pl-2">
-                      {!selectedDateStr && (
-                         <div className="flex items-center gap-2">
-                           <CalendarIcon className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
-                           <span className="text-[#4B5563] text-[12px] font-medium">{dateStr}</span>
-                         </div>
-                      )}
                       <div className="flex items-center gap-2">
                         <Clock className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
                         <span className="text-[#4B5563] text-[12px] font-medium">{agenda.time}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
-                        <span className="text-[#4B5563] text-[12px] font-medium">{agenda.location}</span>
-                      </div>
+                      {agenda.link_or_location ? (
+                        isAgendaUrl(agenda.link_or_location) ? (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <ExternalLink className="w-[14px] h-[14px] text-[#2563EB] shrink-0" strokeWidth={2.5} />
+                            <a
+                              href={formatAgendaUrl(agenda.link_or_location)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[#2563EB] hover:text-[#1D4ED8] hover:underline text-[12px] font-medium truncate max-w-[260px]"
+                              title={agenda.link_or_location}
+                            >
+                              {agenda.link_or_location}
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <MapPin className="w-[14px] h-[14px] text-[#6B7280] shrink-0" strokeWidth={2.5} />
+                            <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.link_or_location}>
+                              {agenda.link_or_location}
+                            </span>
+                          </div>
+                        )
+                      ) : agenda.notes ? (
+                        <div className="flex items-center gap-2 min-w-0">
+                          <MapPin className="w-[14px] h-[14px] text-[#6B7280] shrink-0" strokeWidth={2.5} />
+                          <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.notes}>
+                            {agenda.notes}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-[14px] h-[14px] text-[#9CA3AF] shrink-0" strokeWidth={2.5} />
+                          <span className="text-[#9CA3AF] text-[12px] font-medium">Tanpa Keterangan</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
@@ -525,29 +693,20 @@ export default function AgendaPage() {
 
       <BottomNav activeTab="agenda" />
 
-
-
       {/* Modal Detail Agenda */}
       {selectedAgendaDetail && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => setSelectedAgendaDetail(null)} />
           <div className="relative w-full max-w-sm bg-white rounded-[24px] shadow-xl z-10 p-6 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-2">
-                <div className={`px-3 py-1 w-fit rounded-full flex items-center border ${
-                  selectedAgendaDetail.type === "Rapat" ? "bg-[#E8F3EB] border-[#D1E5D5] text-[#356E3B]" :
-                  selectedAgendaDetail.type === "Acara" ? "bg-[#FFFBEB] border-[#FEF3C7] text-[#D97706]" :
-                  selectedAgendaDetail.type === "Review" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
-                  selectedAgendaDetail.type === "Tenggat" ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]" :
-                  "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]"
-                }`}>
-                  <span className="text-[11px] font-bold uppercase tracking-wider">{selectedAgendaDetail.type}</span>
-                </div>
-                {selectedAgendaDetail.scope === "COMPANY" ? (
-                  <span className="bg-[#E0E7FF] text-[#4338CA] px-2 py-1 rounded text-[10px] font-bold border border-[#C7D2FE]">PERUSAHAAN</span>
-                ) : (
-                  <span className="bg-[#FEF3C7] text-[#D97706] px-2 py-1 rounded text-[10px] font-bold border border-[#FDE68A]">PRIBADI</span>
-                )}
+              <div className={`px-3 py-1 w-fit rounded-full flex items-center border ${
+                selectedAgendaDetail.type === "Rapat" ? "bg-[#E8F3EB] border-[#D1E5D5] text-[#356E3B]" :
+                selectedAgendaDetail.type === "Acara" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
+                selectedAgendaDetail.type === "Hari Penting" ? "bg-[#FAF5FF] border-[#E9D5FF] text-[#9333EA]" :
+                selectedAgendaDetail.type === "Tenggat" ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]" :
+                "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]"
+              }`}>
+                <span className="text-[11px] font-bold uppercase tracking-wider">{selectedAgendaDetail.type}</span>
               </div>
               <button onClick={() => setSelectedAgendaDetail(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
                 <X className="w-5 h-5" />
@@ -558,19 +717,54 @@ export default function AgendaPage() {
             
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">
-                <Clock className="w-5 h-5 text-[#356E3B]" strokeWidth={2} />
+                <Clock className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
                 <span className="text-[#374151] text-[14px] font-medium">{selectedAgendaDetail.time}</span>
               </div>
               
-              <div className="flex flex-col gap-2 bg-[#F9FAFB] p-4 rounded-[14px]">
-                <h3 className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">Catatan Tambahan / Lokasi</h3>
-                <p className="text-[#374151] text-[14px] leading-relaxed whitespace-pre-wrap">
-                  {selectedAgendaDetail.location}
-                </p>
-              </div>
+              {selectedAgendaDetail.link_or_location && (
+                <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">
+                  {isAgendaUrl(selectedAgendaDetail.link_or_location) ? (
+                    <>
+                      <ExternalLink className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
+                      <a
+                        href={formatAgendaUrl(selectedAgendaDetail.link_or_location)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#2563EB] hover:underline text-[14px] font-medium truncate flex-1"
+                        title={selectedAgendaDetail.link_or_location}
+                      >
+                        {selectedAgendaDetail.link_or_location}
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
+                      <span className="text-[#374151] text-[14px] font-medium truncate flex-1">
+                        {selectedAgendaDetail.link_or_location}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {selectedAgendaDetail.notes && (
+                <div className="flex flex-col gap-1.5 bg-[#F9FAFB] p-4 rounded-[14px]">
+                  <h3 className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">Catatan Tambahan</h3>
+                  <p className="text-[#374151] text-[14px] leading-relaxed whitespace-pre-wrap">
+                    {selectedAgendaDetail.notes}
+                  </p>
+                </div>
+              )}
+
+              {!selectedAgendaDetail.link_or_location && !selectedAgendaDetail.notes && (
+                <div className="flex items-center gap-2 text-[#9CA3AF] text-[13px] italic bg-[#F9FAFB] p-3 rounded-[14px]">
+                  <Info className="w-4 h-4 shrink-0" />
+                  <span>Tidak ada catatan atau lokasi tambahan</span>
+                </div>
+              )}
             </div>
 
-            {/* Action Buttons - For PERSONAL or COMPANY if user is management */}
+            {/* Action Buttons */}
             {(selectedAgendaDetail.scope === "PERSONAL" || canCreate("agendas")) && (
               <div className="flex items-center gap-3 mt-6 pt-6 border-t border-gray-100">
                 <button 
@@ -627,7 +821,7 @@ export default function AgendaPage() {
         </div>
       )}
 
-      {/* Modal Form Tambah/Edit dengan UI Identik Admin */}
+      {/* Modal Form Tambah/Edit Agenda - Layout Asli dengan Konsep Tanggal Sesuai Screenshot */}
       {isFormModalOpen && (
         <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center sm:p-4">
           <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => !isSubmitting && setIsFormModalOpen(false)} />
@@ -652,7 +846,7 @@ export default function AgendaPage() {
                     <button
                       type="button"
                       onClick={() => setFormScope("PERSONAL")}
-                      className={`py-2 text-[13px] font-bold rounded-[10px] transition-all ${
+                      className={`py-2 text-[13px] font-bold rounded-[10px] transition-all cursor-pointer ${
                         formScope === "PERSONAL"
                           ? "bg-white text-[#1E4738] shadow-sm"
                           : "text-[#6B7280] hover:text-[#111827]"
@@ -663,7 +857,7 @@ export default function AgendaPage() {
                     <button
                       type="button"
                       onClick={() => setFormScope("COMPANY")}
-                      className={`py-2 text-[13px] font-bold rounded-[10px] transition-all ${
+                      className={`py-2 text-[13px] font-bold rounded-[10px] transition-all cursor-pointer ${
                         formScope === "COMPANY"
                           ? "bg-white text-[#1E4738] shadow-sm"
                           : "text-[#6B7280] hover:text-[#111827]"
@@ -701,37 +895,91 @@ export default function AgendaPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-[13px] font-bold text-[#374151]">
-                  Tanggal Agenda <span className="text-[#EF4444]">*</span>
-                </label>
-                <div className="flex w-full">
-                  <CustomDatePicker 
-                    value={formTanggal}
-                    onChange={setFormTanggal}
-                  />
-                </div>
-              </div>
-
+              {/* KONSEP WAKTU MULAI & WAKTU BERAKHIR SESUAI GAMBAR */}
               <div className="flex flex-col gap-2">
                 <label className="text-[13px] font-bold text-[#374151]">
                   Waktu Pelaksanaan <span className="text-[#EF4444]">*</span>
                 </label>
-                <div className="flex gap-3">
-                  <div className="flex-1 relative">
-                    <CustomTimePicker 
-                      value={formWaktuMulai}
-                      onChange={setFormWaktuMulai}
-                      placeholder="Mulai"
-                    />
+                <div className="bg-[#F9FAFB] rounded-[20px] p-4 border border-[#E5E7EB] flex flex-col">
+                  {/* Seharian Toggle */}
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-[14px] font-medium text-gray-900">Seharian</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsAllDay(!isAllDay)}
+                      className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-200 ease-in-out cursor-pointer ${
+                        isAllDay ? "bg-[#356E3B]" : "bg-[#D1D5DB]"
+                      }`}
+                    >
+                      <div
+                        className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                          isAllDay ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
                   </div>
-                  <div className="flex-1 relative">
-                    <CustomTimePicker 
-                      value={formWaktuSelesai}
-                      onChange={setFormWaktuSelesai}
-                      placeholder="Selesai"
-                    />
+
+                  <div className="h-[1px] bg-gray-200 my-2.5" />
+
+                  {/* Waktu Mulai Row */}
+                  <div 
+                    onClick={() => setExpandedPicker(expandedPicker === "start" ? null : "start")}
+                    className="flex items-center justify-between py-1 cursor-pointer select-none group"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-[14px] font-medium text-gray-900">Waktu Mulai</span>
+                      <span className="text-[12px] text-gray-500 font-medium mt-0.5">
+                        {formatAgendaDateTime(startTime, isAllDay)}
+                      </span>
+                    </div>
+                    <ChevronsUpDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
                   </div>
+
+                  {/* Roller Picker for Start Time */}
+                  {expandedPicker === "start" && (
+                    <DateTimeRollerPicker 
+                      value={startTime}
+                      isAllDay={isAllDay}
+                      onChange={(newDate) => {
+                        setStartTime(newDate);
+                        if (newDate > endTime) {
+                          const nextEnd = new Date(newDate);
+                          nextEnd.setHours(nextEnd.getHours() + 1);
+                          setEndTime(nextEnd);
+                        }
+                      }}
+                    />
+                  )}
+
+                  <div className="h-[1px] bg-gray-200 my-2.5" />
+
+                  {/* Waktu Berakhir Row */}
+                  <div 
+                    onClick={() => setExpandedPicker(expandedPicker === "end" ? null : "end")}
+                    className="flex items-center justify-between py-1 cursor-pointer select-none group"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-[14px] font-medium text-gray-900">Waktu Berakhir</span>
+                      <span className="text-[12px] text-gray-500 font-medium mt-0.5">
+                        {formatAgendaDateTime(endTime, isAllDay)}
+                      </span>
+                    </div>
+                    <ChevronsUpDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
+                  </div>
+
+                  {/* Roller Picker for End Time */}
+                  {expandedPicker === "end" && (
+                    <DateTimeRollerPicker 
+                      value={endTime}
+                      isAllDay={isAllDay}
+                      onChange={(newDate) => {
+                        setEndTime(newDate);
+                        if (newDate < startTime) {
+                          setStartTime(newDate);
+                        }
+                      }}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -740,10 +988,10 @@ export default function AgendaPage() {
                   Link Tautan / Lokasi (Opsional)
                 </label>
                 <input 
-                  type="url"
+                  type="text"
                   value={formLink}
                   onChange={(e) => setFormLink(e.target.value)}
-                  placeholder="Misal: https://meet.google.com/..."
+                  placeholder="Misal: https://meet.google.com/... atau Ruang Rapat Lt. 2"
                   className="w-full border border-[#E5E7EB] rounded-[14px] px-4 py-3.5 text-[14px] text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white font-medium"
                 />
               </div>
@@ -777,7 +1025,7 @@ export default function AgendaPage() {
               <div className="pt-2 pb-4">
                 <button 
                   onClick={handleSubmit}
-                  disabled={isSubmitting || !formTanggal || !formWaktuMulai || !formWaktuSelesai}
+                  disabled={isSubmitting || !formKegiatan.trim()}
                   className="w-full bg-[#356E3B] hover:bg-[#2A582F] disabled:bg-[#A3B8A8] text-white rounded-full py-4 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98]"
                 >
                   {isSubmitting ? (

@@ -42,7 +42,7 @@ export function TopBar({
         {title}
       </h1>
       <div className="flex items-center gap-2 justify-end z-10">
-        {showCompanySwitcher && <CompanySwitcher variant="dark" />}
+        {showCompanySwitcher && <CompanySwitcher variant="dark" compact={true} />}
         {rightAction}
       </div>
     </div>

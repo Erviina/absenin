@@ -81,6 +81,7 @@ export const agenda = pgTable("agendas", {
   deleted_by: uuid("deleted_by"),
   profile_id: uuid("profile_id").references(() => profiles.id),
   agenda_category_id: uuid("agenda_category_id").references(() => agendaCategories.id),
+  link_or_location: text("link_or_location"),
 });
 
 export const workModeEnum = pgEnum("work_mode_enum", ["WFH", "WFO"]);
