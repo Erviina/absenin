@@ -223,7 +223,9 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
 
     if (tenant) {
       activeRole = tenant.role;
-      if (tenant.role === "owner" || tenant.role === "admin") {
+      if (tenant.role === "owner") {
+        roles = ["Owner", "Admin", "Employee"];
+      } else if (tenant.role === "admin") {
         roles = ["Admin", "Employee"];
       } else if (tenant.role === "manager") {
         roles = ["Manager", "Employee"];
@@ -231,11 +233,8 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
         roles = ["Employee"];
       }
     } else {
-      // Fallback to profileRoles
-      const rolesResult = await db.select().from(profileRoles).where(eq(profileRoles.profile_id, profile.id));
-      roles = rolesResult.map((r) => r.role).filter((r): r is string => Boolean(r));
-      if (roles.includes("Admin")) activeRole = "admin";
-      else if (roles.includes("Manager")) activeRole = "manager";
+      activeRole = "member";
+      roles = ["Employee"];
     }
 
     res.json({

@@ -49,23 +49,76 @@ router.post("/check-in", authenticate, upload.single("photo"), async (req: AuthR
       return res.status(400).json({ success: false, message: "Invalid coordinates." });
     }
 
-    // 4. Check for active attendance today in this company
-    const activeAttendance = await db
+    // 3. Fetch company configuration and validate work_days & work_start_time (15 menit sebelum masuk)
+    const compRes = await db.execute(sql`
+      SELECT id, work_start_time, work_days,
+             (now() AT TIME ZONE 'Asia/Jakarta')::time as current_time_wib,
+             EXTRACT(ISODOW FROM now() AT TIME ZONE 'Asia/Jakarta') as current_isodow
+      FROM companies
+      WHERE id = ${companyId} AND deleted_at IS NULL
+      LIMIT 1
+    `);
+
+    if (compRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan." });
+    }
+
+    const compRow = compRes.rows[0];
+    const isodow = parseInt(compRow.current_isodow as string, 10);
+    const dayNames = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+    const currentDayName = dayNames[isodow - 1];
+
+    // Validasi work_days
+    const workDays = compRow.work_days as string[] | null;
+    if (workDays && Array.isArray(workDays) && workDays.length > 0) {
+      if (!workDays.includes(currentDayName)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Hari ini (${currentDayName}) bukan hari kerja perusahaan.` 
+        });
+      }
+    }
+
+    // Validasi work_start_time (Check-in hanya dibuka 15 menit sebelum work_start_time)
+    if (compRow.work_start_time) {
+      const [startHour, startMin] = String(compRow.work_start_time).split(":").map(Number);
+      const startTotalMinutes = (isNaN(startHour) ? 8 : startHour) * 60 + (isNaN(startMin) ? 0 : startMin);
+      const openTotalMinutes = Math.max(0, startTotalMinutes - 15);
+
+      const currentTimeStr = String(compRow.current_time_wib);
+      const [curHour, curMin] = currentTimeStr.split(":").map(Number);
+      const curTotalMinutes = (isNaN(curHour) ? 0 : curHour) * 60 + (isNaN(curMin) ? 0 : curMin);
+
+      if (curTotalMinutes < openTotalMinutes) {
+        const openHour = Math.floor(openTotalMinutes / 60);
+        const openMinute = openTotalMinutes % 60;
+        const openTimeFormatted = `${String(openHour).padStart(2, '0')}:${String(openMinute).padStart(2, '0')}`;
+        return res.status(400).json({
+          success: false,
+          message: `Check-in belum dibuka. Check-in hanya dapat dilakukan mulai 15 menit sebelum jam masuk (pukul ${openTimeFormatted} WIB).`
+        });
+      }
+    }
+
+    // 4. Check for existing attendance today in this company (mencegah check-in ganda baik yang masih aktif maupun yang sudah checkout)
+    const existingAttendance = await db
       .select()
       .from(attendances)
       .where(
         and(
           eq(attendances.profile_id, userId),
           eq(attendances.company_id, companyId),
-          isNull(attendances.check_out_time),
           isNull(attendances.deleted_at),
           sql`DATE(check_in_time AT TIME ZONE 'Asia/Jakarta') = DATE(now() AT TIME ZONE 'Asia/Jakarta')`
         )
       )
       .limit(1);
 
-    if (activeAttendance.length > 0) {
-      return res.status(400).json({ success: false, message: "You already have an active check-in today." });
+    if (existingAttendance.length > 0) {
+      if (existingAttendance[0].check_out_time) {
+        return res.status(400).json({ success: false, message: "Anda sudah menyelesaikan absensi (check-in dan check-out) untuk hari ini." });
+      }
+      return res.status(400).json({ success: false, message: "Anda sudah melakukan check-in hari ini." });
     }
 
     // 5. Upload photo
@@ -221,12 +274,30 @@ router.get("/today", authenticate, async (req: AuthRequest, res: Response): Prom
       .where(and(...conditions))
       .limit(1);
 
+    let companyData = null;
+    if (tenant?.companyId) {
+      const compRes = await db.execute(sql`
+        SELECT id, name, work_start_time, work_end_time, work_days,
+               to_char(now() AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS') as server_time,
+               to_char(now() AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD') as server_date,
+               to_char(now() AT TIME ZONE 'Asia/Jakarta', 'HH24:MI') as server_clock,
+               EXTRACT(ISODOW FROM now() AT TIME ZONE 'Asia/Jakarta') as current_isodow
+        FROM companies
+        WHERE id = ${tenant.companyId} AND deleted_at IS NULL
+        LIMIT 1
+      `);
+      if (compRes.rows.length > 0) {
+        companyData = compRes.rows[0];
+      }
+    }
+
     if (todayAttendance.length === 0) {
       return res.status(200).json({
         success: true,
         data: {
           status: "NOT_CHECKED_IN",
-          attendance: null
+          attendance: null,
+          company: companyData
         }
       });
     }
@@ -238,7 +309,8 @@ router.get("/today", authenticate, async (req: AuthRequest, res: Response): Prom
         success: true,
         data: {
           status: "CHECKED_OUT",
-          attendance
+          attendance,
+          company: companyData
         }
       });
     } else {
@@ -246,7 +318,8 @@ router.get("/today", authenticate, async (req: AuthRequest, res: Response): Prom
         success: true,
         data: {
           status: "CHECKED_IN",
-          attendance
+          attendance,
+          company: companyData
         }
       });
     }

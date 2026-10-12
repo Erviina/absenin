@@ -111,14 +111,11 @@ export async function resolveTenant(
       }
     }
 
-    // Check roles
-    const rolesRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${userId}
+    // Role check: Only assign owner if creator, otherwise default to member (prevents cross-company role leakage)
+    const ownerCheck = await db.execute(sql`
+      SELECT id FROM companies WHERE id = ${cid} AND created_by = ${userId} LIMIT 1
     `);
-    const roles = rolesRes.rows.map((r: any) => (r.role as string).toLowerCase());
-    let role: TenantContext["role"] = "member";
-    if (roles.includes("admin")) role = "admin";
-    else if (roles.includes("manager")) role = "manager";
+    const role: TenantContext["role"] = ownerCheck.rows.length > 0 ? "owner" : "member";
 
     return {
       companyId: cid,

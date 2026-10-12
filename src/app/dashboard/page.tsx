@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useCompany } from "@/context/CompanyContext";
+import { evaluateSchedule, CompanyScheduleData } from "@/lib/schedule";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { activeCompanyId, activeRole } = useCompany();
+  const { activeCompanyId, activeRole, refreshMemberships } = useCompany();
 
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
@@ -22,6 +23,8 @@ export default function DashboardPage() {
   const [isAttendanceLoading, setIsAttendanceLoading] = useState(true);
   const [attendanceError, setAttendanceError] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [companySchedule, setCompanySchedule] = useState<CompanyScheduleData | null>(null);
+  const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
 
   // Close dropdown whenever active company or active role changes
   useEffect(() => {
@@ -63,10 +66,14 @@ export default function DashboardPage() {
         try {
           const authData = await authRes.json();
           if (authData.success) {
-            setUser(authData.data.user);
-            if (!authData.data.user?.company && !activeCompanyId) {
+            const userData = authData.data.user;
+            setUser(userData);
+            if (!userData?.company && !activeCompanyId) {
               router.push("/cek-perusahaan");
               return;
+            }
+            if (userData?.activeRole && activeRole && userData.activeRole !== activeRole) {
+              refreshMemberships().catch(console.error);
             }
           }
         } catch (e) {
@@ -96,6 +103,15 @@ export default function DashboardPage() {
           if (attendData.success && attendData.data) {
             setAttendanceStatus(attendData.data.status);
             setAttendanceError(false);
+            if (attendData.data.company) {
+              setCompanySchedule(attendData.data.company);
+              if (attendData.data.company.server_time) {
+                const serverMs = new Date(attendData.data.company.server_time).getTime();
+                if (!isNaN(serverMs)) {
+                  setServerOffsetMs(serverMs - Date.now());
+                }
+              }
+            }
           } else {
             setAttendanceError(true);
           }
@@ -114,6 +130,32 @@ export default function DashboardPage() {
     fetchData();
   }, [router, activeCompanyId]);
 
+  const scheduleEval = evaluateSchedule(companySchedule, serverOffsetMs);
+
+  let ctaText = "Check In";
+  let isCtaDisabled = false;
+
+  if (isAttendanceLoading) {
+    ctaText = "Memuat...";
+    isCtaDisabled = true;
+  } else if (attendanceError) {
+    ctaText = "Gagal Memuat";
+    isCtaDisabled = true;
+  } else if (attendanceStatus === "CHECKED_OUT") {
+    ctaText = "Absensi Selesai";
+    isCtaDisabled = true;
+  } else if (attendanceStatus === "CHECKED_IN") {
+    ctaText = "Check Out";
+    isCtaDisabled = false;
+  } else if (attendanceStatus === "NOT_CHECKED_IN") {
+    if (!scheduleEval.isCheckInOpen) {
+      ctaText = "Check In (Belum Dibuka)";
+      isCtaDisabled = true;
+    } else {
+      ctaText = "Check In";
+      isCtaDisabled = false;
+    }
+  }
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
@@ -141,9 +183,11 @@ export default function DashboardPage() {
 
           {/* Name & Dropdown Toggle */}
           {(() => {
-            const isManagement = activeRole 
-              ? ["owner", "admin", "manager"].includes(activeRole) 
-              : Boolean(user?.isManagement || (user?.roles?.includes("Admin") || user?.roles?.includes("Manager")));
+            const isManagement = Boolean(
+              (activeRole && ["owner", "admin", "manager"].includes(activeRole)) ||
+              (user?.activeRole && ["owner", "admin", "manager"].includes(user.activeRole)) ||
+              user?.isManagement
+            );
 
             return (
               <>
@@ -269,17 +313,21 @@ export default function DashboardPage() {
           {/* CTA Check In Overlapping at Bottom Right (Half Pill) */}
           <div className="absolute bottom-0 right-0 z-20 flex items-end">
             <button 
-              onClick={() => window.location.href = '/checkin'}
-              disabled={isAttendanceLoading || attendanceError}
-              className="bg-[#1E4738] hover:bg-[#153428] text-white rounded-l-full pl-5 pr-4 py-3 flex items-center gap-2 shadow-sm border-[4px] border-r-0 border-white transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+              onClick={() => {
+                if (!isCtaDisabled) {
+                  window.location.href = '/checkin';
+                }
+              }}
+              disabled={isCtaDisabled}
+              className={`rounded-l-full pl-5 pr-4 py-3 flex items-center gap-2 shadow-sm border-[4px] border-r-0 border-white transition-all ${
+                isCtaDisabled
+                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed border-gray-200 shadow-none opacity-90'
+                  : 'bg-[#1E4738] hover:bg-[#153428] text-white active:scale-95'
+              }`}
             >
               <MapPin className="w-[18px] h-[18px]" strokeWidth={2.5} />
               <span className="font-bold text-[14px]">
-                {isAttendanceLoading 
-                  ? "Memuat..." 
-                  : attendanceError 
-                    ? "Gagal Memuat" 
-                    : (attendanceStatus === "CHECKED_IN" ? "Check Out" : "Check In")}
+                {ctaText}
               </span>
               <ArrowRight className="w-5 h-5 ml-1" strokeWidth={2.5} />
             </button>

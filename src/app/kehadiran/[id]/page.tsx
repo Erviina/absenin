@@ -91,6 +91,61 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
     }
   }
 
+  const checkInLat =
+    data?.check_in_latitude !== null && data?.check_in_latitude !== undefined && data?.check_in_latitude !== ""
+      ? parseFloat(data.check_in_latitude)
+      : null;
+  const checkInLng =
+    data?.check_in_longitude !== null && data?.check_in_longitude !== undefined && data?.check_in_longitude !== ""
+      ? parseFloat(data.check_in_longitude)
+      : null;
+  const hasValidCheckInCoords =
+    checkInLat !== null &&
+    checkInLng !== null &&
+    !isNaN(checkInLat) &&
+    !isNaN(checkInLng) &&
+    checkInLat >= -90 &&
+    checkInLat <= 90 &&
+    checkInLng >= -180 &&
+    checkInLng <= 180;
+
+  const checkOutLat =
+    data?.check_out_latitude !== null && data?.check_out_latitude !== undefined && data?.check_out_latitude !== ""
+      ? parseFloat(data.check_out_latitude)
+      : null;
+  const checkOutLng =
+    data?.check_out_longitude !== null && data?.check_out_longitude !== undefined && data?.check_out_longitude !== ""
+      ? parseFloat(data.check_out_longitude)
+      : null;
+  const hasValidCheckOutCoords =
+    checkOutLat !== null &&
+    checkOutLng !== null &&
+    !isNaN(checkOutLat) &&
+    !isNaN(checkOutLng) &&
+    checkOutLat >= -90 &&
+    checkOutLat <= 90 &&
+    checkOutLng >= -180 &&
+    checkOutLng <= 180;
+
+  const mapMarkers: Array<{ lat: number; lng: number; label: string; type: "check-in" | "check-out" }> = [];
+  if (hasValidCheckInCoords && checkInLat !== null && checkInLng !== null) {
+    mapMarkers.push({
+      lat: checkInLat,
+      lng: checkInLng,
+      label: "Presensi Masuk",
+      type: "check-in"
+    });
+  }
+  if (hasValidCheckOutCoords && checkOutLat !== null && checkOutLng !== null) {
+    mapMarkers.push({
+      lat: checkOutLat,
+      lng: checkOutLng,
+      label: "Presensi Keluar",
+      type: "check-out"
+    });
+  }
+  const hasValidCoords = mapMarkers.length > 0;
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-white relative">
       {/* Header */}
@@ -191,46 +246,96 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
               <MapPin className="w-4 h-4 text-[#4B5563]" strokeWidth={2.5} />
               <span className="text-[#111827] text-[14px] font-bold">Peta Lokasi Presensi</span>
             </div>
-            <div className="bg-[#E8F3EB] px-2.5 py-1 rounded-full flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#356E3B]" />
-              <span className="text-[#356E3B] text-[11px] font-bold">Radius Valid (15m)</span>
+            <div className="flex items-center gap-2">
+              {hasValidCheckInCoords && (
+                <div className="bg-[#E8F3EB] px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#356E3B]" />
+                  <span className="text-[#356E3B] text-[11px] font-bold">Masuk</span>
+                </div>
+              )}
+              {hasValidCheckOutCoords && (
+                <div className="bg-[#FFEDD5] px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
+                  <span className="text-[#EA580C] text-[11px] font-bold">Keluar</span>
+                </div>
+              )}
             </div>
           </div>
           
           <div className="w-full h-[240px] relative z-0">
-            <MapLocation label="Titik Presensi Masuk" />
-            
-            {/* Custom Map Controls Overlay (Visual only, to match design) */}
-            <div className="absolute right-3 bottom-3 z-10 flex flex-col gap-2">
-              <button className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center text-[#4B5563] active:scale-95 transition-transform">
-                <Plus className="w-5 h-5" strokeWidth={2.5} />
-              </button>
-              <button className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center text-[#4B5563] active:scale-95 transition-transform">
-                <Minus className="w-5 h-5" strokeWidth={2.5} />
-              </button>
-            </div>
+            {hasValidCoords ? (
+              <>
+                <MapLocation markers={mapMarkers} />
+                
+                {/* Custom Map Controls Overlay (Visual only, to match design) */}
+                <div className="absolute right-3 bottom-3 z-10 flex flex-col gap-2">
+                  <button className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center text-[#4B5563] active:scale-95 transition-transform">
+                    <Plus className="w-5 h-5" strokeWidth={2.5} />
+                  </button>
+                  <button className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center text-[#4B5563] active:scale-95 transition-transform">
+                    <Minus className="w-5 h-5" strokeWidth={2.5} />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full bg-[#F9FAFB] flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                  <MapPin className="w-6 h-6 text-gray-400" />
+                </div>
+                <p className="text-[#374151] font-bold text-[14px] mb-1">Titik Lokasi Tidak Tersedia</p>
+                <p className="text-[#6B7280] text-[12px] max-w-[260px]">
+                  Koordinat presensi tidak valid atau belum terekam.
+                </p>
+              </div>
+            )}
           </div>
 
-          <div className="p-5 bg-white flex justify-between items-center">
-            <div className="flex flex-col pr-4">
-              <span className="text-[#111827] text-[13px] font-bold leading-tight mb-1">
-                Check-in: {data.check_in_address || "Lokasi tidak diketahui"}
-              </span>
-              <span className="text-[#9CA3AF] text-[11px] font-mono mb-3">
-                Lat: {data.check_in_latitude} • Long: {data.check_in_longitude}
-              </span>
-              
-              {data.check_out_time && (
-                <>
-                  <span className="text-[#111827] text-[13px] font-bold leading-tight mb-1 border-t border-gray-100 pt-3">
-                    Check-out: {data.check_out_address || "Lokasi tidak diketahui"}
+          <div className="p-5 bg-white flex flex-col gap-3">
+            {/* Info Check-in */}
+            <div className="flex items-start gap-3">
+              <div className="w-7 h-7 rounded-lg bg-[#E8F3EB] flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#356E3B]" />
+              </div>
+              <div className="flex flex-col flex-1">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[#1E4738] text-[11px] font-bold uppercase tracking-wider">Lokasi Check-in</span>
+                </div>
+                <span className="text-[#111827] text-[13px] font-semibold leading-tight mb-1">
+                  {data.check_in_address || "Lokasi tidak diketahui"}
+                </span>
+                {hasValidCheckInCoords ? (
+                  <span className="text-[#6B7280] text-[11px] font-mono">
+                    Lat: {data.check_in_latitude} • Long: {data.check_in_longitude}
                   </span>
-                  <span className="text-[#9CA3AF] text-[11px] font-mono">
-                    Lat: {data.check_out_latitude} • Long: {data.check_out_longitude}
-                  </span>
-                </>
-              )}
+                ) : (
+                  <span className="text-gray-400 text-[11px] italic">Koordinat tidak tercatat</span>
+                )}
+              </div>
             </div>
+
+            {/* Info Check-out */}
+            {data.check_out_time && (
+              <div className="flex items-start gap-3 border-t border-gray-100 pt-3">
+                <div className="w-7 h-7 rounded-lg bg-[#FFEDD5] flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#EA580C]" />
+                </div>
+                <div className="flex flex-col flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[#EA580C] text-[11px] font-bold uppercase tracking-wider">Lokasi Check-out</span>
+                  </div>
+                  <span className="text-[#111827] text-[13px] font-semibold leading-tight mb-1">
+                    {data.check_out_address || "Lokasi tidak diketahui"}
+                  </span>
+                  {hasValidCheckOutCoords ? (
+                    <span className="text-[#6B7280] text-[11px] font-mono">
+                      Lat: {data.check_out_latitude} • Long: {data.check_out_longitude}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 text-[11px] italic">Koordinat tidak tercatat</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

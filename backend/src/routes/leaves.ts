@@ -67,21 +67,61 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
     // Validate request body
     const validatedData = createLeaveSchema.parse(req.body);
 
-    // Insert leave request
-    const newLeave = await db.insert(leaveRequests).values({
-      id: crypto.randomUUID(),
-      profile_id: userAuth.id,
-      company_id: companyId as string,
-      leave_category_id: validatedData.leave_category_id,
-      start_date: validatedData.start_date,
-      end_date: validatedData.end_date,
-      description: validatedData.description,
-      attachment_url: validatedData.attachment_url,
-      status: "Menunggu", // Default status is "Menunggu"
-      created_by: userAuth.id,
-      updated_by: userAuth.id
-    }).returning();
-    
+    // Use transaction with transaction-level advisory lock to serialize concurrent submissions and check daily quota
+    const txResult = await db.transaction(async (tx) => {
+      // 1. Transaction-level advisory lock on (hashtext('leave_requests'), hashtext(userAuth.id))
+      // Serializes concurrent requests from the same user to prevent race conditions
+      await tx.execute(sql`
+        SELECT pg_advisory_xact_lock(hashtext('leave_requests'), hashtext(${userAuth.id}))
+      `);
+
+      // 2. Check if user already submitted an active leave request today with status 'Menunggu' or 'Disetujui' in Asia/Jakarta timezone
+      const existingToday = await tx.execute(sql`
+        SELECT id FROM leave_requests
+        WHERE profile_id = ${userAuth.id}
+          AND status IN ('Menunggu', 'Disetujui')
+          AND deleted_at IS NULL
+          AND DATE(created_at AT TIME ZONE 'Asia/Jakarta') = DATE(now() AT TIME ZONE 'Asia/Jakarta')
+        LIMIT 1
+      `);
+
+      if (existingToday.rows.length > 0) {
+        return {
+          conflict: true,
+          message: "Anda sudah mengajukan izin hari ini. Silakan ajukan kembali besok."
+        };
+      }
+
+      // 3. Insert leave request
+      const newLeave = await tx.insert(leaveRequests).values({
+        id: crypto.randomUUID(),
+        profile_id: userAuth.id,
+        company_id: companyId as string,
+        leave_category_id: validatedData.leave_category_id,
+        start_date: validatedData.start_date,
+        end_date: validatedData.end_date,
+        description: validatedData.description,
+        attachment_url: validatedData.attachment_url,
+        status: "Menunggu", // Default status is "Menunggu"
+        created_by: userAuth.id,
+        updated_by: userAuth.id
+      }).returning();
+
+      return {
+        conflict: false,
+        data: newLeave[0]
+      };
+    });
+
+    if (txResult.conflict) {
+      return res.status(409).json({
+        success: false,
+        message: txResult.message
+      });
+    }
+
+    const createdLeave = txResult.data!;
+
     // Add notification logic
     const requesterRes = await db.execute(sql`SELECT full_name, email FROM profiles WHERE id = ${userAuth.id}`);
     const requesterName = requesterRes.rows[0]?.full_name || requesterRes.rows[0]?.email || "Employee";
@@ -103,19 +143,19 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         type: "LEAVE_PENDING",
         title: "Pengajuan Izin Baru",
         message: `${requesterName} mengajukan izin/cuti baru.`,
-        reference_id: newLeave[0].id as string,
+        reference_id: createdLeave.id as string,
       }));
       await db.insert(notifications).values(notifData);
     }
 
-    res.status(201).json({ success: true, data: newLeave[0] });
+    return res.status(201).json({ success: true, data: createdLeave });
 
   } catch (error) {
     console.error("Error creating leave request:", error);
     if (error instanceof z.ZodError) {
       return res.status(400).json({ success: false, message: "Invalid data", errors: error.issues });
     }
-    res.status(500).json({ success: false, message: "Internal server error" });
+    return res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 
@@ -137,7 +177,7 @@ router.get("/admin", authenticate, async (req: Request, res: Response): Promise<
     // Fetch leaves for this company
     const companyLeaves = await db.execute(sql`
       SELECT 
-        lr.id, lr.start_date, lr.end_date, lr.description, lr.attachment_url, lr.status, lr.created_at,
+        lr.id, lr.start_date, lr.end_date, lr.description, lr.attachment_url, lr.status, lr.created_at, lr.rejection_reason,
         p.full_name as employee_name, p.avatar_url as employee_avatar,
         lc.name as category_name
       FROM leave_requests lr
@@ -159,10 +199,22 @@ router.put("/:id/status", authenticate, async (req: Request, res: Response): Pro
   try {
     const userAuth = (req as any).user;
     const leaveId = req.params.id;
-    const { status } = req.body; // "Disetujui" or "Ditolak"
+    const { status, rejection_reason } = req.body; // "Disetujui" or "Ditolak"
 
     if (status !== "Disetujui" && status !== "Ditolak") {
       return res.status(400).json({ success: false, message: "Invalid status." });
+    }
+
+    // Alasan penolakan wajib berupa string non-kosong jika status Ditolak
+    let trimmedReason: string | null = null;
+    if (status === "Ditolak") {
+      if (typeof rejection_reason !== "string" || !rejection_reason.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Alasan penolakan wajib diisi."
+        });
+      }
+      trimmedReason = rejection_reason.trim();
     }
     
     // Check management role and get active company_id via resolveTenant
@@ -175,27 +227,51 @@ router.put("/:id/status", authenticate, async (req: Request, res: Response): Pro
     }
     const companyId = tenant.companyId;
 
+    // Check existing leave request
+    const existingLeave = await db.execute(sql`
+      SELECT id, status, profile_id FROM leave_requests
+      WHERE id = ${leaveId} AND company_id = ${companyId}
+      LIMIT 1
+    `);
+
+    if (existingLeave.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Leave request not found or unauthorized." });
+    }
+
+    if (existingLeave.rows[0].status !== "Menunggu") {
+      return res.status(409).json({
+        success: false,
+        message: "Pengajuan izin ini sudah diproses sebelumnya dan tidak dapat diubah lagi."
+      });
+    }
+
     // Update status and create notification in a transaction
     const updateRes = await db.transaction(async (tx) => {
       const up = await tx.execute(sql`
         UPDATE leave_requests
-        SET status = ${status}, approved_by = ${userAuth.id}, approved_at = now(), updated_at = now()
-        WHERE id = ${leaveId} AND company_id = ${companyId}
-        RETURNING id, status, profile_id
+        SET 
+          status = ${status}, 
+          rejection_reason = ${trimmedReason},
+          approved_by = ${userAuth.id}, 
+          approved_at = now(), 
+          updated_at = now()
+        WHERE id = ${leaveId} AND company_id = ${companyId} AND status = 'Menunggu'
+        RETURNING id, status, profile_id, rejection_reason
       `);
 
       if (up.rows.length > 0) {
         const leaveData = up.rows[0];
         const isApproved = status === "Disetujui";
+        const notifMessage = isApproved 
+          ? "Pengajuan izin Anda telah disetujui." 
+          : `Pengajuan izin Anda ditolak. Alasan: "${trimmedReason}".`;
         
         await tx.insert(notifications).values({
           company_id: companyId,
           recipient_id: leaveData.profile_id as string,
           type: isApproved ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
           title: isApproved ? "Pengajuan Izin Disetujui" : "Pengajuan Izin Ditolak",
-          message: isApproved 
-            ? "Pengajuan izin Anda telah disetujui." 
-            : "Maaf, pengajuan izin Anda ditolak.",
+          message: notifMessage,
           reference_id: leaveData.id as string,
         });
       }
@@ -203,7 +279,7 @@ router.put("/:id/status", authenticate, async (req: Request, res: Response): Pro
     });
     
     if (updateRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Leave request not found or unauthorized." });
+      return res.status(409).json({ success: false, message: "Pengajuan izin sudah diproses sebelumnya." });
     }
 
     return res.status(200).json({ success: true, data: updateRes.rows[0] });

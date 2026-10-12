@@ -4,12 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ChevronLeft, RefreshCcw, ArrowRight, Plus, Minus, Target, 
-  X, Zap, HelpCircle, MapPin, Check, CheckCircle2
+  X, Zap, HelpCircle, MapPin, Check, CheckCircle2, AlertTriangle, Info
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 import { TopBar } from '@/components/TopBar';
 import { useCompany } from "@/context/CompanyContext";
+import { evaluateSchedule, CompanyScheduleData } from "@/lib/schedule";
 const LeafletMap = dynamic(() => import('@/components/MapLocation'), { 
   ssr: false,
   loading: () => <div className="w-full h-full bg-[#e6eedc] animate-pulse" />
@@ -28,6 +29,11 @@ export default function CheckinPage() {
   // Status State
   const [attendanceStatus, setAttendanceStatus] = useState<"NOT_CHECKED_IN" | "CHECKED_IN" | "CHECKED_OUT" | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
+  const [companySchedule, setCompanySchedule] = useState<CompanyScheduleData | null>(null);
+  const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
+  const [showEarlyCheckoutModal, setShowEarlyCheckoutModal] = useState<boolean>(false);
+  const [showLowAccuracyModal, setShowLowAccuracyModal] = useState<boolean>(false);
+  const [lowAccuracyConfirmed, setLowAccuracyConfirmed] = useState<boolean>(false);
 
   // Submit State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -110,6 +116,7 @@ export default function CheckinPage() {
   const fetchLocation = () => {
     setIsLocating(true);
     setLocationError(null);
+    setLowAccuracyConfirmed(false);
 
     if (!navigator.geolocation) {
       setLocationError("Geolokasi tidak didukung oleh browser Anda.");
@@ -120,20 +127,21 @@ export default function CheckinPage() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude, accuracy } = position.coords;
+        const roundedAccuracy = Math.round(accuracy);
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
           const data = await res.json();
           setLocation({
             lat: latitude,
             lng: longitude,
-            accuracy: Math.round(accuracy),
+            accuracy: roundedAccuracy,
             address: data.display_name || "Alamat tidak ditemukan"
           });
         } catch (error) {
           setLocation({
             lat: latitude,
             lng: longitude,
-            accuracy: Math.round(accuracy),
+            accuracy: roundedAccuracy,
             address: "Gagal mengambil alamat"
           });
         } finally {
@@ -144,11 +152,15 @@ export default function CheckinPage() {
         let msg = "Akses lokasi diperlukan untuk melakukan absensi.";
         if (error.code === 1 /* PERMISSION_DENIED */) {
           msg = "Akses lokasi ditolak. Izinkan akses lokasi di pengaturan browser untuk melanjutkan.";
+        } else if (error.code === 2 /* POSITION_UNAVAILABLE */) {
+          msg = "Informasi lokasi tidak tersedia. Pastikan GPS/layanan lokasi aktif.";
+        } else if (error.code === 3 /* TIMEOUT */) {
+          msg = "Waktu pencarian lokasi habis. Silakan klik Coba Lagi.";
         }
         setLocationError(msg);
         setIsLocating(false);
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   };
 
@@ -197,6 +209,28 @@ export default function CheckinPage() {
         const data = await res.json();
         if (res.ok) {
           setAttendanceStatus(data.data.status);
+          if (data.data?.company) {
+            setCompanySchedule(data.data.company);
+            if (data.data.company.server_time) {
+              const serverMs = new Date(data.data.company.server_time).getTime();
+              if (!isNaN(serverMs)) {
+                setServerOffsetMs(serverMs - Date.now());
+              }
+            }
+          } else {
+            // Fallback ke /companies/me jika company belum disertakan
+            try {
+              const compRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/me`, { headers });
+              if (compRes.ok) {
+                const compData = await compRes.json();
+                if (compData.data) {
+                  setCompanySchedule(compData.data);
+                }
+              }
+            } catch (e) {
+              console.error("Failed to load company schedule fallback", e);
+            }
+          }
         } else {
           setSubmitError(data.message || "Gagal memeriksa status kehadiran.");
         }
@@ -367,8 +401,30 @@ export default function CheckinPage() {
     );
   }
 
+  const scheduleEval = evaluateSchedule(companySchedule, serverOffsetMs);
   const isCheckOutMode = attendanceStatus === "CHECKED_IN";
+  const isCheckInBlocked = !isCheckOutMode && !scheduleEval.isCheckInOpen;
   const titleText = isCheckOutMode ? "Check-out" : "Check-in";
+  const isLowAccuracy = location !== null && location.accuracy > 100;
+
+  const handleTriggerSubmit = () => {
+    if (!location || !location.lat || !location.lng) {
+      setSubmitError("Titik lokasi belum tersedia.");
+      return;
+    }
+
+    // Validasi akurasi GPS: jika toleransi > 100m dan belum dikonfirmasi pengguna
+    if (location.accuracy > 100 && !lowAccuracyConfirmed) {
+      setShowLowAccuracyModal(true);
+      return;
+    }
+
+    if (isCheckOutMode && scheduleEval.isEarlyCheckout) {
+      setShowEarlyCheckoutModal(true);
+      return;
+    }
+    handleSubmit();
+  };
 
   return (
     <div className="flex flex-col min-h-[100dvh] w-full bg-[#fbfdfc] relative">
@@ -455,13 +511,49 @@ export default function CheckinPage() {
                       <span className="text-[10px] text-[#9ca3af] font-medium tracking-wide">
                         {location.lat.toFixed(7)}, {location.lng.toFixed(7)}
                       </span>
-                      <div className="flex items-center gap-1.5 bg-[#e4faed] px-2.5 py-1 rounded-full">
-                        <div className="w-1.5 h-1.5 bg-[#00a859] rounded-full" />
-                        <span className="text-[9px] font-bold text-[#1E4738]">Akurasi {location.accuracy}m</span>
-                      </div>
+                      {location.accuracy <= 100 ? (
+                        <div className="flex items-center gap-1.5 bg-[#e4faed] px-2.5 py-1 rounded-full">
+                          <div className="w-1.5 h-1.5 bg-[#00a859] rounded-full" />
+                          <span className="text-[9px] font-bold text-[#1E4738]">Akurasi Baik ({location.accuracy}m)</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                          <span className="text-[9px] font-bold text-amber-800">Akurasi Rendah ({location.accuracy}m &gt; 100m)</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
+
+                {/* Warning Banner jika Akurasi GPS > 100m */}
+                {isLowAccuracy && (
+                  <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-[16px] p-3 mb-4 text-amber-900 text-[12px]">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex flex-col flex-1">
+                      <span className="font-bold mb-0.5">Peringatan: Akurasi GPS Kurang Presisi</span>
+                      <span className="text-amber-800 leading-relaxed text-[11px] mb-2">
+                        Toleransi sinyal lokasi saat ini ±{location.accuracy}m (melebihi batas aman 100m). Titik alamat presensi berpotensi bergeser dari posisi sebenarnya.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={fetchLocation}
+                        className="self-start text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
+                      >
+                        <RefreshCcw className="w-3 h-3" />
+                        Perbarui Lokasi GPS
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Warning Banner jika Check-in belum dibuka / bukan hari kerja */}
+                {isCheckInBlocked && (
+                  <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-[14px] p-3 mb-4 text-amber-800 text-[12px] font-medium">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>{scheduleEval.reason}</span>
+                  </div>
+                )}
 
                 <div className="flex gap-3">
                   <button 
@@ -473,7 +565,12 @@ export default function CheckinPage() {
                   </button>
                   <button 
                     onClick={() => setStep(2)}
-                    className="flex-1 h-14 rounded-full bg-[#356E3B] hover:bg-[#1E4738] text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-lg transition-colors"
+                    disabled={isCheckInBlocked}
+                    className={`flex-1 h-14 rounded-full font-bold text-[14px] flex items-center justify-center gap-2 shadow-lg transition-colors ${
+                      isCheckInBlocked
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                        : 'bg-[#356E3B] hover:bg-[#1E4738] text-white'
+                    }`}
                   >
                     Ya, Lanjutkan
                     <ArrowRight className="w-4 h-4" strokeWidth={3} />
@@ -671,9 +768,28 @@ export default function CheckinPage() {
                       <span className="text-[12px] font-bold text-[#1E4738] leading-tight mb-1.5 pr-2">
                         {location?.address || "Alamat tidak ditemukan"}
                       </span>
-                      <span className="text-[10px] font-medium text-[#9ca3af] tracking-wide">
-                        ({location?.lat.toFixed(7)}, {location?.lng.toFixed(7)})
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-medium text-[#9ca3af] tracking-wide">
+                          ({location?.lat.toFixed(7)}, {location?.lng.toFixed(7)})
+                        </span>
+                        {location && (
+                          location.accuracy <= 100 ? (
+                            <span className="text-[9px] font-bold text-[#356E3B] bg-[#e4faed] px-2 py-0.5 rounded-full">
+                              ±{location.accuracy}m
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <AlertTriangle className="w-2.5 h-2.5" /> ±{location.accuracy}m (rendah)
+                            </span>
+                          )
+                        )}
+                      </div>
+                      {isLowAccuracy && (
+                        <div className="mt-2.5 flex items-start gap-1.5 p-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px]">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                          <span>Akurasi sinyal ±{location?.accuracy}m (melebihi batas 100m). Lokasi berpotensi kurang presisi.</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -691,10 +807,20 @@ export default function CheckinPage() {
               {submitError}
             </div>
           )}
+          {isCheckInBlocked && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[12px] font-medium flex items-center gap-2">
+              <Info className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{scheduleEval.reason}</span>
+            </div>
+          )}
           <button 
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="w-full h-14 bg-[#356E3B] hover:bg-[#1E4738] text-white rounded-full font-bold text-[15px] shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+            onClick={handleTriggerSubmit}
+            disabled={isSubmitting || isCheckInBlocked}
+            className={`w-full h-14 rounded-full font-bold text-[15px] shadow-lg transition-transform active:scale-95 disabled:active:scale-100 flex items-center justify-center gap-2 ${
+              isCheckInBlocked
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                : 'bg-[#356E3B] hover:bg-[#1E4738] text-white disabled:opacity-50'
+            }`}
           >
             {isSubmitting ? (
               <>
@@ -705,6 +831,90 @@ export default function CheckinPage() {
               isCheckOutMode ? "Simpan Check-out" : "Simpan Kehadiran"
             )}
           </button>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Pulang Lebih Awal */}
+      {showEarlyCheckoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-5 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[24px] max-w-sm w-full p-6 shadow-2xl flex flex-col items-center text-center">
+            <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mb-4 text-amber-600">
+              <AlertTriangle className="w-7 h-7" strokeWidth={2.2} />
+            </div>
+            <h3 className="text-[18px] font-bold text-[#111827] mb-2">
+              Konfirmasi Pulang Lebih Awal
+            </h3>
+            <p className="text-[13px] text-[#4B5563] leading-relaxed mb-6">
+              Jam pulang perusahaan adalah pukul <strong className="text-[#111827] font-bold">{scheduleEval.endTimeFormatted} WIB</strong>. Apakah Anda yakin ingin melakukan check-out sekarang sebelum jam pulang kerja?
+            </p>
+            <div className="flex w-full gap-3">
+              <button
+                type="button"
+                onClick={() => setShowEarlyCheckoutModal(false)}
+                className="flex-1 py-3.5 px-4 rounded-full border border-gray-200 text-[#4B5563] font-bold text-[14px] hover:bg-gray-50 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEarlyCheckoutModal(false);
+                  handleSubmit();
+                }}
+                className="flex-1 py-3.5 px-4 rounded-full bg-[#356E3B] hover:bg-[#1E4738] text-white font-bold text-[14px] shadow-md transition-colors"
+              >
+                Ya, Check-out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Akurasi GPS Rendah */}
+      {showLowAccuracyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-5 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[24px] max-w-sm w-full p-6 shadow-2xl flex flex-col items-center text-center">
+            <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mb-4 text-amber-600">
+              <AlertTriangle className="w-7 h-7" strokeWidth={2.2} />
+            </div>
+            <h3 className="text-[18px] font-bold text-[#111827] mb-2">
+              Akurasi GPS Rendah (±{location?.accuracy}m)
+            </h3>
+            <p className="text-[13px] text-[#4B5563] leading-relaxed mb-6">
+              Toleransi akurasi lokasi Anda saat ini ({location?.accuracy} meter) melebihi batas yang disarankan (&le; 100 meter). Hal ini dapat menyebabkan perbedaan titik atau alamat saat {isCheckOutMode ? "check-out" : "check-in"}.
+              <br /><br />
+              Pastikan GPS aktif dan berada di area terbuka untuk mendapatkan akurasi terbaik.
+            </p>
+            <div className="flex flex-col w-full gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLowAccuracyModal(false);
+                  setStep(1);
+                  fetchLocation();
+                }}
+                className="w-full py-3.5 px-4 rounded-full bg-[#356E3B] hover:bg-[#1E4738] text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-md transition-colors"
+              >
+                <RefreshCcw className="w-4 h-4" />
+                Perbarui Lokasi
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLowAccuracyModal(false);
+                  setLowAccuracyConfirmed(true);
+                  if (isCheckOutMode && scheduleEval.isEarlyCheckout) {
+                    setShowEarlyCheckoutModal(true);
+                  } else {
+                    handleSubmit();
+                  }
+                }}
+                className="w-full py-3 px-4 rounded-full border border-gray-200 text-[#4B5563] font-semibold text-[13px] hover:bg-gray-50 transition-colors"
+              >
+                Tetap Lanjutkan ({titleText})
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

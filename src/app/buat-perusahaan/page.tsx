@@ -18,11 +18,60 @@ export default function BuatPerusahaanPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+  const [isCopied, setIsCopied] = useState(false);
 
   const maxAlamat = 300;
 
   const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "http://192.168.100.11:3000";
   const qrUrl = `${BASE_URL}/gabung-perusahaan?code=${joinCode}`;
+
+  const handleSalinKode = async () => {
+    const kode = joinCode || "ABC123";
+    if (!kode) {
+      alert("Kode perusahaan tidak tersedia.");
+      return;
+    }
+
+    let berhasil = false;
+
+    // 1. Coba Clipboard API jika didukung (HTTPS / localhost)
+    if (typeof window !== "undefined" && navigator?.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(kode);
+        berhasil = true;
+      } catch (err) {
+        console.warn("navigator.clipboard.writeText gagal, mencoba fallback:", err);
+      }
+    }
+
+    // 2. Fallback execCommand untuk non-secure context (misal HTTP via IP LAN)
+    if (!berhasil && typeof document !== "undefined") {
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = kode;
+        textArea.style.position = "fixed";
+        textArea.style.top = "0";
+        textArea.style.left = "-9999px";
+        textArea.style.opacity = "0";
+        textArea.setAttribute("readonly", "");
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        berhasil = document.execCommand("copy");
+        document.body.removeChild(textArea);
+      } catch (fallbackErr) {
+        console.error("Fallback execCommand gagal:", fallbackErr);
+      }
+    }
+
+    if (berhasil) {
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+      alert("Kode berhasil disalin!");
+    } else {
+      alert("Gagal menyalin kode. Silakan salin secara manual.");
+    }
+  };
 
   const handleBagikanUndangan = async () => {
     const text = `Mari bergabung dengan perusahaan ${nama} di AbsenIN!\n\nKode perusahaan: ${joinCode}\n\nGunakan link berikut untuk bergabung:`;
@@ -182,8 +231,13 @@ export default function BuatPerusahaanPage() {
             <p className="text-[#64748B] text-[12px] font-medium">Kode Bergabung</p>
             <div className="flex items-center justify-between">
               <span className="text-[#1E293B] text-[24px] font-bold tracking-wider">{joinCode || "ABC123"}</span>
-              <button className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors">
-                <Copy className="w-5 h-5" />
+              <button 
+                type="button"
+                onClick={handleSalinKode}
+                title="Salin Kode Perusahaan"
+                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                {isCopied ? <Check className="w-5 h-5 text-[#356E3B]" /> : <Copy className="w-5 h-5" />}
               </button>
             </div>
           </div>

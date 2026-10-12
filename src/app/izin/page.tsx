@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ChevronLeft, Plus, Calendar, ChevronDown, Clock, Trash2, FileText, Send, UploadCloud, Paperclip, ExternalLink, XCircle, CheckCircle2, CircleDot, Circle } from "lucide-react";
+import { ChevronLeft, Plus, Calendar, ChevronDown, Clock, Trash2, FileText, Send, UploadCloud, Paperclip, ExternalLink, XCircle, CheckCircle2, CircleDot, Circle, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/bottom-nav";
@@ -17,6 +17,7 @@ type IzinRequest = {
   desc: string;
   dateStr: string;
   status: "Menunggu" | "Disetujui" | "Ditolak";
+  rejection_reason?: string;
 };
 
 export default function IzinPage() {
@@ -40,6 +41,8 @@ export default function IzinPage() {
   // State untuk form
   const [isAddingIzin, setIsAddingIzin] = useState(false);
   const [selectedIzinId, setSelectedIzinId] = useState<string | null>(null);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [isCheckingQuota, setIsCheckingQuota] = useState(false);
 
   const [kategori, setKategori] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -104,7 +107,7 @@ export default function IzinPage() {
 
   // Handler form submit
   const handleSubmit = async () => {
-    if (!startDate || !kategori) return;
+    if (isLoading || !startDate || !kategori) return;
     setIsLoading(true);
     
     try {
@@ -162,7 +165,7 @@ export default function IzinPage() {
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         // Refresh data
         await fetchCategoriesAndLeaves();
         
@@ -206,12 +209,81 @@ export default function IzinPage() {
   };
 
   const handleBack = () => {
-    if (isAddingIzin) {
+    if (showQuotaModal) {
+      setShowQuotaModal(false);
+    } else if (isAddingIzin) {
       setIsAddingIzin(false);
     } else if (selectedIzinId) {
       setSelectedIzinId(null);
     } else {
       router.back();
+    }
+  };
+
+  // Helper untuk mendapatkan tanggal kalender YYYY-MM-DD zona waktu Asia/Jakarta
+  const getJakartaDate = (dateInput?: string | Date) => {
+    const d = dateInput ? new Date(dateInput) : new Date();
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  };
+
+  // Handler saat tombol plus (+) ditekan: verifikasi kuota sebelum membuka form
+  const handleOpenAddIzin = async () => {
+    if (isCheckingQuota) return;
+    setIsCheckingQuota(true);
+
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
+
+      // Ambil data terbaru dari backend untuk memastikan status kuota akurat
+      const leaveRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves", { headers });
+      if (!leaveRes.ok) {
+        throw new Error("Gagal memeriksa status kuota pengajuan izin. Silakan coba lagi.");
+      }
+
+      const leaveData = await leaveRes.json();
+      if (!leaveData.success || !Array.isArray(leaveData.data)) {
+        throw new Error(leaveData.message || "Gagal memverifikasi status pengajuan izin.");
+      }
+
+      // Perbarui list pengajuan dengan data terkini
+      setPengajuanList(leaveData.data);
+
+      const todayJakarta = getJakartaDate();
+      const hasBlockingLeaveToday = leaveData.data.some((item: any) => {
+        if (!item.created_at || item.deleted_at) return false;
+        const itemDateJakarta = getJakartaDate(item.created_at);
+        const isToday = itemDateJakarta === todayJakarta;
+        const isBlockingStatus = item.status === "Menunggu" || item.status === "Disetujui";
+        return isToday && isBlockingStatus;
+      });
+
+      if (hasBlockingLeaveToday) {
+        setShowQuotaModal(true);
+      } else {
+        setIsAddingIzin(true);
+      }
+    } catch (error) {
+      console.error("Error checking leave quota:", error);
+      alert((error as Error)?.message || "Gagal memeriksa kuota pengajuan izin.");
+    } finally {
+      setIsCheckingQuota(false);
     }
   };
 
@@ -246,8 +318,9 @@ export default function IzinPage() {
         rightAction={
           (!isAddingIzin && !selectedIzinId) ? (
             <button 
-              onClick={() => setIsAddingIzin(true)}
-              className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30"
+              onClick={handleOpenAddIzin}
+              disabled={isCheckingQuota}
+              className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30 disabled:opacity-50"
             >
               <Plus className="w-6 h-6" />
             </button>
@@ -380,11 +453,11 @@ export default function IzinPage() {
 
             <button 
               onClick={handleSubmit}
-              disabled={!startDate || !noteText}
+              disabled={isLoading || !startDate || !noteText}
               className="w-full bg-[#356E3B] hover:bg-[#2A582F] disabled:bg-[#A3B8A8] text-white rounded-full py-4 mt-2 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98]"
             >
               <Send className="w-[18px] h-[18px]" strokeWidth={2.5} />
-              Kirim Pengajuan
+              {isLoading ? "Mengirim..." : "Kirim Pengajuan"}
             </button>
 
           </div>
@@ -471,6 +544,21 @@ export default function IzinPage() {
                 </div>
               )}
             </div>
+
+            {/* Rejection Alert Banner if status is Ditolak */}
+            {selectedIzin.status === "Ditolak" && (
+              <div className="bg-[#FEF2F2] rounded-[24px] p-5 border border-[#FEE2E2] flex items-start gap-3.5 shadow-sm">
+                <div className="w-9 h-9 rounded-full bg-[#FEE2E2] flex items-center justify-center shrink-0 text-[#EF4444] mt-0.5">
+                  <AlertCircle className="w-5 h-5" strokeWidth={2.5} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[13px] font-bold text-[#991B1B]">Alasan Penolakan</span>
+                  <p className="text-[13px] text-[#7F1D1D] leading-relaxed">
+                    {selectedIzin.rejection_reason || "Tidak ada alasan penolakan yang dicantumkan."}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Tracking Status Card */}
             <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB]">
@@ -570,6 +658,12 @@ export default function IzinPage() {
                       <div className="flex flex-col gap-0.5 pt-0.5">
                         <span className="text-[#EF4444] text-[15px] font-bold leading-tight">Izin Ditolak</span>
                         <span className="text-[#6B7280] text-[12px]">Persetujuan final (Ditolak).</span>
+                        {selectedIzin.rejection_reason && (
+                          <div className="text-[12px] text-[#7F1D1D] bg-[#FEF2F2] border border-[#FEE2E2] rounded-lg p-2.5 mt-1.5 leading-snug">
+                            <span className="font-semibold text-[#991B1B]">Alasan: </span>
+                            {selectedIzin.rejection_reason}
+                          </div>
+                        )}
                       </div>
                     </div>
                     
@@ -708,6 +802,13 @@ export default function IzinPage() {
                       <Calendar className="w-4 h-4 text-[#6EA874]" strokeWidth={2.5} />
                       <span className="text-[#6B7280] text-[13px] font-medium">{dateStr}</span>
                     </div>
+
+                    {req.status === "Ditolak" && req.rejection_reason && (
+                      <div className="text-[12px] text-[#7F1D1D] bg-[#FEF2F2] border border-[#FEE2E2] rounded-lg px-2.5 py-1.5 mt-0.5 leading-snug">
+                        <span className="font-semibold text-[#991B1B]">Alasan Penolakan: </span>
+                        {req.rejection_reason}
+                      </div>
+                    )}
                   </div>
                 )})}
 
@@ -718,6 +819,30 @@ export default function IzinPage() {
       </div>
 
       {(!isAddingIzin && !selectedIzinId) && <BottomNav activeTab="izin" />}
+
+      {/* Modal Kuota Pengajuan Harian */}
+      {showQuotaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-5 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[24px] max-w-sm w-full p-6 shadow-2xl flex flex-col items-center text-center">
+            <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mb-4 text-amber-600">
+              <AlertCircle className="w-7 h-7" strokeWidth={2.2} />
+            </div>
+            <h3 className="text-[18px] font-bold text-[#111827] mb-2">
+              Kamu Sudah Mengajukan Izin Hari Ini
+            </h3>
+            <p className="text-[13px] text-[#4B5563] leading-relaxed mb-6">
+              Pengajuan izin kamu hari ini masih menunggu persetujuan atau sudah disetujui. Kamu bisa mengajukan kembali jika pengajuan sebelumnya ditolak.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowQuotaModal(false)}
+              className="w-full py-3.5 px-4 rounded-full bg-[#356E3B] hover:bg-[#2A582F] text-white font-bold text-[14px] shadow-sm transition-colors active:scale-[0.98]"
+            >
+              Mengerti
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { useCompany } from "@/context/CompanyContext";
 
 export default function KelolaKaryawanPage() {
   const router = useRouter();
-  const { activeCompanyId, activeCompany, activeRole, isLoading: isCompanyLoading } = useCompany();
+  const { activeCompanyId, activeCompany, activeRole, isLoading: isCompanyLoading, refreshMemberships } = useCompany();
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function KelolaKaryawanPage() {
 // ==========================================
 function AdminKaryawanView() {
   const router = useRouter();
-  const { activeCompanyId, activeCompany, activeRole } = useCompany();
+  const { activeCompanyId, activeCompany, activeRole, refreshMemberships } = useCompany();
 
   // If user switches to a company where they are just a member, redirect back to dashboard
   useEffect(() => {
@@ -277,12 +277,15 @@ function AdminKaryawanView() {
     setSaveRoleError("");
 
     try {
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/companies/employees/${selectedEmployeeForRole.id}/roles`, {
         method: "PATCH",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
+        headers,
         body: JSON.stringify({ roles: newRoles })
       });
 
@@ -290,6 +293,7 @@ function AdminKaryawanView() {
       if (data.success) {
         setSelectedEmployeeForRole(null);
         fetchEmployeesData(token);
+        await refreshMemberships();
       } else {
         setSaveRoleError(data.message || "Gagal menyimpan hak akses");
       }
@@ -811,7 +815,11 @@ function AdminKaryawanView() {
               filteredEmployees.map((item) => {
                 let roleText = 'Karyawan';
                 let roleColorClass = 'bg-gray-100 text-gray-500';
-                if (item.roles?.includes('Admin')) {
+                const isOwner = (item.role || '').toLowerCase() === 'owner' || item.roles?.includes('Owner');
+                if (isOwner) {
+                  roleText = 'Owner';
+                  roleColorClass = 'bg-[#eef5f0] text-[#1E4738] font-bold';
+                } else if (item.roles?.includes('Admin')) {
                   roleText = 'Admin';
                   roleColorClass = 'bg-[#eef5f0] text-[#356E3B]';
                 } else if (item.roles?.includes('Manager')) {
@@ -825,8 +833,9 @@ function AdminKaryawanView() {
                 return (
                  <div 
                    key={item.id} 
-                   className="flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] cursor-pointer hover:border-[#dce9df] transition-colors bg-white hover:bg-gray-50/50"
+                   className={`flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] transition-colors bg-white ${isOwner ? 'cursor-default' : 'cursor-pointer hover:border-[#dce9df] hover:bg-gray-50/50'}`}
                    onClick={() => {
+                     if (isOwner) return;
                      setSelectedEmployeeForRole(item);
                      if (item.roles?.includes('Admin')) setSelectedRole('Admin');
                      else if (item.roles?.includes('Manager')) setSelectedRole('Manager');
@@ -881,19 +890,21 @@ function AdminKaryawanView() {
                          <span>Keluarkan</span>
                        </button>
                      )}
-                     <button
-                       type="button"
-                       onClick={() => {
-                         setSelectedEmployeeForRole(item);
-                         if (item.roles?.includes('Admin')) setSelectedRole('Admin');
-                         else if (item.roles?.includes('Manager')) setSelectedRole('Manager');
-                         else setSelectedRole('Employee');
-                       }}
-                       className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-[#356E3B] hover:bg-gray-100 transition-colors"
-                       title="Pengaturan akses"
-                     >
-                       <ChevronRight className="w-4 h-4" />
-                     </button>
+                     {!isOwner && (
+                       <button
+                         type="button"
+                         onClick={() => {
+                           setSelectedEmployeeForRole(item);
+                           if (item.roles?.includes('Admin')) setSelectedRole('Admin');
+                           else if (item.roles?.includes('Manager')) setSelectedRole('Manager');
+                           else setSelectedRole('Employee');
+                         }}
+                         className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-[#356E3B] hover:bg-gray-100 transition-colors"
+                         title="Pengaturan akses"
+                       >
+                         <ChevronRight className="w-4 h-4" />
+                       </button>
+                     )}
                    </div>
                  </div>
                 );

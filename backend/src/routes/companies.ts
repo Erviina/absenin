@@ -13,7 +13,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
-const createCompanySchema = z.object({
+const createCompanySchema = z.object({ 
   name: z.string().min(1, "Nama perusahaan wajib diisi"),
   address: z.string().min(1, "Alamat wajib diisi"),
   category_id: z.string().uuid().optional().nullable(),
@@ -357,14 +357,24 @@ router.get("/employees", authenticate, async (req: Request, res: Response): Prom
     `);
     
     const employees = membersRes.rows.map((row: any) => {
-      const userRoles = [row.role ? row.role.charAt(0).toUpperCase() + row.role.slice(1) : "Employee"];
-      if (!userRoles.includes("Employee")) userRoles.push("Employee");
+      const cmRole = (row.role || "member").toLowerCase();
+      let userRoles: string[] = ["Employee"];
+      if (cmRole === "owner") {
+        userRoles = ["Owner", "Admin", "Employee"];
+      } else if (cmRole === "admin") {
+        userRoles = ["Admin", "Employee"];
+      } else if (cmRole === "manager") {
+        userRoles = ["Manager", "Employee"];
+      } else {
+        userRoles = ["Employee"];
+      }
+
       return {
         id: row.id,
         full_name: row.full_name,
         email: row.email,
         avatar_url: row.avatar_url,
-        role: row.role,
+        role: cmRole,
         roles: userRoles
       };
     });
@@ -598,62 +608,88 @@ router.patch("/employees/:employeeId/roles", authenticate, async (req: Request, 
     }
     const { roles } = parseResult.data;
 
-    // 1. Get Admin's company_id
-    const adminProfileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${user.id}
-    `);
-    
-    if (adminProfileRes.rows.length === 0 || !adminProfileRes.rows[0].company_id) {
+    // 1. Resolve tenant for active company and verify management authorization
+    const tenant = await resolveTenant(req, user.id);
+    if (!tenant) {
       return res.status(404).json({
         success: false,
-        message: "Anda tidak terhubung ke perusahaan manapun",
+        message: "Perusahaan tidak ditemukan atau Anda belum bergabung dengan perusahaan",
       });
     }
-    const companyId = adminProfileRes.rows[0].company_id;
 
-    // 2. Verify if user is an Admin
-    const roleRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${user.id} AND role = 'Admin'
-    `);
-    if (roleRes.rows.length === 0) {
+    if (!tenant.isManagement || (tenant.role !== "owner" && tenant.role !== "admin")) {
       return res.status(403).json({
         success: false,
-        message: "Forbidden: Hanya Admin yang dapat mengubah hak akses",
+        message: "Forbidden: Hanya Owner atau Admin yang dapat mengubah hak akses",
       });
     }
 
-    // Self Role Safety
-    if (user.id === employeeId && !roles.includes('Admin')) {
+    const companyId = tenant.companyId;
+
+    // Self Role Safety: Admin cannot revoke their own Admin access
+    if (user.id === employeeId && !roles.includes("Admin")) {
       return res.status(400).json({
         success: false,
         message: "Anda tidak dapat menghapus akses Admin milik Anda sendiri",
       });
     }
 
-    // 3. Verify target employee
-    const targetProfileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${employeeId} AND deleted_at IS NULL
+    // 2. Verify target employee in active company
+    const targetMemberRes = await db.execute(sql`
+      SELECT cm.role, cm.status, p.id
+      FROM company_members cm
+      JOIN profiles p ON p.id = cm.profile_id
+      WHERE cm.company_id = ${companyId}
+        AND cm.profile_id = ${employeeId}
+        AND cm.deleted_at IS NULL
+        AND p.deleted_at IS NULL
+      LIMIT 1
     `);
-    if (targetProfileRes.rows.length === 0) {
+
+    if (targetMemberRes.rows.length === 0 || targetMemberRes.rows[0].status !== "active") {
       return res.status(404).json({
         success: false,
-        message: "Karyawan tidak ditemukan",
-      });
-    }
-    if (targetProfileRes.rows[0].company_id !== companyId) {
-      return res.status(403).json({
-        success: false,
-        message: "Karyawan bukan bagian dari perusahaan Anda",
+        message: "Karyawan tidak ditemukan dalam perusahaan ini",
       });
     }
 
-    // 4. Update roles using transaction
+    const currentTargetRole = (targetMemberRes.rows[0].role as string || "member").toLowerCase();
+
+    // 3. Do not allow changing Owner role through employee role update
+    if (currentTargetRole === "owner") {
+      return res.status(400).json({
+        success: false,
+        message: "Role Owner tidak dapat diubah melalui alur perubahan role karyawan",
+      });
+    }
+
+    // 4. Determine roles to set: always preserve Employee role
+    const rolesToSet = Array.from(new Set(["Employee", ...roles]));
+    let targetCompanyRole: "admin" | "manager" | "member" = "member";
+    if (rolesToSet.includes("Admin")) {
+      targetCompanyRole = "admin";
+    } else if (rolesToSet.includes("Manager")) {
+      targetCompanyRole = "manager";
+    } else {
+      targetCompanyRole = "member";
+    }
+
+    // 5. Update both company_members and profile_roles in a single transaction
     await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE company_members
+        SET role = ${targetCompanyRole}, updated_at = now()
+        WHERE company_id = ${companyId}
+          AND profile_id = ${employeeId}
+          AND role != 'owner'
+          AND deleted_at IS NULL
+      `);
+
       await tx.execute(sql`
         DELETE FROM profile_roles WHERE profile_id = ${employeeId}
       `);
-      
-      for (const role of roles) {
+
+      for (const role of rolesToSet) {
         await tx.execute(sql`
           INSERT INTO profile_roles (profile_id, role)
           VALUES (${employeeId}, ${role})
@@ -664,6 +700,12 @@ router.patch("/employees/:employeeId/roles", authenticate, async (req: Request, 
     return res.status(200).json({
       success: true,
       message: "Hak akses berhasil diperbarui",
+      data: {
+        employee_id: employeeId,
+        company_id: companyId,
+        role: targetCompanyRole,
+        roles: rolesToSet,
+      }
     });
   } catch (error: any) {
     console.error("Update employee roles error:", error);

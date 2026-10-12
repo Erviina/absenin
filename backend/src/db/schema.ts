@@ -138,6 +138,7 @@ export const leaveRequests = pgTable("leave_requests", {
   status: text("status"), // USER-DEFINED in pg, mapped as text in drizzle
   approved_at: timestamp("approved_at", { withTimezone: true }),
   approved_by: uuid("approved_by"),
+  rejection_reason: text("rejection_reason"),
   created_at: timestamp("created_at", { withTimezone: true }),
   updated_at: timestamp("updated_at", { withTimezone: true }),
   deleted_at: timestamp("deleted_at", { withTimezone: true }),
