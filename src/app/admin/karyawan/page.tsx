@@ -444,11 +444,11 @@ function AdminKaryawanView() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       <TopBar 
         title="Kelola Karyawan" 
-        showCompanySwitcher={true}
         rightAction={
           <button 
             onClick={() => setIsBarcodeModalOpen(true)} 
-            className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-[10px] flex items-center justify-center transition-colors"
+            className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all z-10"
+            aria-label="Kode QR Perusahaan"
           >
             <QrCode className="w-5 h-5 text-white" />
           </button>

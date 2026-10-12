@@ -166,7 +166,9 @@ export function CompanySwitcher({ compact = false, variant = "light" }: CompanyS
       {/* Switcher Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-[16px] transition-all active:scale-[0.98] max-w-[260px] cursor-pointer ${
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-[16px] transition-all active:scale-[0.98] ${
+          compact ? "max-w-[130px] sm:max-w-[180px]" : "max-w-[260px]"
+        } cursor-pointer ${
           isDark
             ? "bg-white/20 hover:bg-white/30 border border-white/25 text-white backdrop-blur-sm"
             : "bg-[#EAF3ED] hover:bg-[#DCEEE0] border border-[#BFDFCA] text-[#1E4738] shadow-[0_1px_3px_rgba(0,0,0,0.04)]"

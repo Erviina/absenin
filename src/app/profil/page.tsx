@@ -317,12 +317,6 @@ export default function ProfilPage() {
               <Building2 className="w-4 h-4 text-[#356E3B]" />
               <span className="text-[#6B7280] text-[11px] font-bold uppercase tracking-wider">Organisasi / Komunitas Aktif</span>
             </div>
-            <button 
-              onClick={() => router.push("/cek-perusahaan?from=profil")}
-              className="text-[#1E4738] text-[12px] font-bold hover:underline flex items-center gap-0.5"
-            >
-              Kelola / Gabung <ChevronRight className="w-3.5 h-3.5" />
-            </button>
           </div>
           <CompanySwitcher />
 

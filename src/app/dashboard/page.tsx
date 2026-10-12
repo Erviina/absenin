@@ -1,19 +1,26 @@
 "use client";
 
-import { Bell, MapPin, ArrowRight, ChevronDown, ChevronUp, User, Building2, Check, ChevronRight } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { 
+  Bell, 
+  MapPin, 
+  ArrowRight, 
+  ChevronDown, 
+  Briefcase,
+  Users,
+  Building2
+} from "lucide-react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
-import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useCompany } from "@/context/CompanyContext";
 import { evaluateSchedule, CompanyScheduleData } from "@/lib/schedule";
+// import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { activeCompanyId, activeRole, refreshMemberships } = useCompany();
+  const { activeCompanyId, activeRole } = useCompany();
 
-  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const profileDropdownRef = useRef<HTMLDivElement>(null);
+  const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
 
   const [user, setUser] = useState<any>(null);
   const [news, setNews] = useState<any[]>([]);
@@ -26,20 +33,10 @@ export default function DashboardPage() {
   const [companySchedule, setCompanySchedule] = useState<CompanyScheduleData | null>(null);
   const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
 
-  // Close dropdown whenever active company or active role changes
+  // Close drawer whenever active company or active role changes
   useEffect(() => {
-    setIsProfileDropdownOpen(false);
+    setIsContextDrawerOpen(false);
   }, [activeCompanyId, activeRole]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
-        setIsProfileDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -130,64 +127,39 @@ export default function DashboardPage() {
     fetchData();
   }, [router, activeCompanyId]);
 
-  const scheduleEval = evaluateSchedule(companySchedule, serverOffsetMs);
-
-  let ctaText = "Check In";
-  let isCtaDisabled = false;
-
-  if (isAttendanceLoading) {
-    ctaText = "Memuat...";
-    isCtaDisabled = true;
-  } else if (attendanceError) {
-    ctaText = "Gagal Memuat";
-    isCtaDisabled = true;
-  } else if (attendanceStatus === "CHECKED_OUT") {
-    ctaText = "Absensi Selesai";
-    isCtaDisabled = true;
-  } else if (attendanceStatus === "CHECKED_IN") {
-    ctaText = "Check Out";
-    isCtaDisabled = false;
-  } else if (attendanceStatus === "NOT_CHECKED_IN") {
-    if (!scheduleEval.isCheckInOpen) {
-      ctaText = "Check In (Belum Dibuka)";
-      isCtaDisabled = true;
-    } else {
-      ctaText = "Check In";
-      isCtaDisabled = false;
-    }
-  }
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       
-      {/* Header */}
-      <div className="flex justify-between items-center px-6 pt-6 pb-4 bg-[#fbfdfc] sticky top-0 z-20">
-        <div className="flex items-center gap-3 relative">
-          
-          {/* Avatar (Click to Profile) */}
+      {/* Top Header: Profil & Notifikasi */}
+      <div className="flex justify-between items-center px-6 pt-9 sm:pt-10 pb-3.5 bg-[#fbfdfc]">
+        {/* Avatar & Greeting */}
+        <div className="flex items-center gap-3 min-w-0">
           <div 
             onClick={() => router.push("/profil")}
-            className="cursor-pointer shrink-0"
+            className="cursor-pointer shrink-0 relative group"
+            title="Lihat Profil"
           >
             {user?.avatarUrl && !avatarError ? (
-            <img
-              src={user.avatarUrl}
-              alt="Avatar"
-              className="w-[46px] h-[46px] rounded-full shrink-0 object-cover"
-              onError={() => setAvatarError(true)}
-            />
-          ) : (
-            <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full"></div>
-          )}
+              <img
+                src={user.avatarUrl}
+                alt="Avatar"
+                className="w-[46px] h-[46px] rounded-full shrink-0 object-cover ring-2 ring-[#1E4738]/10 group-hover:ring-[#1E4738]/30 transition-all shadow-xs"
+                onError={() => setAvatarError(true)}
+              />
+            ) : (
+              <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full flex items-center justify-center text-[#1E4738] font-bold text-[16px] shadow-xs">
+                {user?.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+              </div>
+            )}
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a859] border-2 border-white rounded-full"></div>
           </div>
 
           {/* Name & Dropdown Toggle */}
           {(() => {
-            const isManagement = Boolean(
-              (activeRole && ["owner", "admin", "manager"].includes(activeRole)) ||
-              (user?.activeRole && ["owner", "admin", "manager"].includes(user.activeRole)) ||
-              user?.isManagement
-            );
+            const isManagement = activeRole 
+              ? ["owner", "admin", "manager"].includes(activeRole) 
+              : Boolean(user?.isManagement || (user?.roles?.includes("Admin") || user?.roles?.includes("Manager")));
 
             return (
               <>
@@ -273,24 +245,69 @@ export default function DashboardPage() {
           })()}
         </div>
 
-        <div className="flex items-center gap-2">
-          <CompanySwitcher />
-          <button 
-            className="w-10 h-10 rounded-full bg-[#f4f9f6] border border-[#eef5f0] flex items-center justify-center relative active:scale-95 transition-transform"
-            onClick={() => router.push("/notifikasi")}
-            title="Notifikasi"
-          >
-            <Bell className="w-5 h-5 text-[#1E4738]" strokeWidth={1.8} />
-            {unreadCount > 0 && (
-              <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#00a859] border-[2px] border-white rounded-full"></div>
-            )}
-          </button>
+        {/* Notifikasi Button */}
+        <button 
+          className="w-10 h-10 rounded-full bg-white border border-[#E5E7EB] shadow-xs flex items-center justify-center relative hover:bg-[#F9FAFB] active:scale-95 transition-transform shrink-0 cursor-pointer"
+          onClick={() => router.push("/notifikasi")}
+          title="Notifikasi"
+        >
+          <Bell className="w-5 h-5 text-[#1E4738]" strokeWidth={1.8} />
+          {unreadCount > 0 && (
+            <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#00a859] border-2 border-white rounded-full"></div>
+          )}
+        </button>
+      </div>
+
+      {/* Workspace Context Bar (Tenant & Mode Akses Minimalis) */}
+      <div className="px-6 pt-1.5 pb-4">
+        <div 
+          onClick={() => setIsContextDrawerOpen(true)}
+          className="w-full bg-white hover:bg-[#F9FCFA] border border-[#DEEAE0] rounded-[22px] py-3.5 px-4 flex items-center justify-between shadow-[0_4px_16px_rgba(30,71,56,0.04)] cursor-pointer transition-all active:scale-[0.99] group"
+          title="Kelola Perusahaan & Peran Akun"
+        >
+          {/* Active Company & Category */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 rounded-[14px] bg-[#1E4738] text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+              {(() => {
+                const CatIcon = getCategoryIcon(activeCompany?.category?.code);
+                return <CatIcon className="w-5 h-5" />;
+              })()}
+            </div>
+            <div className="flex flex-col min-w-0 text-left">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[14px] font-bold text-[#111827] truncate group-hover:text-[#1E4738] transition-colors">
+                  {activeCompany?.name || "Pilih Perusahaan"}
+                </span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border capitalize shrink-0 font-bold ${getRoleBadgeStyle(activeRole)}`}>
+                  {activeRole || "Member"}
+                </span>
+              </div>
+              <span className="text-[11.5px] text-[#5C786C] font-medium leading-none mt-1 truncate">
+                {activeCompany?.category?.name || "Organisasi"}
+              </span>
+            </div>
+          </div>
+
+          {/* Active Mode Tag & Trigger */}
+          <div className="flex items-center gap-2 pl-3 border-l border-gray-100 shrink-0">
+            <div className="flex items-center gap-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#1E4738] border border-[#DCFCE7] px-2.5 py-1 rounded-full text-[11px] font-bold shadow-2xs transition-colors">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
+              <span>Personal</span>
+            </div>
+            <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
+          </div>
         </div>
       </div>
 
+      {/* Drawer Bottom Sheet: Peralihan Akun & Perusahaan */}
+      <AccountContextDrawer 
+        isOpen={isContextDrawerOpen}
+        onClose={() => setIsContextDrawerOpen(false)}
+        currentMode="personal"
+      />
 
       {/* Main Content */}
-      <div className="flex-1 px-6 pt-4 flex flex-col gap-8">
+      <div className="flex-1 px-6 pt-0 flex flex-col gap-6">
         
         {/* Hero Section */}
         <div className="relative w-full rounded-[24px] mb-2 bg-[#dce9df] overflow-hidden min-h-[164px]">
@@ -327,7 +344,11 @@ export default function DashboardPage() {
             >
               <MapPin className="w-[18px] h-[18px]" strokeWidth={2.5} />
               <span className="font-bold text-[14px]">
-                {ctaText}
+                {isAttendanceLoading 
+                  ? "Memuat..." 
+                  : attendanceError 
+                    ? "Gagal Memuat" 
+                    : (attendanceStatus === "CHECKED_IN" ? "Check Out" : "Check In")}
               </span>
               <ArrowRight className="w-5 h-5 ml-1" strokeWidth={2.5} />
             </button>

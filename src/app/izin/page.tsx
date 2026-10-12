@@ -322,7 +322,7 @@ export default function IzinPage() {
               disabled={isCheckingQuota}
               className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white transition-colors hover:bg-white/30 disabled:opacity-50"
             >
-              <Plus className="w-6 h-6" />
+              <Plus className="w-6 h-6 text-white" />
             </button>
           ) : null
         }
