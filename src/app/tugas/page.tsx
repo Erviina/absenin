@@ -7,6 +7,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { SwipeableTaskItem } from "@/components/SwipeableTaskItem";
 import { TopBar } from "@/components/TopBar";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
+import { CustomTimePicker } from "@/components/CustomTimePicker";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Badge } from "@/components/Badge";
 
@@ -374,16 +375,12 @@ export default function TugasPage() {
                     value={taskDate}
                     onChange={setTaskDate}
                   />
-                  <div className="flex-1 relative">
-                    <Clock className="w-[18px] h-[18px] text-[#356E3B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
-                    <input 
-                      type="time" 
-                      value={taskTime}
-                      onChange={(e) => setTaskTime(e.target.value)}
-                      onClick={(e) => e.currentTarget.showPicker && e.currentTarget.showPicker()}
-                      className="w-full border border-[#E5E7EB] rounded-[14px] pl-10 pr-4 py-3.5 text-[14px] font-medium text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white [&::-webkit-calendar-picker-indicator]:hidden cursor-pointer"
-                    />
-                  </div>
+                  <CustomTimePicker
+                    value={taskTime}
+                    onChange={setTaskTime}
+                    placeholder="Pilih Waktu"
+                    className="flex-1"
+                  />
                 </div>
               </div>
 
