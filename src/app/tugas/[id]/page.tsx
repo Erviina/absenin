@@ -3,33 +3,52 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
-import { Clock, CheckCircle2, AlignLeft, Calendar } from "lucide-react";
+import { Clock, CheckCircle2, AlignLeft, Calendar, Users, Share2 } from "lucide-react";
+import { formatDate } from "@/lib/dateUtils";
+import { useDialog } from "@/context/DialogContext";
+import { shareContent } from "@/lib/shareUtils";
+import { Badge } from "@/components/Badge";
 
 export default function TugasDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const { showToast } = useDialog();
   
   const [task, setTask] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const handleShare = () => {
+    if (!task) return;
+    shareContent({
+      title: task.title,
+      text: task.title,
+      path: `/tugas/${id}`,
+      onToast: showToast,
+    });
+  };
 
   useEffect(() => {
     const fetchTask = async () => {
       try {
         const token = localStorage.getItem("accessToken");
-        if (!token) return;
+        if (!token) {
+          router.replace(`/login?redirect=${encodeURIComponent(`/tugas/${id}`)}`);
+          return;
+        }
         
-        // We fetch all tasks and filter by ID, 
-        // since we don't have a GET /tasks/:id endpoint yet, or we can just find it.
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", {
-          headers: { "Authorization": "Bearer " + token }
-        });
-        
+        const headers: Record<string, string> = { Authorization: "Bearer " + token };
+        let res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tasks/${id}`, { headers });
         if (res.ok) {
-          const data = await res.json();
-          const t = data.find((x: any) => x.id === id);
-          if (t) {
-            setTask(t);
+          const t = await res.json();
+          setTask(t);
+        } else {
+          // Fallback to fetch all tasks and find by id
+          res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tasks`, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            const t = Array.isArray(data) ? data.find((x: any) => x.id === id) : null;
+            if (t) setTask(t);
           }
         }
       } catch (err) {
@@ -40,7 +59,7 @@ export default function TugasDetailPage() {
     };
     
     fetchTask();
-  }, [id]);
+  }, [id, router]);
 
   if (loading) {
     return (
@@ -66,7 +85,22 @@ export default function TugasDetailPage() {
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
-      <TopBar title="Detail Tugas" onBack={() => router.back()} />
+      <TopBar 
+        title="Detail Tugas" 
+        onBack={() => router.back()} 
+        rightAction={
+          task ? (
+            <button
+              onClick={handleShare}
+              className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all"
+              aria-label="Bagikan Tugas"
+              title="Bagikan Tugas"
+            >
+              <Share2 className="w-5 h-5 text-white" />
+            </button>
+          ) : null
+        }
+      />
 
       <div className="px-6 pt-6 pb-20 flex flex-col gap-6">
         
@@ -76,18 +110,29 @@ export default function TugasDetailPage() {
             <h1 className={`text-[18px] font-bold leading-snug ${task.completed ? "text-[#9CA3AF] line-through" : "text-[#111827]"}`}>
               {task.title}
             </h1>
-            <div className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-bold ${task.type === 'group' ? 'bg-[#E5F0FF] text-[#2563EB]' : 'bg-[#E8F3EB] text-[#356E3B]'}`}>
+            <Badge variant={task.type === 'group' ? 'info' : 'success'} size="sm" uppercase>
               {task.type === 'group' ? 'Grup' : 'Personal'}
-            </div>
+            </Badge>
           </div>
           
-          <div className="flex items-center gap-2 mt-2">
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full ${task.completed ? 'bg-[#E8F3EB]' : 'bg-gray-100'}`}>
-              <CheckCircle2 className={`w-4 h-4 ${task.completed ? 'text-[#356E3B]' : 'text-gray-400'}`} />
+          <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-50">
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${task.completed ? 'bg-[#E8F3EB]' : 'bg-gray-100'}`}>
+                <CheckCircle2 className={`w-4 h-4 ${task.completed ? 'text-[#356E3B]' : 'text-gray-400'}`} />
+              </div>
+              <span className={`text-[13px] font-medium ${task.completed ? 'text-[#356E3B]' : 'text-gray-500'}`}>
+                {task.completed ? 'Sudah Selesai' : 'Belum Selesai'}
+              </span>
             </div>
-            <span className={`text-[13px] font-medium ${task.completed ? 'text-[#356E3B]' : 'text-gray-500'}`}>
-              {task.completed ? 'Sudah Selesai' : 'Belum Selesai'}
-            </span>
+
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F3EB] text-[#356E3B] text-[12px] font-bold hover:bg-[#D1E5D5] active:scale-95 transition-all shadow-xs"
+              aria-label="Bagikan Tugas"
+            >
+              <Share2 className="w-3.5 h-3.5 text-[#356E3B]" />
+              <span>Bagikan</span>
+            </button>
           </div>
         </div>
 
@@ -104,7 +149,7 @@ export default function TugasDetailPage() {
                 </div>
                 <div>
                   <p className="text-[11px] text-[#6B7280] font-medium">Tanggal</p>
-                  <p className="text-[14px] font-bold text-[#111827]">{task.date || "-"}</p>
+                  <p className="text-[14px] font-bold text-[#111827]">{task.date ? formatDate(task.date) : "-"}</p>
                 </div>
               </div>
               
@@ -136,6 +181,56 @@ export default function TugasDetailPage() {
           </div>
 
         </div>
+
+        {/* Group Task Assignees Section */}
+        {task.type === 'group' && (
+          <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
+            <h3 className="text-[13px] font-bold text-[#374151] uppercase tracking-wide flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#356E3B]" />
+              Anggota Ditugaskan ({task.assignees?.length || 0})
+            </h3>
+
+            {Array.isArray(task.assignees) && task.assignees.length > 0 ? (
+              <div className="flex flex-col divide-y divide-gray-100">
+                {task.assignees.map((assignee: any, idx: number) => {
+                  const name = assignee.name || assignee.full_name || "Anggota Tim";
+                  const initial = name.charAt(0).toUpperCase();
+                  const role = assignee.role ? assignee.role.toUpperCase() : "MEMBER";
+
+                  return (
+                    <div key={assignee.id || idx} className="py-3 first:pt-0 last:pb-0 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#E8F3EB] text-[#356E3B] font-bold text-[14px] flex items-center justify-center shrink-0 overflow-hidden border border-[#D1E5D5]">
+                        {assignee.avatar_url ? (
+                          <img src={assignee.avatar_url} alt={name} className="w-full h-full object-cover" />
+                        ) : (
+                          initial
+                        )}
+                      </div>
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-[14px] font-bold text-[#111827] truncate">
+                          {name}
+                        </span>
+                        <span className="text-[11px] text-[#6B7280] truncate">
+                          {assignee.email || `@${name.toLowerCase().replace(/\s+/g, "_")}`}
+                        </span>
+                      </div>
+                      <Badge variant="success" size="xs" uppercase>
+                        {role}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-[#F9FAFB] rounded-[16px] p-4 border border-[#E5E7EB] text-center">
+                <p className="text-[13px] text-gray-500">
+                  Tugas grup ini berlaku untuk seluruh anggota perusahaan.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );

@@ -7,9 +7,11 @@ import { Search, ListFilter, Check, User, ChevronRight, ChevronLeft, FileDown, C
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { useDialog } from "@/context/DialogContext";
 
 export default function LaporanKehadiranPage() {
   const router = useRouter();
+  const { showToast } = useDialog();
   
   const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
@@ -176,6 +178,7 @@ export default function LaporanKehadiranPage() {
         });
         
         doc.save(`${fileName}.pdf`);
+        showToast("Laporan PDF berhasil diunduh!", "success");
       } else if (type === 'xlsx') {
         const wsData = [
           ["LAPORAN KEHADIRAN KARYAWAN"],
@@ -188,10 +191,11 @@ export default function LaporanKehadiranPage() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Laporan Kehadiran");
         XLSX.writeFile(wb, `${fileName}.xlsx`);
+        showToast("Laporan Excel berhasil diunduh!", "success");
       }
     } catch (err) {
       console.error("Export error", err);
-      // fallback without alert per requirements, just log it.
+      showToast("Gagal mengunduh laporan", "error");
     } finally {
       setIsExporting(false);
       setSelectedItems([]);

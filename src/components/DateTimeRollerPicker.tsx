@@ -183,7 +183,7 @@ export function DateTimeRollerPicker({
         items={dateList}
         selectedIndex={selectedDateIndex}
         onSelectIndex={handleSelectDate}
-        renderLabel={(d) => `${MONTH_NAMES_SHORT[d.getMonth()]} ${String(d.getDate()).padStart(2, "0")}`}
+        renderLabel={(d) => `${d.getDate()} ${MONTH_NAMES_SHORT[d.getMonth()]}`}
         widthClass={isAllDay ? "w-full" : "flex-[1.3]"}
       />
 

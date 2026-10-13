@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
+import { formatDate, formatDateRange } from "@/lib/dateUtils";
 
 export default function NotifikasiPage() {
   const router = useRouter();
@@ -117,17 +118,6 @@ export default function NotifikasiPage() {
   });
 
   // Date Filter Modal Handlers
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "Pilih Tanggal";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "Pilih Tanggal";
-    const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-    return `${day} ${month} ${year}`;
-  };
-
   const handleApplyFilter = () => {
     setAppliedStartDate(startDate);
     setAppliedEndDate(endDate);
@@ -209,7 +199,7 @@ export default function NotifikasiPage() {
         {/* Info filter tanggal jika aktif */}
         {(appliedStartDate || appliedEndDate) && (
           <p className="text-[#9CA3AF] text-[12px] font-medium mt-1">
-            Menampilkan dari {formatDate(appliedStartDate)} - {formatDate(appliedEndDate)}
+            Menampilkan dari {formatDateRange(appliedStartDate, appliedEndDate)}
           </p>
         )}
 

@@ -1,12 +1,53 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
-import { tasks, profiles } from "../db/schema";
+import { tasks, profiles, notifications } from "../db/schema";
 import { eq, desc, or, and, isNull } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import crypto from "crypto";
 import { resolveTenant } from "../utils/tenant";
 
 const router = Router();
+
+// Helper to notify assignees safely
+async function notifyAssignees(
+  companyId: string,
+  assignees: any[],
+  creatorId: string,
+  taskId: string,
+  taskTitle: string,
+  existingAssigneeIds: Set<string> = new Set()
+) {
+  try {
+    if (!companyId || !Array.isArray(assignees) || assignees.length === 0) return;
+
+    const [creator] = await db
+      .select({ full_name: profiles.full_name })
+      .from(profiles)
+      .where(eq(profiles.id, creatorId))
+      .limit(1);
+
+    const senderName = creator?.full_name || "Rekan kerja Anda";
+
+    for (const assignee of assignees) {
+      const recipientId = typeof assignee === "string" ? assignee : assignee?.id;
+      if (!recipientId || recipientId === creatorId || existingAssigneeIds.has(recipientId)) {
+        continue;
+      }
+
+      await db.insert(notifications).values({
+        company_id: companyId,
+        recipient_id: recipientId,
+        type: "TASK_ASSIGNED",
+        title: "Tugas Baru Ditugaskan",
+        message: `${senderName} menugaskan tugas "${taskTitle}" kepada Anda.`,
+        reference_id: taskId,
+        is_read: false,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to notify assignees:", err);
+  }
+}
 
 // Get all tasks for the current user (personal) and their company (group)
 router.get("/", authenticate, async (req: Request, res: Response): Promise<void> => {
@@ -27,6 +68,9 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
       conditions.push(and(eq(tasks.company_id, companyId), isNull(tasks.deleted_at)));
     }
 
+    // Also include tasks explicitly assigned to profileId
+    conditions.push(and(eq(tasks.assigned_to, profileId), isNull(tasks.deleted_at)));
+
     const userTasks = await db.select().from(tasks).where(or(...conditions)).orderBy(desc(tasks.created_at));
 
     const formattedTasks = userTasks.map(t => {
@@ -40,6 +84,8 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
         completed: t.is_completed,
         type: t.company_id ? "group" : "personal",
         company_id: t.company_id,
+        assignees: t.assignees || [],
+        assigned_to: t.assigned_to || null,
         created_at: t.created_at
       };
     });
@@ -47,6 +93,67 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
     res.json(formattedTasks);
   } catch (error: any) {
     console.error("Error fetching tasks:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Get single task by ID
+router.get("/:id", authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const profileId = (req as any).user?.id;
+    if (!profileId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const taskId = String(req.params.id);
+    const existingTask = await db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.id, taskId), isNull(tasks.deleted_at)));
+
+    if (existingTask.length === 0) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+
+    const t = existingTask[0];
+    const tenant = await resolveTenant(req, profileId);
+    const companyId = tenant?.companyId;
+
+    const isGroup = t.company_id !== null;
+    let isAssignee = false;
+    if (Array.isArray(t.assignees)) {
+      isAssignee = t.assignees.some((a: any) => (typeof a === "string" ? a === profileId : a?.id === profileId));
+    }
+    if (t.assigned_to === profileId) {
+      isAssignee = true;
+    }
+
+    if (!isGroup && t.profile_id !== profileId) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    } else if (isGroup && t.company_id !== companyId && t.profile_id !== profileId && !isAssignee) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const d = t.deadline ? new Date(t.deadline) : null;
+    res.json({
+      id: t.id,
+      title: t.title,
+      date: d ? d.toISOString().split("T")[0] : null,
+      time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
+      note: t.notes || "",
+      completed: t.is_completed,
+      type: t.company_id ? "group" : "personal",
+      company_id: t.company_id,
+      assignees: t.assignees || [],
+      assigned_to: t.assigned_to || null,
+      created_at: t.created_at
+    });
+  } catch (error: any) {
+    console.error("Error fetching task details:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -60,7 +167,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
       return;
     }
 
-    const { title, date, time, note, type } = req.body;
+    const { title, date, time, note, type, assignees, assigned_to } = req.body;
 
     if (!title) {
       res.status(400).json({ error: "Title is required" });
@@ -80,6 +187,11 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
     const deadlineStr = `${date || new Date().toISOString().split("T")[0]}T${time || "00:00"}:00Z`;
     const deadline = new Date(deadlineStr);
 
+    const safeAssignees = Array.isArray(assignees) ? assignees : [];
+    const safeAssignedTo =
+      assigned_to ||
+      (safeAssignees[0] ? (typeof safeAssignees[0] === "string" ? safeAssignees[0] : safeAssignees[0].id) : null);
+
     const [newTask] = await db
       .insert(tasks)
       .values({
@@ -90,12 +202,18 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
         deadline,
         notes: note || null,
         is_completed: false,
+        assignees: safeAssignees,
+        assigned_to: safeAssignedTo,
         created_at: new Date(),
         updated_at: new Date(),
         created_by: profileId
       })
       .returning();
 
+    // Send notifications to assignees for group tasks
+    if (companyId && safeAssignees.length > 0) {
+      await notifyAssignees(companyId, safeAssignees, profileId, newTask.id, newTask.title || "Tugas Baru");
+    }
 
     const d = newTask.deadline ? new Date(newTask.deadline) : null;
     res.status(201).json({
@@ -106,6 +224,9 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
       note: newTask.notes || "",
       completed: newTask.is_completed,
       type: newTask.company_id ? "group" : "personal",
+      company_id: newTask.company_id,
+      assignees: newTask.assignees || [],
+      assigned_to: newTask.assigned_to || null,
       created_at: newTask.created_at
     });
   } catch (error: any) {
@@ -124,7 +245,7 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
     }
 
     const taskId = String(req.params.id);
-    const { title, date, time, note, completed } = req.body;
+    const { title, date, time, note, completed, assignees, assigned_to } = req.body;
 
     const existingTask = await db.select().from(tasks).where(eq(tasks.id, taskId));
 
@@ -133,39 +254,79 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
       return;
     }
 
-    const profileRes = await db.select().from(profiles).where(eq(profiles.id, profileId));
-    const companyId = profileRes[0]?.company_id;
+    const currentTask = existingTask[0];
+    const tenant = await resolveTenant(req, profileId);
+    const companyId = tenant?.companyId;
 
-    const isGroup = existingTask[0].company_id !== null;
+    const isGroup = currentTask.company_id !== null;
 
-    if (!isGroup && existingTask[0].profile_id !== profileId) {
+    if (!isGroup && currentTask.profile_id !== profileId) {
       res.status(403).json({ error: "Forbidden" });
       return;
-    } else if (isGroup && existingTask[0].company_id !== companyId) {
+    } else if (isGroup && currentTask.company_id !== companyId && currentTask.profile_id !== profileId) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
 
-    let updatedDeadline = existingTask[0].deadline;
+    let updatedDeadline = currentTask.deadline;
     if (date !== undefined || time !== undefined) {
-      const fallbackD = existingTask[0].deadline ? new Date(existingTask[0].deadline) : new Date();
+      const fallbackD = currentTask.deadline ? new Date(currentTask.deadline) : new Date();
       const d = date !== undefined ? date : fallbackD.toISOString().split("T")[0];
       const t = time !== undefined ? time : fallbackD.toISOString().split("T")[1].substring(0, 5);
       updatedDeadline = new Date(`${d}T${t}:00Z`);
     }
 
+    const updateData: any = {
+      title: title !== undefined ? title : currentTask.title,
+      deadline: updatedDeadline,
+      notes: note !== undefined ? note : currentTask.notes,
+      is_completed: completed !== undefined ? completed : currentTask.is_completed,
+      updated_at: new Date(),
+      updated_by: profileId
+    };
+
+    let newAssigneesToNotify: any[] = [];
+    if (assignees !== undefined) {
+      const safeAssignees = Array.isArray(assignees) ? assignees : [];
+      updateData.assignees = safeAssignees;
+      updateData.assigned_to =
+        assigned_to !== undefined
+          ? assigned_to
+          : (safeAssignees[0] ? (typeof safeAssignees[0] === "string" ? safeAssignees[0] : safeAssignees[0].id) : null);
+
+      // Check which assignees are new
+      const oldAssigneeIds = new Set(
+        Array.isArray(currentTask.assignees)
+          ? currentTask.assignees.map((a: any) => (typeof a === "string" ? a : a?.id))
+          : []
+      );
+      newAssigneesToNotify = safeAssignees;
+    } else if (assigned_to !== undefined) {
+      updateData.assigned_to = assigned_to;
+    }
+
     const [updatedTask] = await db
       .update(tasks)
-      .set({
-        title: title !== undefined ? title : existingTask[0].title,
-        deadline: updatedDeadline,
-        notes: note !== undefined ? note : existingTask[0].notes,
-        is_completed: completed !== undefined ? completed : existingTask[0].is_completed,
-        updated_at: new Date(),
-        updated_by: profileId
-      })
+      .set(updateData)
       .where(eq(tasks.id, taskId))
       .returning();
+
+    // Send notifications to newly added assignees
+    if (currentTask.company_id && newAssigneesToNotify.length > 0) {
+      const oldAssigneeIds = new Set(
+        Array.isArray(currentTask.assignees)
+          ? currentTask.assignees.map((a: any) => (typeof a === "string" ? a : a?.id))
+          : []
+      );
+      await notifyAssignees(
+        currentTask.company_id,
+        newAssigneesToNotify,
+        profileId,
+        updatedTask.id,
+        updatedTask.title || "Tugas Baru",
+        oldAssigneeIds
+      );
+    }
 
     const rd = updatedTask.deadline ? new Date(updatedTask.deadline) : null;
     res.json({
@@ -176,6 +337,9 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
       note: updatedTask.notes || "",
       completed: updatedTask.is_completed,
       type: updatedTask.company_id ? "group" : "personal",
+      company_id: updatedTask.company_id,
+      assignees: updatedTask.assignees || [],
+      assigned_to: updatedTask.assigned_to || null,
       created_at: updatedTask.created_at
     });
   } catch (error: any) {

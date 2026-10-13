@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Calendar } from "lucide-react";
 import { CustomCalendar } from "./CustomCalendar";
+import { formatDate } from "@/lib/dateUtils";
 
 interface CustomDatePickerProps {
   value: string;
@@ -12,16 +13,7 @@ export function CustomDatePicker({ value, onChange, placeholder = "Pilih Tanggal
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return placeholder;
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return placeholder;
-    const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-    return `${day} ${month} ${year}`;
-  };
+  const displayDate = value ? formatDate(value) : placeholder;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -43,7 +35,7 @@ export function CustomDatePicker({ value, onChange, placeholder = "Pilih Tanggal
       >
         <Calendar className="w-[18px] h-[18px] text-[#356E3B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
         <span className={`text-[14px] font-medium ${!value ? "text-[#9CA3AF]" : "text-[#111827]"}`}>
-          {formatDate(value)}
+          {displayDate}
         </span>
       </div>
       

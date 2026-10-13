@@ -5,10 +5,14 @@ import { ChevronLeft, Plus, Calendar, ChevronDown, Clock, Trash2, FileText, Send
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/bottom-nav";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { Badge } from "@/components/Badge";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { CustomSelect } from "@/components/CustomSelect";
 import { createClient } from "@supabase/supabase-js";
 import { useCompany } from "@/context/CompanyContext";
+import { useDialog } from "@/context/DialogContext";
+import { formatDateRange } from "@/lib/dateUtils";
 
 // Tipe Data untuk Pengajuan Izin
 type IzinRequest = {
@@ -23,6 +27,7 @@ type IzinRequest = {
 export default function IzinPage() {
   const router = useRouter();
   const { activeCompanyId } = useCompany();
+  const { showToast } = useDialog();
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -178,6 +183,7 @@ export default function IzinPage() {
       if (res.ok && data.success) {
         // Refresh data
         await fetchCategoriesAndLeaves();
+        showToast("Pengajuan izin berhasil dikirim", "success");
         
         // Reset Form
         setIsAddingIzin(false);
@@ -188,11 +194,11 @@ export default function IzinPage() {
         setAttachment(null);
         setFileObj(null);
       } else {
-        alert(data.message || "Gagal mengajukan izin");
+        showToast(data.message || "Gagal mengajukan izin", "error");
       }
     } catch (error) {
       console.error("Error submitting leave:", error);
-      alert((error as Error)?.message || "Network error");
+      showToast((error as Error)?.message || "Network error", "error");
     } finally {
       setIsLoading(false);
     }
@@ -291,7 +297,7 @@ export default function IzinPage() {
       }
     } catch (error) {
       console.error("Error checking leave quota:", error);
-      alert((error as Error)?.message || "Gagal memeriksa kuota pengajuan izin.");
+      showToast((error as Error)?.message || "Gagal memeriksa kuota pengajuan izin.", "error");
     } finally {
       setIsCheckingQuota(false);
     }
@@ -461,14 +467,16 @@ export default function IzinPage() {
               )}
             </div>
 
-            <button 
+            <PrimaryButton 
               onClick={handleSubmit}
               disabled={isLoading || !startDate || !noteText}
-              className="w-full bg-[#356E3B] hover:bg-[#2A582F] disabled:bg-[#A3B8A8] text-white rounded-full py-4 mt-2 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98]"
+              isLoading={isLoading}
+              loadingText="Mengirim..."
+              icon={<Send className="w-[18px] h-[18px]" strokeWidth={2.5} />}
+              className="w-full mt-2"
             >
-              <Send className="w-[18px] h-[18px]" strokeWidth={2.5} />
-              {isLoading ? "Mengirim..." : "Kirim Pengajuan"}
-            </button>
+              Kirim Pengajuan
+            </PrimaryButton>
 
           </div>
         ) : selectedIzinId && selectedIzin ? (
@@ -481,32 +489,24 @@ export default function IzinPage() {
             const diffTime = Math.abs(end.getTime() - start.getTime());
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
             
-            const sDate = start.getDate();
-            const sMonth = start.toLocaleDateString('id-ID', { month: 'short' });
-            const sYear = start.getFullYear();
-            
-            const eDate = end.getDate();
-            const eMonth = end.toLocaleDateString('id-ID', { month: 'short' });
-            const eYear = end.getFullYear();
-            
-            let dateStr = "";
-            if (sYear !== eYear) {
-              dateStr = `${sDate} ${sMonth} ${sYear} - ${eDate} ${eMonth} ${eYear}`;
-            } else if (sMonth !== eMonth) {
-              dateStr = `${sDate} ${sMonth} - ${eDate} ${eMonth} ${eYear}`;
-            } else if (sDate !== eDate) {
-              dateStr = `${sDate} - ${eDate} ${eMonth} ${eYear}`;
-            } else {
-              dateStr = `${sDate} ${sMonth} ${eYear}`;
-            }
+            const dateStr = formatDateRange(selectedIzin.start_date, selectedIzin.end_date);
             
             return (
           <div className="flex flex-col gap-5">
             {/* Top Card */}
             <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Jenis Pengajuan</span>
-                <h2 className="text-[#111827] text-[18px] font-bold">{catName}</h2>
+              <div className="flex justify-between items-start">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Jenis Pengajuan</span>
+                  <h2 className="text-[#111827] text-[18px] font-bold">{catName}</h2>
+                </div>
+                <Badge
+                  variant={selectedIzin.status === "Menunggu" ? "warning" : selectedIzin.status === "Disetujui" ? "success" : "danger"}
+                  size="md"
+                  dot
+                >
+                  {selectedIzin.status}
+                </Badge>
               </div>
               
               <div className="w-full h-[1px] bg-[#F3F4F6]" />
@@ -755,9 +755,9 @@ export default function IzinPage() {
                 <h2 className="text-[#111827] text-[16px] font-bold">
                   Daftar Pengajuan
                 </h2>
-                <div className="bg-[#E8F3EB] px-3 py-1.5 rounded-full border border-[#D1E5D5]">
-                  <span className="text-[#356E3B] text-[11px] font-bold">{filteredList.length} Pengajuan</span>
-                </div>
+                <Badge variant="company" size="sm">
+                  {filteredList.length} Pengajuan
+                </Badge>
               </div>
 
               <div className="flex flex-col gap-4">
@@ -765,20 +765,7 @@ export default function IzinPage() {
                 {filteredList.map((req) => {
                   const catName = categories.find(c => c.id === req.leave_category_id)?.name || "Lainnya";
                   
-                  const start = new Date(req.start_date);
-                  const end = new Date(req.end_date);
-                  const sDate = start.getDate();
-                  const sMonth = start.toLocaleDateString('id-ID', { month: 'short' });
-                  const sYear = start.getFullYear();
-                  const eDate = end.getDate();
-                  const eMonth = end.toLocaleDateString('id-ID', { month: 'short' });
-                  const eYear = end.getFullYear();
-                  
-                  let dateStr = "";
-                  if (sYear !== eYear) dateStr = `${sDate} ${sMonth} ${sYear} - ${eDate} ${eMonth} ${eYear}`;
-                  else if (sMonth !== eMonth) dateStr = `${sDate} ${sMonth} - ${eDate} ${eMonth} ${eYear}`;
-                  else if (sDate !== eDate) dateStr = `${sDate} - ${eDate} ${eMonth} ${eYear}`;
-                  else dateStr = `${sDate} ${sMonth} ${eYear}`;
+                  const dateStr = formatDateRange(req.start_date, req.end_date);
                   
                   return (
                   <div 
@@ -791,22 +778,13 @@ export default function IzinPage() {
                         <h3 className="text-[#111827] text-[16px] font-bold">{catName}</h3>
                         <span className="text-[#6B7280] text-[13px]">{req.description}</span>
                       </div>
-                      <div className={`px-3 py-1.5 rounded-full flex items-center gap-1.5 border ${
-                        req.status === "Menunggu" ? "bg-[#FFFBEB] border-[#FEF3C7]" :
-                        req.status === "Disetujui" ? "bg-[#E8F3EB] border-[#D1E5D5]" :
-                        "bg-[#FEF2F2] border-[#FEE2E2]"
-                      }`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${
-                          req.status === "Menunggu" ? "bg-[#F59E0B]" :
-                          req.status === "Disetujui" ? "bg-[#356E3B]" :
-                          "bg-[#EF4444]"
-                        }`} />
-                        <span className={`text-[11px] font-bold ${
-                          req.status === "Menunggu" ? "text-[#D97706]" :
-                          req.status === "Disetujui" ? "text-[#356E3B]" :
-                          "text-[#EF4444]"
-                        }`}>{req.status}</span>
-                      </div>
+                      <Badge 
+                        variant={req.status === "Menunggu" ? "warning" : req.status === "Disetujui" ? "success" : "danger"} 
+                        size="sm" 
+                        dot
+                      >
+                        {req.status}
+                      </Badge>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                       <Calendar className="w-4 h-4 text-[#6EA874]" strokeWidth={2.5} />
@@ -843,13 +821,13 @@ export default function IzinPage() {
             <p className="text-[13px] text-[#4B5563] leading-relaxed mb-6">
               Pengajuan izin kamu hari ini masih menunggu persetujuan atau sudah disetujui. Kamu bisa mengajukan kembali jika pengajuan sebelumnya ditolak.
             </p>
-            <button
+            <PrimaryButton
               type="button"
               onClick={() => setShowQuotaModal(false)}
-              className="w-full py-3.5 px-4 rounded-full bg-[#356E3B] hover:bg-[#2A582F] text-white font-bold text-[14px] shadow-sm transition-colors active:scale-[0.98]"
+              className="w-full"
             >
               Mengerti
-            </button>
+            </PrimaryButton>
           </div>
         </div>
       )}

@@ -1,9 +1,10 @@
 "use client";
 
-import { ChevronLeft, PlusCircle, Image as ImageIcon } from "lucide-react";
+import { ChevronLeft, PlusCircle, Image as ImageIcon, CheckCircle2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { TopBar } from "@/components/TopBar";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -15,12 +16,14 @@ type Category = {
 };
 
 import { useCompany } from "@/context/CompanyContext";
+import { useDialog } from "@/context/DialogContext";
 
 function BuatBeritaForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editingId = searchParams.get("id");
   const { activeCompanyId, canCreate, activeRole } = useCompany();
+  const { showToast } = useDialog();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -98,12 +101,12 @@ function BuatBeritaForm() {
 
   const handleSubmit = async () => {
     if (!title || !content) {
-      alert("Judul dan Isi Berita wajib diisi");
+      showToast("Judul dan Isi Berita wajib diisi", "warning");
       return;
     }
 
     if (!canCreate("news")) {
-      alert("Hanya Owner/Admin/Manager yang berwenang mempublikasikan berita");
+      showToast("Hanya Owner/Admin/Manager yang berwenang mempublikasikan berita", "error");
       return;
     }
     
@@ -160,12 +163,13 @@ function BuatBeritaForm() {
 
       const data = await res.json();
       if (data.success) {
+        showToast(editingId ? "Berita berhasil diperbarui" : "Berita berhasil diterbitkan", "success");
         router.push("/admin/berita");
       } else {
-        alert(data.message || "Gagal menyimpan berita");
+        showToast(data.message || "Gagal menyimpan berita", "error");
       }
     } catch (error: any) {
-      alert(error?.message || "Terjadi kesalahan jaringan");
+      showToast(error?.message || "Terjadi kesalahan jaringan", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -261,13 +265,16 @@ function BuatBeritaForm() {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md p-5 bg-gradient-to-t from-[#f4f9f6] via-[#f4f9f6] to-transparent pb-8 z-20">
-        <button 
+        <PrimaryButton 
           onClick={handleSubmit}
           disabled={isSubmitting || !title || !content}
-          className={`w-full py-4 rounded-full font-bold text-[15px] shadow-[0_4px_12px_rgba(53,110,59,0.2)] transition-all ${isSubmitting || !title || !content ? 'bg-gray-300 text-gray-500 shadow-none' : 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]'}`}
+          isLoading={isSubmitting}
+          loadingText="Menyimpan..."
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          className="w-full"
         >
-          {isSubmitting ? "Menyimpan..." : (editingId ? "Simpan Perubahan" : "Unggah Sekarang")}
-        </button>
+          {editingId ? "Simpan Perubahan" : "Unggah Sekarang"}
+        </PrimaryButton>
       </div>
     </div>
   );

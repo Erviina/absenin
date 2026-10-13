@@ -8,8 +8,10 @@ import {
   Briefcase,
   Users,
   Building2,
-  User
+  User,
+  Newspaper
 } from "lucide-react";
+import { sanitizeText, truncateText } from "@/lib/sanitize";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
@@ -313,21 +315,27 @@ export default function DashboardPage() {
               </div>
             ) : (
               news.map((item, idx) => (
-                <div key={item.id || idx} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                <div 
+                  key={item.id || idx} 
+                  onClick={() => router.push(`/berita/${item.id}`)}
+                  className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#dce9df] hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
+                >
                   {item.cover_image_url ? (
-                    <img src={item.cover_image_url} alt={item.title} className="w-[72px] h-[72px] rounded-2xl shrink-0 object-cover" />
+                    <img src={item.cover_image_url} alt={sanitizeText(item.title)} className="w-[72px] h-[72px] rounded-2xl shrink-0 object-cover" />
                   ) : (
-                    <div className="w-[72px] h-[72px] bg-[#d9e8df] rounded-2xl shrink-0"></div>
+                    <div className="w-[72px] h-[72px] bg-[#d9e8df] rounded-2xl shrink-0 flex items-center justify-center text-[#1E4738]/60">
+                      <Newspaper className="w-7 h-7" />
+                    </div>
                   )}
-                  <div className="flex flex-col justify-center">
+                  <div className="flex flex-col justify-center flex-1 min-w-0 overflow-hidden">
                     <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
                       {item.category?.name || "Pengumuman"}
                     </span>
-                    <h3 className="text-[#1E4738] text-[13px] font-bold leading-snug mb-1 line-clamp-1">
-                      {item.title}
+                    <h3 className="text-[#1E4738] group-hover:text-[#356E3B] transition-colors text-[13px] font-bold leading-snug mb-1 line-clamp-1 break-words [overflow-wrap:anywhere]">
+                      {sanitizeText(item.title)}
                     </h3>
-                    <p className="text-[#7d998c] text-[11px] line-clamp-1">
-                      {item.content}
+                    <p className="text-[#7d998c] text-[11px] line-clamp-1 break-words [overflow-wrap:anywhere]">
+                      {truncateText(item.content, 90)}
                     </p>
                   </div>
                 </div>

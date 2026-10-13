@@ -19,10 +19,12 @@ import {
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
+import { useDialog } from "@/context/DialogContext";
 
 export default function ProfilPage() {
   const router = useRouter();
   const { activeCompany, activeRole, memberships, refreshMemberships } = useCompany();
+  const { showConfirm, showToast } = useDialog();
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +129,7 @@ export default function ProfilPage() {
         setIsExitModalOpen(false);
         setExitReason("");
         await fetchExitRequestMe();
+        showToast("Permohonan keluar berhasil diajukan ke Admin", "success");
       } else {
         setExitError(data.message || "Gagal mengajukan permohonan keluar");
       }
@@ -142,7 +145,15 @@ export default function ProfilPage() {
     const token = localStorage.getItem("accessToken");
     if (!token) return;
 
-    if (!confirm("Batalkan permohonan keluar dari organisasi ini?")) return;
+    const confirmed = await showConfirm({
+      title: "Batalkan Permohonan Keluar?",
+      message: `Apakah Anda yakin ingin membatalkan permohonan keluar dari ${activeCompany.name}?`,
+      confirmText: "Ya, Batalkan",
+      cancelText: "Kembali",
+      type: "warning",
+      icon: "alert",
+    });
+    if (!confirmed) return;
 
     setIsCancellingExit(true);
     try {
@@ -158,11 +169,12 @@ export default function ProfilPage() {
       const data = await res.json();
       if (data.success) {
         setMyExitRequest(null);
+        showToast("Permohonan keluar berhasil dibatalkan", "success");
       } else {
-        alert(data.message || "Gagal membatalkan permohonan keluar");
+        showToast(data.message || "Gagal membatalkan permohonan keluar", "error");
       }
     } catch (err) {
-      alert("Terjadi kesalahan jaringan");
+      showToast("Terjadi kesalahan jaringan", "error");
     } finally {
       setIsCancellingExit(false);
     }
@@ -199,11 +211,22 @@ export default function ProfilPage() {
     return "Karyawan";
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const confirmed = await showConfirm({
+      title: "Keluar dari Akun?",
+      message: "Apakah Anda yakin ingin keluar dari akun Anda saat ini?",
+      confirmText: "Ya, Keluar",
+      cancelText: "Batal",
+      type: "danger",
+      icon: "logout",
+    });
+    if (!confirmed) return;
+
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");
     localStorage.removeItem("activeCompanyId");
     localStorage.removeItem("companyMemberships");
+    showToast("Berhasil keluar dari akun", "info");
     router.push("/login");
   };
 
@@ -212,12 +235,12 @@ export default function ProfilPage() {
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      alert("Ukuran file maksimal 2 MB");
+      showToast("Ukuran file maksimal 2 MB", "warning");
       return;
     }
 
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      alert("Hanya format JPEG, PNG, dan WebP yang diizinkan");
+      showToast("Hanya format JPEG, PNG, dan WebP yang diizinkan", "warning");
       return;
     }
 
@@ -239,12 +262,13 @@ export default function ProfilPage() {
       if (data.success) {
         // Refresh the profile to get new avatarUrl
         await fetchUser();
+        showToast("Foto profil berhasil diperbarui", "success");
       } else {
-        alert(data.message || "Gagal mengupload foto profil");
+        showToast(data.message || "Gagal mengupload foto profil", "error");
       }
     } catch (err) {
       console.error("Error uploading avatar:", err);
-      alert("Terjadi kesalahan jaringan saat mengupload foto profil");
+      showToast("Terjadi kesalahan jaringan saat mengupload foto profil", "error");
     } finally {
       setIsUploadingAvatar(false);
       if (fileInputRef.current) {

@@ -4,13 +4,17 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ChevronLeft, RefreshCcw, ArrowRight, Plus, Minus, Target, 
-  X, Zap, HelpCircle, MapPin, Check, CheckCircle2, AlertTriangle, Info
+  Zap, HelpCircle, MapPin, Check, CheckCircle2, AlertTriangle, Info
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
 import { TopBar } from '@/components/TopBar';
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { Badge } from "@/components/Badge";
 import { useCompany } from "@/context/CompanyContext";
+import { useDialog } from "@/context/DialogContext";
 import { evaluateSchedule, CompanyScheduleData } from "@/lib/schedule";
+import { formatDateTime } from "@/lib/dateUtils";
 const LeafletMap = dynamic(() => import('@/components/MapLocation'), { 
   ssr: false,
   loading: () => <div className="w-full h-full bg-[#e6eedc] animate-pulse" />
@@ -19,6 +23,7 @@ const LeafletMap = dynamic(() => import('@/components/MapLocation'), {
 export default function CheckinPage() {
   const router = useRouter();
   const { activeCompanyId } = useCompany();
+  const { showToast } = useDialog();
   const [step, setStep] = useState(1);
   const [workMode, setWorkMode] = useState<"WFO" | "WFH">("WFO");
 
@@ -246,16 +251,6 @@ export default function CheckinPage() {
     fetchAttendanceStatus();
   }, [activeCompanyId]);
 
-  const formatDateTime = (date: Date) => {
-    const d = date.getDate().toString().padStart(2, '0');
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
-    const m = months[date.getMonth()];
-    const y = date.getFullYear();
-    const h = date.getHours().toString().padStart(2, '0');
-    const min = date.getMinutes().toString().padStart(2, '0');
-    return `${d} ${m} ${y}, ${h}:${min} WIB`;
-  };
-
   const handleBack = () => {
     if (step > 1) setStep(step - 1);
     else router.push("/dashboard");
@@ -319,7 +314,7 @@ export default function CheckinPage() {
 
       // Success
       if (photoUrl) URL.revokeObjectURL(photoUrl);
-      alert(attendanceStatus === "CHECKED_IN" ? "Check-out berhasil!" : "Check-in berhasil!");
+      showToast(attendanceStatus === "CHECKED_IN" ? "Check-out berhasil!" : "Check-in berhasil!", "success");
       router.push("/dashboard");
     } catch (err: any) {
       setSubmitError(err.message || "Terjadi kesalahan sistem");
@@ -328,7 +323,11 @@ export default function CheckinPage() {
   };
 
   const renderStepper = (isOverlay = false) => (
-    <div className={`flex items-center justify-between px-10 py-5 ${isOverlay ? 'bg-black/40 backdrop-blur-md rounded-2xl mx-4 border border-white/10' : 'bg-[#fbfdfc] border-b border-[#eef5f0]'}`}>
+    <div className={`flex items-center justify-between ${
+      isOverlay 
+        ? 'px-4 sm:px-6 py-2 bg-black/40 backdrop-blur-md rounded-2xl mx-4 border border-white/10' 
+        : 'px-10 py-5 bg-[#fbfdfc] border-b border-[#eef5f0]'
+    }`}>
       {[
         { num: 1, label: "Titik Lokasi" },
         { num: 2, label: "Bukti Foto" },
@@ -341,20 +340,20 @@ export default function CheckinPage() {
           <div key={s.num} className="flex flex-col items-center relative z-10 w-full">
             {/* Connecting Line */}
             {i < 2 && (
-              <div className={`absolute top-4 left-[60%] w-[80%] h-[3px] -z-10 ${
+              <div className={`absolute ${isOverlay ? 'top-3.5' : 'top-4'} left-[60%] w-[80%] h-[3px] -z-10 ${
                 step > s.num ? (isOverlay ? 'bg-white/50' : 'bg-[#356E3B]') : (isOverlay ? 'bg-white/10' : 'bg-[#dce9df]')
               }`} />
             )}
             
             {/* Circle */}
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold mb-2 transition-colors ${
+            <div className={`${isOverlay ? 'w-7 h-7 text-[12px] mb-1' : 'w-8 h-8 text-[13px] mb-2'} rounded-full flex items-center justify-center font-bold transition-colors ${
               isCurrent 
                 ? 'bg-[#356E3B] text-white shadow-md shadow-[#356E3B]/20' 
                 : isActive 
                   ? (isOverlay ? 'bg-white text-[#356E3B]' : 'bg-[#356E3B] text-white')
                   : (isOverlay ? 'bg-white/20 text-white' : 'bg-[#dce9df] text-[#5C786C]')
             }`}>
-              {isActive && s.num < step ? <Check className="w-5 h-5" strokeWidth={3} /> : s.num}
+              {isActive && s.num < step ? <Check className={isOverlay ? "w-4 h-4" : "w-5 h-5"} strokeWidth={3} /> : s.num}
             </div>
             
             {/* Label */}
@@ -487,12 +486,13 @@ export default function CheckinPage() {
                 </div>
                 <p className="text-red-500 font-bold text-[14px] mb-2">Lokasi Gagal Didapatkan</p>
                 <p className="text-[#5C786C] text-[12px] px-4 mb-4">{locationError}</p>
-                <button 
+                <PrimaryButton 
                   onClick={fetchLocation}
-                  className="px-6 h-10 rounded-full bg-[#356E3B] text-white font-bold text-[13px] flex items-center gap-2 hover:bg-[#1E4738] transition-colors"
+                  size="sm"
+                  icon={<RefreshCcw className="w-4 h-4" />}
                 >
-                  <RefreshCcw className="w-4 h-4" /> Coba Lagi
-                </button>
+                  Coba Lagi
+                </PrimaryButton>
               </div>
             ) : location ? (
               <>
@@ -512,15 +512,13 @@ export default function CheckinPage() {
                         {location.lat.toFixed(7)}, {location.lng.toFixed(7)}
                       </span>
                       {location.accuracy <= 100 ? (
-                        <div className="flex items-center gap-1.5 bg-[#e4faed] px-2.5 py-1 rounded-full">
-                          <div className="w-1.5 h-1.5 bg-[#00a859] rounded-full" />
-                          <span className="text-[9px] font-bold text-[#1E4738]">Akurasi Baik ({location.accuracy}m)</span>
-                        </div>
+                        <Badge variant="success" size="sm" dot>
+                          Akurasi Baik ({location.accuracy}m)
+                        </Badge>
                       ) : (
-                        <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
-                          <AlertTriangle className="w-3 h-3 text-amber-600" />
-                          <span className="text-[9px] font-bold text-amber-800">Akurasi Rendah ({location.accuracy}m &gt; 100m)</span>
-                        </div>
+                        <Badge variant="warning" size="sm" icon={<AlertTriangle className="w-3 h-3 text-amber-600" />}>
+                          Akurasi Rendah ({location.accuracy}m &gt; 100m)
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -563,18 +561,14 @@ export default function CheckinPage() {
                     <RefreshCcw className="w-4 h-4" strokeWidth={2.5} />
                     Refresh
                   </button>
-                  <button 
+                  <PrimaryButton 
                     onClick={() => setStep(2)}
                     disabled={isCheckInBlocked}
-                    className={`flex-1 h-14 rounded-full font-bold text-[14px] flex items-center justify-center gap-2 shadow-lg transition-colors ${
-                      isCheckInBlocked
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                        : 'bg-[#356E3B] hover:bg-[#1E4738] text-white'
-                    }`}
+                    rightIcon={<ArrowRight className="w-4 h-4" strokeWidth={3} />}
+                    className="flex-1"
                   >
                     Ya, Lanjutkan
-                    <ArrowRight className="w-4 h-4" strokeWidth={3} />
-                  </button>
+                  </PrimaryButton>
                 </div>
               </>
             ) : null}
@@ -582,21 +576,21 @@ export default function CheckinPage() {
         </div>
       )}
 
-      {/* STEP 2: Bukti Foto (Full Screen) */}
+      {/* STEP 2: Bukti Foto (Full Screen Responsive) */}
       {step === 2 && (
-        <div className="fixed inset-0 z-50 bg-[#111] flex flex-col justify-between overflow-hidden max-w-md mx-auto">
+        <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] w-full z-50 bg-[#111] flex flex-col justify-between overflow-hidden max-w-md mx-auto select-none">
           {/* Camera Feed */}
           {cameraError ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#111] z-20 px-8 text-center">
               <Zap className="w-12 h-12 text-red-500 mb-4 opacity-80" />
               <p className="text-white font-bold text-lg mb-2">Kamera Gagal</p>
               <p className="text-gray-400 text-sm mb-6">{cameraError}</p>
-              <button 
+              <PrimaryButton 
                 onClick={startCamera}
-                className="bg-[#356E3B] px-8 h-12 rounded-full font-bold text-white shadow-lg"
+                icon={<RefreshCcw className="w-4 h-4" />}
               >
                 Coba Lagi
-              </button>
+              </PrimaryButton>
             </div>
           ) : (
             <video 
@@ -609,16 +603,20 @@ export default function CheckinPage() {
             />
           )}
           {/* Dark Gradient Overlay for readability */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
 
           {/* Top Controls */}
-          <div className="relative z-10 pt-12 px-6 flex justify-between items-center mb-6">
-            <button onClick={() => setStep(1)} className="w-10 h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center backdrop-blur-md">
-              <X className="w-5 h-5 text-white" />
+          <div className="relative z-10 pt-[max(0.75rem,env(safe-area-inset-top,0.75rem))] px-4 sm:px-6 flex justify-between items-center shrink-0 mb-1.5 sm:mb-2">
+            <button 
+              onClick={() => setStep(1)} 
+              aria-label="Kembali"
+              className="w-10 h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center backdrop-blur-md hover:bg-black/70 active:scale-95 transition-all text-white shrink-0"
+            >
+              <ChevronLeft className="w-6 h-6 text-white" />
             </button>
             <button 
               onClick={() => setIsMirror(!isMirror)}
-              className="px-4 h-10 rounded-full bg-white/95 text-[#1E4738] font-bold text-[12px] flex items-center gap-2 shadow-lg"
+              className="px-3.5 sm:px-4 h-9 sm:h-10 rounded-full bg-white/95 text-[#1E4738] font-bold text-[11px] sm:text-[12px] flex items-center gap-1.5 sm:gap-2 shadow-lg active:scale-95 transition-transform shrink-0"
             >
               <RefreshCcw className="w-3.5 h-3.5" strokeWidth={3} />
               Mirror {isMirror ? 'ON' : 'OFF'}
@@ -626,54 +624,55 @@ export default function CheckinPage() {
           </div>
 
           {/* Overlaid Stepper */}
-          <div className="relative z-10">
+          <div className="relative z-10 shrink-0 mb-1">
             {renderStepper(true)}
           </div>
 
-          {/* Face Oval Guide */}
-          <div className="relative flex-1 flex flex-col items-center justify-center z-10 px-8">
-            <div className="w-[280px] h-[360px] border-[2px] border-[#a1d6b2] rounded-[100px] rounded-b-[140px] relative mt-10 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+          {/* Face Oval Guide - Flexible & Auto-scaling for all mobile viewports */}
+          <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center z-10 px-4 py-1 overflow-hidden">
+            <div className="w-[min(250px,65vw)] h-[min(310px,36vh)] sm:w-[270px] sm:h-[350px] border-[2px] border-[#a1d6b2] rounded-[100px] rounded-b-[140px] relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] shrink-0 flex items-center justify-center">
               {/* Corner markers */}
-              <div className="absolute -top-[1px] -left-[1px] w-6 h-6 border-t-[3px] border-l-[3px] border-[#a1d6b2] rounded-tl-[16px]" />
-              <div className="absolute -top-[1px] -right-[1px] w-6 h-6 border-t-[3px] border-r-[3px] border-[#a1d6b2] rounded-tr-[16px]" />
-              <div className="absolute -bottom-[1px] -left-[1px] w-6 h-6 border-b-[3px] border-l-[3px] border-[#a1d6b2] rounded-bl-[20px]" />
-              <div className="absolute -bottom-[1px] -right-[1px] w-6 h-6 border-b-[3px] border-r-[3px] border-[#a1d6b2] rounded-br-[20px]" />
+              <div className="absolute -top-[1px] -left-[1px] w-5 h-5 sm:w-6 sm:h-6 border-t-[3px] border-l-[3px] border-[#a1d6b2] rounded-tl-[16px]" />
+              <div className="absolute -top-[1px] -right-[1px] w-5 h-5 sm:w-6 sm:h-6 border-t-[3px] border-r-[3px] border-[#a1d6b2] rounded-tr-[16px]" />
+              <div className="absolute -bottom-[1px] -left-[1px] w-5 h-5 sm:w-6 sm:h-6 border-b-[3px] border-l-[3px] border-[#a1d6b2] rounded-bl-[20px]" />
+              <div className="absolute -bottom-[1px] -right-[1px] w-5 h-5 sm:w-6 sm:h-6 border-b-[3px] border-r-[3px] border-[#a1d6b2] rounded-br-[20px]" />
               
               {/* Eye Guide */}
-              <div className="absolute top-[40%] left-1/2 -translate-x-1/2 w-16 h-8 border border-white/40 rounded-[50%] flex items-center justify-center">
-                <div className="w-2.5 h-2.5 rounded-full bg-white/40" />
+              <div className="absolute top-[38%] left-1/2 -translate-x-1/2 w-14 sm:w-16 h-7 sm:h-8 border border-white/40 rounded-[50%] flex items-center justify-center">
+                <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-white/40" />
               </div>
             </div>
             
-            <p className="text-white text-[15px] font-medium mt-10 drop-shadow-md">
+            <p className="text-white text-[13px] sm:text-[14px] font-medium mt-2.5 sm:mt-3 drop-shadow-md text-center shrink-0">
               Tempatkan wajah Anda pada Area Oval
             </p>
             
-            <div className="mt-4 bg-black/60 backdrop-blur-md border border-white/10 px-4 py-2.5 rounded-full flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-full border border-gray-400 flex items-center justify-center">
+            <div className="mt-1.5 sm:mt-2 bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1 sm:py-1.5 rounded-full flex items-center gap-1.5 shrink-0 max-w-[95%]">
+              <div className="w-3 h-3 rounded-full border border-gray-400 flex items-center justify-center shrink-0">
                 <div className="w-1.5 h-1.5 rounded-full bg-[#a1d6b2]" />
               </div>
-              <span className="text-[10px] text-gray-200">Mode Mirror: Hasil foto akan terbalik seperti cermin</span>
+              <span className="text-[10px] text-gray-200 truncate">Mode Mirror: Hasil foto sesuai cermin</span>
             </div>
           </div>
 
-          {/* Bottom Camera Controls */}
-          <div className="relative z-10 pb-12 pt-6 px-10 flex justify-between items-center">
-            <button className="w-12 h-12 rounded-full bg-black/40 border border-white/20 flex items-center justify-center backdrop-blur-md">
+          {/* Bottom Camera Controls - Guaranteed Visible & Safe-area Compliant */}
+          <div className="relative z-10 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom,1.25rem))] pt-2 sm:pt-3 px-8 sm:px-10 flex justify-between items-center w-full">
+            <button className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black/40 border border-white/20 flex items-center justify-center backdrop-blur-md shrink-0 active:scale-95 transition-transform">
               <Zap className="w-5 h-5 text-white" />
             </button>
             
             <button 
               onClick={takePhoto} 
               disabled={!!cameraError}
-              className="w-[72px] h-[72px] rounded-full border-[4px] border-[#a1d6b2] p-1 flex items-center justify-center transition-transform active:scale-90 disabled:opacity-50 disabled:active:scale-100"
+              aria-label="Ambil Foto"
+              className="w-[68px] h-[68px] sm:w-[72px] sm:h-[72px] rounded-full border-[4px] border-[#a1d6b2] p-1 flex items-center justify-center transition-transform active:scale-90 disabled:opacity-50 disabled:active:scale-100 shrink-0 shadow-lg"
             >
               <div className="w-full h-full bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center justify-center">
                 <div className="w-3 h-3 rounded-full bg-[#a1d6b2]" />
               </div>
             </button>
             
-            <button className="w-12 h-12 rounded-full bg-black/40 border border-white/20 flex items-center justify-center backdrop-blur-md">
+            <button className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black/40 border border-white/20 flex items-center justify-center backdrop-blur-md shrink-0 active:scale-95 transition-transform">
               <HelpCircle className="w-5 h-5 text-white" />
             </button>
           </div>
@@ -774,13 +773,13 @@ export default function CheckinPage() {
                         </span>
                         {location && (
                           location.accuracy <= 100 ? (
-                            <span className="text-[9px] font-bold text-[#356E3B] bg-[#e4faed] px-2 py-0.5 rounded-full">
+                            <Badge variant="success" size="sm">
                               ±{location.accuracy}m
-                            </span>
+                            </Badge>
                           ) : (
-                            <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <AlertTriangle className="w-2.5 h-2.5" /> ±{location.accuracy}m (rendah)
-                            </span>
+                            <Badge variant="warning" size="sm" icon={<AlertTriangle className="w-2.5 h-2.5" />}>
+                              ±{location.accuracy}m (rendah)
+                            </Badge>
                           )
                         )}
                       </div>
@@ -813,24 +812,16 @@ export default function CheckinPage() {
               <span>{scheduleEval.reason}</span>
             </div>
           )}
-          <button 
+          <PrimaryButton 
             onClick={handleTriggerSubmit}
             disabled={isSubmitting || isCheckInBlocked}
-            className={`w-full h-14 rounded-full font-bold text-[15px] shadow-lg transition-transform active:scale-95 disabled:active:scale-100 flex items-center justify-center gap-2 ${
-              isCheckInBlocked
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                : 'bg-[#356E3B] hover:bg-[#1E4738] text-white disabled:opacity-50'
-            }`}
+            isLoading={isSubmitting}
+            loadingText={isCheckOutMode ? "Menyimpan Check-out..." : "Menyimpan..."}
+            icon={<CheckCircle2 className="w-5 h-5" />}
+            className="w-full"
           >
-            {isSubmitting ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                {isCheckOutMode ? "Menyimpan Check-out..." : "Menyimpan..."}
-              </>
-            ) : (
-              isCheckOutMode ? "Simpan Check-out" : "Simpan Kehadiran"
-            )}
-          </button>
+            {isCheckOutMode ? "Simpan Check-out" : "Simpan Kehadiran"}
+          </PrimaryButton>
         </div>
       )}
 
@@ -855,16 +846,17 @@ export default function CheckinPage() {
               >
                 Batal
               </button>
-              <button
+              <PrimaryButton
                 type="button"
                 onClick={() => {
                   setShowEarlyCheckoutModal(false);
                   handleSubmit();
                 }}
-                className="flex-1 py-3.5 px-4 rounded-full bg-[#356E3B] hover:bg-[#1E4738] text-white font-bold text-[14px] shadow-md transition-colors"
+                icon={<Check className="w-4 h-4" strokeWidth={3} />}
+                className="flex-1"
               >
                 Ya, Check-out
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
@@ -886,18 +878,18 @@ export default function CheckinPage() {
               Pastikan GPS aktif dan berada di area terbuka untuk mendapatkan akurasi terbaik.
             </p>
             <div className="flex flex-col w-full gap-2.5">
-              <button
+              <PrimaryButton
                 type="button"
                 onClick={() => {
                   setShowLowAccuracyModal(false);
                   setStep(1);
                   fetchLocation();
                 }}
-                className="w-full py-3.5 px-4 rounded-full bg-[#356E3B] hover:bg-[#1E4738] text-white font-bold text-[14px] flex items-center justify-center gap-2 shadow-md transition-colors"
+                icon={<RefreshCcw className="w-4 h-4" />}
+                className="w-full"
               >
-                <RefreshCcw className="w-4 h-4" />
                 Perbarui Lokasi
-              </button>
+              </PrimaryButton>
               <button
                 type="button"
                 onClick={() => {

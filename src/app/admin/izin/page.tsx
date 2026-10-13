@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { AdminBottomNav } from "@/components/admin-bottom-nav";
 import { TopBar } from "@/components/TopBar";
+import { formatDateRange } from "@/lib/dateUtils";
 
 // Types mapped from backend
 type IzinRequest = {
@@ -353,11 +354,11 @@ export default function KelolaIzinPage() {
                       <div className="flex flex-col gap-1.5">
                         <h3 className="text-[#1E4738] text-[15px] font-bold leading-none">{item.name}</h3>
                         {item.type.toLowerCase().includes("cuti") ? (
-                          <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2 py-0.5 rounded-md w-fit">Cuti</span>
+                          <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">Cuti</span>
                         ) : item.type.toLowerCase().includes("sakit") ? (
-                          <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2 py-0.5 rounded-md w-fit border border-[#ffedd5]">Izin Sakit</span>
+                          <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit border border-[#ffedd5]">Izin Sakit</span>
                         ) : (
-                          <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2 py-0.5 rounded-md w-fit">{item.type}</span>
+                          <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">{item.type}</span>
                         )}
                       </div>
                     </div>
@@ -369,7 +370,7 @@ export default function KelolaIzinPage() {
                         const start = new Date(item.start_date);
                         const end = new Date(item.end_date);
                         const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-                        return <>{start.getDate()} {start.toLocaleDateString('id-ID', { month: 'short' })} {start.getFullYear()} <span className="text-[#94a3b8] font-medium">({diffDays} Hari)</span></>;
+                        return <>{formatDateRange(item.start_date, item.end_date)} <span className="text-[#94a3b8] font-medium">({diffDays} Hari)</span></>;
                       })()}
                     </div>
                     <div className="text-[12px] text-[#64748b] leading-snug">
@@ -424,11 +425,11 @@ export default function KelolaIzinPage() {
                     <div className="flex flex-col gap-1.5">
                       <h3 className="text-[#1E4738] text-[15px] font-bold leading-none">{item.name}</h3>
                       {item.type.toLowerCase().includes("cuti") ? (
-                        <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2 py-0.5 rounded-md w-fit">Cuti</span>
+                        <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">Cuti</span>
                       ) : item.type.toLowerCase().includes("sakit") ? (
-                        <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2 py-0.5 rounded-md w-fit border border-[#ffedd5]">Izin Sakit</span>
+                        <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit border border-[#ffedd5]">Izin Sakit</span>
                       ) : (
-                        <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2 py-0.5 rounded-md w-fit">{item.type}</span>
+                        <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">{item.type}</span>
                       )}
                     </div>
                   </div>
@@ -447,7 +448,7 @@ export default function KelolaIzinPage() {
                       const start = new Date(item.start_date);
                       const end = new Date(item.end_date);
                       const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-                      return <>{start.getDate()} {start.toLocaleDateString('id-ID', { month: 'short' })} {start.getFullYear()} <span className="text-[#94a3b8] font-medium">({diffDays} Hari)</span></>;
+                      return <>{formatDateRange(item.start_date, item.end_date)} <span className="text-[#94a3b8] font-medium">({diffDays} Hari)</span></>;
                     })()}
                   </div>
                   <div className="text-[12px] text-[#64748b] leading-snug">

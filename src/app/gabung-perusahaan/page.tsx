@@ -5,10 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Html5Qrcode } from "html5-qrcode";
+import { useDialog } from "@/context/DialogContext";
 
 function GabungPerusahaanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { showToast } = useDialog();
   const [kode, setKode] = useState("");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [status, setStatus] = useState<'idle' | 'pending' | 'accepted'>('idle');
@@ -75,7 +77,7 @@ function GabungPerusahaanContent() {
         () => {} // onScanFailure ignore
       ).catch(err => {
         console.error("Camera error", err);
-        alert("Kamera tidak dapat diakses atau permission ditolak.");
+        showToast("Kamera tidak dapat diakses atau izin kamera ditolak.", "error");
         setIsScannerOpen(false);
       });
 
@@ -107,7 +109,7 @@ function GabungPerusahaanContent() {
       setIsFlashOn(!isFlashOn);
     } catch (error) {
       console.warn("Torch failed", error);
-      alert("Flash tidak didukung di perangkat atau browser ini.");
+      showToast("Flash tidak didukung di perangkat atau browser ini.", "info");
     }
   };
 

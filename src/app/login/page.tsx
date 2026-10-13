@@ -1,16 +1,31 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
 import { Loader2 } from "lucide-react";
 
 import { getPersonalModePreference } from "@/lib/personalMode";
+import { useDialog } from "@/context/DialogContext";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
+  const { showToast } = useDialog();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Jika pengguna sudah login, langsung arahkan ke target redirect atau dashboard
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (token) {
+      if (redirectParam && redirectParam.startsWith("/")) {
+        router.replace(redirectParam);
+      } else {
+        router.replace("/dashboard");
+      }
+    }
+  }, [redirectParam, router]);
 
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) return;
@@ -31,15 +46,22 @@ export default function LoginPage() {
 
       if (!res.ok) {
         console.error("Login failed with status:", res.status, data);
-        alert(data?.message || `Gagal login (Error ${res.status})`);
+        showToast(data?.message || `Gagal login (Error ${res.status})`, "error");
         return;
       }
       
       if (data?.success) {
         localStorage.setItem("accessToken", data.data.accessToken);
         localStorage.setItem("user", JSON.stringify(data.data.user));
+        showToast("Login berhasil!", "success");
         
-        // redirect according to PRD condition
+        // Cek jika terdapat target redirect dari tautan yang dibagikan
+        if (redirectParam && redirectParam.startsWith("/")) {
+          router.replace(redirectParam);
+          return;
+        }
+
+        // Redirect default sesuai PRD
         const user = data.data.user;
         const skipCompany = getPersonalModePreference(user.id);
         if (!user.company && !skipCompany) {
@@ -49,11 +71,11 @@ export default function LoginPage() {
         }
       } else {
         console.error("Login failed:", data?.message);
-        alert(data?.message || "Login failed");
+        showToast(data?.message || "Login failed", "error");
       }
     } catch (err) {
       console.error("Login error:", err);
-      alert("Terjadi kesalahan jaringan saat login");
+      showToast("Terjadi kesalahan jaringan saat login", "error");
     } finally {
       setIsLoading(false);
     }
@@ -114,5 +136,19 @@ export default function LoginPage() {
       </div>
 
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -317,6 +317,46 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
   }
 });
 
+// GET /api/companies/members - Daftar anggota aktif perusahaan untuk mention/tugas
+router.get("/members", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+    const tenant = await resolveTenant(req, user.id);
+
+    if (!tenant) {
+      return res.status(404).json({
+        success: false,
+        message: "Perusahaan tidak ditemukan atau Anda belum bergabung dengan perusahaan",
+      });
+    }
+
+    const companyId = tenant.companyId;
+
+    const membersRes = await db.execute(sql`
+      SELECT 
+        p.id, 
+        p.full_name, 
+        p.email, 
+        p.avatar_url,
+        cm.role
+      FROM company_members cm
+      JOIN profiles p ON p.id = cm.profile_id
+      WHERE cm.company_id = ${companyId}
+        AND cm.status = 'active'
+        AND cm.deleted_at IS NULL
+      ORDER BY p.full_name ASC
+    `);
+
+    return res.status(200).json({
+      success: true,
+      data: membersRes.rows,
+    });
+  } catch (error: any) {
+    console.error("Get company members error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 router.get("/employees", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;

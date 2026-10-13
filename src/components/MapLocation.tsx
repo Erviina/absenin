@@ -20,19 +20,28 @@ const getCustomIcon = (label: string, type: "check-in" | "check-out" | "default"
   return new L.DivIcon({
     className: "custom-leaflet-icon",
     html: `
-      <div class="flex flex-col items-center">
-        <div class="w-[52px] h-[52px] rounded-[20px] rounded-bl-[6px] rotate-45 flex items-center justify-center shadow-lg border-[3px] border-white relative z-20" style="background-color: ${pinBg}">
-          <div class="w-5 h-5 bg-white rounded-full -rotate-45 flex items-center justify-center">
-            <div class="w-2.5 h-2.5 rounded-full" style="background-color: ${pinBg}"></div>
+      <div class="flex flex-col items-center justify-start w-[120px]">
+        <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.35));">
+          <path 
+            d="M17 1C8.163 1 1 8.163 1 17C1 27.5 14.5 41.2 16.3 42.9C16.7 43.3 17.3 43.3 17.7 42.9C19.5 41.2 33 27.5 33 17C33 8.163 25.837 1 17 1Z" 
+            fill="${pinBg}" 
+            stroke="#FFFFFF" 
+            stroke-width="2.5" 
+            stroke-linejoin="round"
+          />
+          <circle cx="17" cy="17" r="6" fill="#FFFFFF" />
+          <circle cx="17" cy="17" r="3" fill="${pinBg}" />
+        </svg>
+        <div class="w-3.5 h-1 bg-black/25 rounded-full blur-[1px] -mt-0.5"></div>
+        ${label ? `
+          <div class="text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md mt-1 whitespace-nowrap z-20 pointer-events-none border border-white/20" style="background-color: ${badgeBg};">
+            ${label}
           </div>
-        </div>
-        <div class="text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-md mt-1 absolute top-[55px] whitespace-nowrap z-20 pointer-events-none" style="background-color: ${badgeBg}">
-          ${label}
-        </div>
+        ` : ""}
       </div>
     `,
-    iconSize: [52, 80],
-    iconAnchor: [26, 48],
+    iconSize: [120, 75],
+    iconAnchor: [60, 43],
   });
 };
 

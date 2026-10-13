@@ -46,13 +46,16 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
         n.cover_image_url, 
         n.created_at, 
         c.id as category_id, 
-        c.name as category_name
+        c.name as category_name,
+        p.id as author_id,
+        p.full_name as author_name,
+        p.avatar_url as author_avatar_url
       FROM news n
       LEFT JOIN news_categories c ON n.news_category_id = c.id
+      LEFT JOIN profiles p ON COALESCE(n.author_id, n.created_by, n.profile_id) = p.id
       WHERE n.company_id = ${companyId} 
         AND n.deleted_at IS NULL
-      ORDER BY n.created_at DESC 
-      LIMIT 10
+      ORDER BY n.created_at DESC
     `);
 
     const formattedNews = newsRes.rows.map((row: any) => ({
@@ -63,6 +66,11 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
       category: {
         id: row.category_id,
         name: row.category_name
+      },
+      author: {
+        id: row.author_id,
+        name: row.author_name || "Admin",
+        avatar_url: row.author_avatar_url
       },
       created_at: row.created_at
     }));
@@ -75,6 +83,74 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
 
   } catch (error: any) {
     console.error("Get news error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error", errors: [error.message] });
+  }
+});
+
+// GET /api/news/:id
+router.get("/:id", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+    const newsId = req.params.id;
+    const tenant = await resolveTenant(req, user.id);
+    
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+    }
+    
+    const companyId = tenant.companyId;
+
+    const newsRes = await db.execute(sql`
+      SELECT 
+        n.id, 
+        n.title, 
+        n.content, 
+        n.cover_image_url, 
+        n.created_at, 
+        c.id as category_id, 
+        c.name as category_name,
+        p.id as author_id,
+        p.full_name as author_name,
+        p.avatar_url as author_avatar_url
+      FROM news n
+      LEFT JOIN news_categories c ON n.news_category_id = c.id
+      LEFT JOIN profiles p ON COALESCE(n.author_id, n.created_by, n.profile_id) = p.id
+      WHERE n.id = ${newsId}
+        AND n.company_id = ${companyId} 
+        AND n.deleted_at IS NULL
+      LIMIT 1
+    `);
+
+    if (newsRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Berita tidak ditemukan" });
+    }
+
+    const row: any = newsRes.rows[0];
+    const formattedItem = {
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      cover_image_url: row.cover_image_url,
+      category: {
+        id: row.category_id,
+        name: row.category_name
+      },
+      author: {
+        id: row.author_id,
+        name: row.author_name || "Admin",
+        avatar_url: row.author_avatar_url
+      },
+      created_at: row.created_at
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil detail berita",
+      data: formattedItem
+    });
+
+  } catch (error: any) {
+    console.error("Get news detail error:", error);
     return res.status(500).json({ success: false, message: "Internal server error", errors: [error.message] });
   }
 });

@@ -4,6 +4,7 @@ import { TopBar } from "@/components/TopBar";
 import { Bell, Clock, Calendar, Users, Megaphone, Info } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { formatDateTime } from "@/lib/dateUtils";
 
 export default function NotifikasiDetailPage() {
   const router = useRouter();
@@ -64,20 +65,7 @@ export default function NotifikasiDetailPage() {
     }
   };
 
-  const formatDateTime = (dateString: string) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "";
-    
-    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    
-    return `${day} ${month} ${year}, ${hours}:${minutes} WIB`;
-  };
+
 
   if (isLoading) {
     return (

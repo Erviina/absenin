@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, numeric, index, pgEnum, date as pgDate, boolean } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, text, timestamp, numeric, index, pgEnum, date as pgDate, boolean, jsonb } from "drizzle-orm/pg-core";
 
 export const companies = pgTable("companies", {
   id: uuid("id").primaryKey(),
@@ -157,6 +157,8 @@ export const tasks = pgTable("tasks", {
   deadline: timestamp("deadline", { withTimezone: true }),
   is_completed: boolean("is_completed").default(false),
   task_category_id: uuid("task_category_id"),
+  assignees: jsonb("assignees").default([]),
+  assigned_to: uuid("assigned_to").references(() => profiles.id),
   created_at: timestamp("created_at", { withTimezone: true }),
   updated_at: timestamp("updated_at", { withTimezone: true }),
   deleted_at: timestamp("deleted_at", { withTimezone: true }),

@@ -4,27 +4,40 @@ import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, T
 import { useRouter } from "next/navigation";
 import React, { useState, useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { CustomSelect } from "@/components/CustomSelect";
 import { CustomTimePicker } from "@/components/CustomTimePicker";
 import { QRCodeSVG } from "qrcode.react";
 import { MapContainer, TileLayer, Marker, Circle, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { useDialog } from "@/context/DialogContext";
 
 const getCustomIcon = (label: string) => new L.DivIcon({
   className: "custom-leaflet-icon",
   html: `
-    <div class="flex flex-col items-center">
-      <div class="w-[52px] h-[52px] bg-[#356E3B] rounded-[20px] rounded-bl-[6px] rotate-45 flex items-center justify-center shadow-lg border-[3px] border-white relative z-20">
-        <div class="w-5 h-5 bg-white rounded-full -rotate-45"></div>
-      </div>
-      <div class="bg-[#2c3e35] text-white text-[11px] font-bold px-3.5 py-1.5 rounded-full shadow-md mt-1 absolute top-[55px] whitespace-nowrap z-20">
-        ${label}
-      </div>
+    <div class="flex flex-col items-center justify-start w-[120px]">
+      <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.35));">
+        <path 
+          d="M17 1C8.163 1 1 8.163 1 17C1 27.5 14.5 41.2 16.3 42.9C16.7 43.3 17.3 43.3 17.7 42.9C19.5 41.2 33 27.5 33 17C33 8.163 25.837 1 17 1Z" 
+          fill="#356E3B" 
+          stroke="#FFFFFF" 
+          stroke-width="2.5" 
+          stroke-linejoin="round"
+        />
+        <circle cx="17" cy="17" r="6" fill="#FFFFFF" />
+        <circle cx="17" cy="17" r="3" fill="#356E3B" />
+      </svg>
+      <div class="w-3.5 h-1 bg-black/25 rounded-full blur-[1px] -mt-0.5"></div>
+      ${label ? `
+        <div class="bg-[#1E4738] text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md mt-1 whitespace-nowrap z-20 pointer-events-none border border-white/20">
+          ${label}
+        </div>
+      ` : ""}
     </div>
   `,
-  iconSize: [52, 80],
-  iconAnchor: [26, 48],
+  iconSize: [120, 75],
+  iconAnchor: [60, 43],
 });
 
 function MapUpdater({ lat, lng }: { lat: number, lng: number }) {
@@ -37,6 +50,7 @@ function MapUpdater({ lat, lng }: { lat: number, lng: number }) {
 
 export default function KelolaPerusahaanPage() {
   const router = useRouter();
+  const { showToast } = useDialog();
 
   const [initialData, setInitialData] = useState({ name: "", address: "", latitude: -6.9175, longitude: 107.6191 });
   const [companyData, setCompanyData] = useState({ 
@@ -71,7 +85,7 @@ export default function KelolaPerusahaanPage() {
     const timer = setTimeout(async () => {
       const apiKey = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY;
       if (!apiKey) {
-        alert("API key Geoapify belum dikonfigurasi pada NEXT_PUBLIC_GEOAPIFY_API_KEY");
+        showToast("API key Geoapify belum dikonfigurasi pada NEXT_PUBLIC_GEOAPIFY_API_KEY", "warning");
         return;
       }
       setIsSearching(true);
@@ -88,7 +102,7 @@ export default function KelolaPerusahaanPage() {
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, showToast]);
 
   const handleSelectResult = (result: any) => {
     skipSearch.current = true;
@@ -120,12 +134,12 @@ export default function KelolaPerusahaanPage() {
         const data = await res.json();
         
         if (res.status === 401) {
-          alert("Sesi tidak valid. Silakan login kembali.");
+          showToast("Sesi tidak valid. Silakan login kembali.", "error");
           router.push("/login");
           return;
         }
         if (res.status === 404) {
-          alert("Anda belum memiliki perusahaan.");
+          showToast("Anda belum memiliki perusahaan.", "warning");
           setIsLoading(false);
           return;
         }
@@ -159,17 +173,17 @@ export default function KelolaPerusahaanPage() {
         }
       } catch (error) {
         console.error("Error fetching company", error);
-        alert("Gagal memuat data perusahaan.");
+        showToast("Gagal memuat data perusahaan.", "error");
       } finally {
         setIsLoading(false);
       }
     };
     fetchCompany();
-  }, [router]);
+  }, [router, showToast]);
 
   const handleSimpanPerusahaan = async () => {
     if (!companyData.name) {
-      alert("Nama perusahaan tidak boleh kosong");
+      showToast("Nama perusahaan tidak boleh kosong", "warning");
       return;
     }
     setIsSaving(true);
@@ -186,16 +200,16 @@ export default function KelolaPerusahaanPage() {
       });
       const data = await res.json();
       if (res.status === 403) {
-        alert("Akses ditolak: Anda bukan Admin perusahaan ini.");
+        showToast("Akses ditolak: Anda bukan Admin perusahaan ini.", "error");
       } else if (!data.success) {
-        alert(data.message || "Gagal menyimpan perubahan.");
+        showToast(data.message || "Gagal menyimpan perubahan.", "error");
       } else {
-        alert("Data perusahaan berhasil diperbarui.");
+        showToast("Data perusahaan berhasil diperbarui.", "success");
         setInitialData(prev => ({ ...prev, name: companyData.name, address: companyData.address }));
       }
     } catch (error) {
       console.error(error);
-      alert("Terjadi kesalahan jaringan.");
+      showToast("Terjadi kesalahan jaringan.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -214,12 +228,12 @@ export default function KelolaPerusahaanPage() {
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      alert("Ukuran file maksimal 2 MB");
+      showToast("Ukuran file maksimal 2 MB", "warning");
       return;
     }
 
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      alert("Hanya format JPEG, PNG, dan WebP yang diizinkan");
+      showToast("Hanya format JPEG, PNG, dan WebP yang diizinkan", "warning");
       return;
     }
 
@@ -244,12 +258,13 @@ export default function KelolaPerusahaanPage() {
       const data = await res.json();
       if (data.success) {
         setCompanyImage(data.data.avatar_company_url);
+        showToast("Foto profil perusahaan berhasil diperbarui!", "success");
       } else {
-        alert(data.message || "Gagal mengupload foto");
+        showToast(data.message || "Gagal mengupload foto", "error");
       }
     } catch (err) {
       console.error("Upload company photo error:", err);
-      alert("Terjadi kesalahan jaringan.");
+      showToast("Terjadi kesalahan jaringan.", "error");
     } finally {
       setIsUploadingImage(false);
       if (fileInputRef.current) {
@@ -307,12 +322,12 @@ export default function KelolaPerusahaanPage() {
           work_end_time: jadwalForm.work_end_time
         }));
         setIsKelolaJadwalOpen(false);
-        alert("Jadwal operasional berhasil diperbarui!");
+        showToast("Jadwal operasional berhasil diperbarui!", "success");
       } else {
-        alert(data.message || "Gagal menyimpan jadwal.");
+        showToast(data.message || "Gagal menyimpan jadwal.", "error");
       }
     } catch (e) {
-      alert("Terjadi kesalahan jaringan.");
+      showToast("Terjadi kesalahan jaringan.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -362,12 +377,12 @@ export default function KelolaPerusahaanPage() {
           ...(searchQuery ? { address: searchQuery } : {})
         }));
         setIsUbahLokasiOpen(false);
-        alert("Lokasi berhasil diperbarui!");
+        showToast("Lokasi berhasil diperbarui!", "success");
       } else {
-        alert(data.message || "Gagal menyimpan lokasi.");
+        showToast(data.message || "Gagal menyimpan lokasi.", "error");
       }
     } catch (e) {
-      alert("Terjadi kesalahan jaringan.");
+      showToast("Terjadi kesalahan jaringan.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -539,7 +554,7 @@ export default function KelolaPerusahaanPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   navigator.clipboard.writeText(companyData.join_code);
-                  alert("Kode berhasil disalin!");
+                  showToast("Kode berhasil disalin!", "success");
                 }}
                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-[#356E3B] transition-colors"
               >
@@ -721,14 +736,16 @@ export default function KelolaPerusahaanPage() {
               </div>
 
               {/* Save Button */}
-              <button 
+              <PrimaryButton 
                 onClick={handleSimpan}
                 disabled={isSaving}
-                className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[14px] py-4 rounded-xl flex items-center justify-center gap-2 mt-2 transition-transform active:scale-[0.98] shadow-[0_4px_12px_rgba(53,110,59,0.2)] disabled:opacity-50"
+                isLoading={isSaving}
+                loadingText="Menyimpan..."
+                icon={<Save className="w-4 h-4" strokeWidth={2} />}
+                className="w-full mt-2"
               >
-                <Save className="w-4 h-4" strokeWidth={2} />
-                {isSaving ? "Menyimpan..." : "Simpan Lokasi"}
-              </button>
+                Simpan Lokasi
+              </PrimaryButton>
 
             </div>
           </div>
@@ -827,20 +844,16 @@ export default function KelolaPerusahaanPage() {
               </div>
 
               {/* Save Button */}
-              <button 
+              <PrimaryButton 
                 onClick={handleSaveJadwal}
                 disabled={isSaving || jadwalForm.work_days.length === 0}
-                className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[14px] py-4 rounded-xl flex items-center justify-center gap-2 mt-2 transition-transform active:scale-[0.98] shadow-[0_4px_12px_rgba(53,110,59,0.2)] disabled:opacity-50 disabled:active:scale-100"
+                isLoading={isSaving}
+                loadingText="Menyimpan..."
+                icon={<Save className="w-4 h-4" strokeWidth={2} />}
+                className="w-full mt-2"
               >
-                {isSaving ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" strokeWidth={2} />
-                    Simpan Perubahan
-                  </>
-                )}
-              </button>
+                Simpan Perubahan
+              </PrimaryButton>
             </div>
           </div>
         </div>
@@ -912,7 +925,7 @@ export default function KelolaPerusahaanPage() {
                 <button 
                   onClick={() => {
                     navigator.clipboard.writeText(companyData.join_code);
-                    alert("Kode berhasil disalin!");
+                    showToast("Kode berhasil disalin!", "success");
                   }}
                   className="bg-[#356E3B] hover:bg-[#2b5930] text-white text-[12px] font-bold px-5 py-2.5 rounded-[8px] transition-colors active:scale-95"
                 >

@@ -13,12 +13,14 @@ import {
   Edit2,
   Trash2,
   X,
-  ExternalLink
+  ExternalLink,
+  MoreVertical
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { CustomSelect } from "@/components/CustomSelect";
 import { DateTimeRollerPicker } from "@/components/DateTimeRollerPicker";
+import { useDialog } from "@/context/DialogContext";
 
 // Tipe Data untuk Agenda
 type AgendaItem = {
@@ -51,12 +53,13 @@ function formatAgendaDateTime(d: Date, isAllDay: boolean = false): string {
   const dayName = FULL_DAY_NAMES[d.getDay()];
   const dayNum = d.getDate();
   const monthName = FULL_MONTH_NAMES[d.getMonth()];
+  const year = d.getFullYear();
   if (isAllDay) {
-    return `${dayName}, ${dayNum} ${monthName}`;
+    return `${dayName}, ${dayNum} ${monthName} ${year}`;
   }
   const hours = String(d.getHours()).padStart(2, "0");
   const minutes = String(d.getMinutes()).padStart(2, "0");
-  return `${dayName}, ${dayNum} ${monthName} ${hours}.${minutes}`;
+  return `${dayName}, ${dayNum} ${monthName} ${year}, ${hours}:${minutes} WIB`;
 }
 
 export function isAgendaUrl(str?: string | null): boolean {
@@ -79,6 +82,7 @@ export function formatAgendaUrl(str: string): string {
 
 export default function AdminAgendaPage() {
   const router = useRouter();
+  const { showConfirm, showToast } = useDialog();
   
   // State Navigasi Form Tambah/Ubah
   const [isAddingAgenda, setIsAddingAgenda] = useState(false);
@@ -96,8 +100,21 @@ export default function AdminAgendaPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [selectedAgendaDetail, setSelectedAgendaDetail] = useState<AgendaItem | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [isDetailMenuOpen, setIsDetailMenuOpen] = useState(false);
 
   const [categories, setCategories] = useState<any[]>([]);
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setActiveMenuId(null);
+      setIsDetailMenuOpen(false);
+    };
+    if (activeMenuId || isDetailMenuOpen) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [activeMenuId, isDetailMenuOpen]);
 
   // State Form Tambah/Edit Agenda
   const [formKegiatan, setFormKegiatan] = useState("");
@@ -166,13 +183,17 @@ export default function AdminAgendaPage() {
                           startDate.getDate() === endDate.getDate();
 
         const sDay = startDate.getDate();
-        const sMonth = SHORT_MONTH_NAMES[startDate.getMonth()];
+        const sMonth = FULL_MONTH_NAMES[startDate.getMonth()];
+        const sYear = startDate.getFullYear();
         const eDay = endDate.getDate();
-        const eMonth = SHORT_MONTH_NAMES[endDate.getMonth()];
+        const eMonth = FULL_MONTH_NAMES[endDate.getMonth()];
+        const eYear = endDate.getFullYear();
 
         const timeDisplay = isSameDay 
           ? `${startTimeStr} - ${endTimeStr} WIB`
-          : `${sDay} ${sMonth} ${startTimeStr} - ${eDay} ${eMonth} ${endTimeStr} WIB`;
+          : sYear === eYear
+            ? `${sDay} ${sMonth} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`
+            : `${sDay} ${sMonth} ${sYear} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`;
 
         const linkOrLoc = item.link_or_location || item.link || null;
         const agendaNotes = item.notes || null;
@@ -264,7 +285,7 @@ export default function AdminAgendaPage() {
     setIsAddingAgenda(true);
   };
 
-  const handleEditAgenda = (agenda: AgendaItem, _dateStr: string) => {
+  const handleEditAgenda = (agenda: AgendaItem, _dateStr?: string) => {
     setEditingAgendaId(agenda.id);
     setFormKegiatan(agenda.title);
     setFormKategoriId(agenda.category_id || (categories.length > 0 ? categories[0].id : ""));
@@ -283,7 +304,15 @@ export default function AdminAgendaPage() {
   };
 
   const handleDeleteAgenda = async (id: string) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus agenda ini?")) return;
+    const confirmed = await showConfirm({
+      title: "Hapus Agenda?",
+      message: "Apakah Anda yakin ingin menghapus agenda ini? Tindakan ini tidak dapat dibatalkan.",
+      confirmText: "Ya, Hapus",
+      cancelText: "Batal",
+      type: "danger",
+      icon: "trash",
+    });
+    if (!confirmed) return;
 
     try {
       setIsDeletingId(id);
@@ -310,9 +339,10 @@ export default function AdminAgendaPage() {
         throw new Error(data.message || "Gagal menghapus agenda");
       }
 
+      showToast("Agenda berhasil dihapus", "success");
       await fetchAgendas();
     } catch (err: any) {
-      alert(err.message || "Terjadi kesalahan sistem");
+      showToast(err.message || "Terjadi kesalahan sistem", "error");
     } finally {
       setIsDeletingId(null);
     }
@@ -381,6 +411,7 @@ export default function AdminAgendaPage() {
 
       await fetchAgendas();
 
+      showToast(editingAgendaId ? "Agenda berhasil diperbarui" : "Agenda baru berhasil ditambahkan", "success");
       setIsAddingAgenda(false);
       setEditingAgendaId(null);
     } catch (err: any) {
@@ -814,28 +845,54 @@ export default function AdminAgendaPage() {
                         <h3 className="text-[#111827] text-[16px] font-bold leading-tight pr-4 mt-1">{agenda.title}</h3>
                       </div>
                       
-                      {/* Action Buttons */}
-                      <div className="flex gap-2 opacity-100">
+                      {/* More Action Menu (Titik Tiga) */}
+                      <div className="relative">
                         <button 
-                          onClick={(e) => { e.stopPropagation(); handleEditAgenda(agenda, dateStr); }}
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setActiveMenuId(activeMenuId === agenda.id ? null : agenda.id); 
+                          }}
                           disabled={isDeletingId === agenda.id}
-                          className="w-8 h-8 rounded-full bg-[#F3F4F6] text-[#4B5563] flex items-center justify-center hover:bg-[#E5E7EB] transition-colors disabled:opacity-50"
-                          aria-label="Edit"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleDeleteAgenda(agenda.id); }}
-                          disabled={isDeletingId === agenda.id}
-                          className="w-8 h-8 rounded-full bg-[#FEF2F2] text-[#EF4444] flex items-center justify-center hover:bg-[#FEE2E2] transition-colors disabled:opacity-50"
-                          aria-label="Hapus"
+                          className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center transition-colors active:scale-95 disabled:opacity-50"
+                          aria-label="Menu Aksi"
                         >
                           {isDeletingId === agenda.id ? (
                             <div className="w-3.5 h-3.5 border-2 border-[#EF4444] border-t-transparent rounded-full animate-spin"></div>
                           ) : (
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <MoreVertical className="w-4 h-4" />
                           )}
                         </button>
+
+                        {activeMenuId === agenda.id && (
+                          <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-0 top-9 w-36 bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.12)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150"
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleEditAgenda(agenda, dateStr);
+                              }}
+                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                              <span>Edit</span>
+                            </button>
+                            <div className="h-[1px] bg-gray-100 mx-2" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleDeleteAgenda(agenda.id);
+                              }}
+                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                              <span>Hapus</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                     
@@ -909,9 +966,57 @@ export default function AdminAgendaPage() {
               }`}>
                 <span className="text-[11px] font-bold uppercase tracking-wider">{selectedAgendaDetail.type}</span>
               </div>
-              <button onClick={() => setSelectedAgendaDetail(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsDetailMenuOpen(!isDetailMenuOpen);
+                    }}
+                    className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors"
+                    aria-label="Menu Aksi"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+                  {isDetailMenuOpen && (
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-0 top-9 w-36 bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.12)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150"
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsDetailMenuOpen(false);
+                          const item = selectedAgendaDetail;
+                          setSelectedAgendaDetail(null);
+                          handleEditAgenda(item);
+                        }}
+                        className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                        <span>Edit</span>
+                      </button>
+                      <div className="h-[1px] bg-gray-100 mx-2" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsDetailMenuOpen(false);
+                          const id = selectedAgendaDetail.id;
+                          setSelectedAgendaDetail(null);
+                          handleDeleteAgenda(id);
+                        }}
+                        className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        <span>Hapus</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => setSelectedAgendaDetail(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             
             <h2 className="text-[20px] font-bold text-[#111827] mb-4 leading-tight">{selectedAgendaDetail.title}</h2>

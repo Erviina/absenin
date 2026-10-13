@@ -7,6 +7,7 @@ import { User, FileDown, CalendarDays, CheckCircle2, XCircle, ChevronLeft, Chevr
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { formatDate, formatDateWithDay } from "@/lib/dateUtils";
 
 export default function LaporanDetailUser({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -100,19 +101,6 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
       monthIdx += 1;
     }
     setSelectedMonth(`${monthNames[monthIdx]} ${year}`);
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "Pilih Tanggal";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "Pilih Tanggal";
-    return `${date.getDate().toString().padStart(2, '0')} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-  };
-
-  const getDayName = (dateStr: string) => {
-    const d = new Date(dateStr);
-    const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-    return days[d.getDay()];
   };
 
   const handleExport = (type: 'pdf' | 'xlsx') => {
@@ -280,7 +268,7 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
                   >
                     <div className="flex justify-between items-center mb-4">
                       <span className="text-[#374151] font-medium text-[15px]">
-                        {getDayName(item.check_in_time)}, {formatDate(item.check_in_time)}
+                        {formatDateWithDay(item.check_in_time)}
                       </span>
                       <span className="text-[12px] font-bold px-3 py-1 rounded-full bg-[#E8F3EB] text-[#2D5A3F]">
                         {item.work_mode}

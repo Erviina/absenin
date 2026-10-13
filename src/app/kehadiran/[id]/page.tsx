@@ -5,6 +5,7 @@ import { ChevronLeft, ShieldCheck, MapPin, ExternalLink, Info, Plus, Minus, Refr
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { TopBar } from "@/components/TopBar";
+import { formatDateWithDay } from "@/lib/dateUtils";
 
 // Dynamically import MapLocation to prevent SSR issues
 const MapLocation = dynamic(() => import("@/components/MapLocation"), { 
@@ -61,15 +62,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
     if (id) fetchData();
   }, [id]);
 
-  const formatDateWithDay = (dateString: string) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return dateString;
-    const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-    
-    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
-  };
+
 
   const extractTime = (dateString: string | null) => {
     if (!dateString) return "—";

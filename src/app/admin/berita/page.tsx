@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { AdminBottomNav } from "@/components/admin-bottom-nav";
 import { useCompany } from "@/context/CompanyContext";
+import { useDialog } from "@/context/DialogContext";
+import { formatDate } from "@/lib/dateUtils";
+import { sanitizeText } from "@/lib/sanitize";
 
 type NewsItem = {
   id: string;
@@ -22,6 +25,7 @@ type NewsItem = {
 export default function KelolaBeritaPage() {
   const router = useRouter();
   const { activeCompanyId, canCreate } = useCompany();
+  const { showConfirm, showToast } = useDialog();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,7 +66,16 @@ export default function KelolaBeritaPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus berita ini?")) return;
+    const confirmed = await showConfirm({
+      title: "Hapus Berita?",
+      message: "Apakah Anda yakin ingin menghapus berita ini? Tindakan ini tidak dapat dibatalkan.",
+      confirmText: "Ya, Hapus",
+      cancelText: "Batal",
+      type: "danger",
+      icon: "trash",
+    });
+    if (!confirmed) return;
+
     try {
       const token = localStorage.getItem("accessToken");
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
@@ -74,11 +87,12 @@ export default function KelolaBeritaPage() {
       });
       if (res.ok) {
         setNews(news.filter(n => n.id !== id));
+        showToast("Berita berhasil dihapus", "success");
       } else {
-        alert("Gagal menghapus berita");
+        showToast("Gagal menghapus berita", "error");
       }
     } catch (error) {
-      alert("Error jaringan saat menghapus berita");
+      showToast("Error jaringan saat menghapus berita", "error");
     }
   };
 
@@ -161,11 +175,11 @@ export default function KelolaBeritaPage() {
                       {item.category.name}
                     </span>
                   )}
-                  <h3 className="text-[#1E4738] text-[14px] font-bold leading-snug mb-1 line-clamp-2">
-                    {item.title}
+                  <h3 className="text-[#1E4738] text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere]">
+                    {sanitizeText(item.title)}
                   </h3>
                   <p className="text-[#7d998c] text-[11px] font-medium line-clamp-1 mb-2">
-                    {new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {formatDate(item.created_at)}
                   </p>
                   
                   <div className="flex gap-2 mt-auto">

@@ -10,10 +10,13 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { useCompany } from "@/context/CompanyContext";
+import { useDialog } from "@/context/DialogContext";
+import { formatDate, formatDateWithDay, formatDateRange } from "@/lib/dateUtils";
 
 export default function KehadiranPage() {
   const router = useRouter();
   const { activeCompanyId } = useCompany();
+  const { showToast } = useDialog();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeCalendar, setActiveCalendar] = useState<"start" | "end" | null>(null);
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
@@ -29,17 +32,6 @@ export default function KehadiranPage() {
   const [attendances, setAttendances] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "Pilih Tanggal";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "Pilih Tanggal";
-    const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-    return `${day} ${month} ${year}`;
-  };
 
   const handleApplyFilter = () => {
     setAppliedStartDate(startDate);
@@ -164,6 +156,7 @@ export default function KehadiranPage() {
     });
 
     doc.save("Rekap_Kehadiran.pdf");
+    showToast("Rekap kehadiran PDF berhasil diunduh!", "success");
   };
 
   const handleDownloadExcel = () => {
@@ -182,6 +175,7 @@ export default function KehadiranPage() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Kehadiran");
     XLSX.writeFile(workbook, "Rekap_Kehadiran.xlsx");
+    showToast("Rekap kehadiran Excel berhasil diunduh!", "success");
   };
 
   return (
@@ -288,7 +282,7 @@ export default function KehadiranPage() {
               >
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-[#374151] font-medium text-[15px]">
-                    {getDayName(item.check_in_time)}, {formatDate(item.check_in_time)}
+                    {formatDateWithDay(item.check_in_time)}
                   </span>
                   <span className="bg-[#E8F3EB] text-[#2D5A3F] text-[12px] font-bold px-3 py-1 rounded-full uppercase">
                     {item.work_mode}
@@ -343,7 +337,7 @@ export default function KehadiranPage() {
         {/* Footer Text */}
         <p className="text-center text-[#9CA3AF] text-[13px] font-medium mt-6 mb-24">
           {appliedStartDate && appliedEndDate 
-            ? `Menampilkan riwayat periode ${formatDate(appliedStartDate)} - ${formatDate(appliedEndDate)}`
+            ? `Menampilkan riwayat periode ${formatDateRange(appliedStartDate, appliedEndDate)}`
             : "Menampilkan semua riwayat kehadiran"}
         </p>
 

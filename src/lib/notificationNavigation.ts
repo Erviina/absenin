@@ -106,8 +106,22 @@ export function getNotificationDestination(
     case "AGENDA_UPCOMING":
       return { route: "/agenda", targetCompanyId };
 
+    // === TUGAS (TASK ASSIGNMENT & MENTION) ===
+    case "TASK_ASSIGNED":
+    case "TASK_MENTION":
+      return {
+        route: notif.reference_id ? `/tugas/${notif.reference_id}` : "/tugas",
+        targetCompanyId,
+      };
+
     default:
       // Penanganan backward compatibility untuk format string lowercase
+      if (rawType.toLowerCase() === "task_assigned" || rawType.toLowerCase() === "task_mention") {
+        return {
+          route: notif.reference_id ? `/tugas/${notif.reference_id}` : "/tugas",
+          targetCompanyId,
+        };
+      }
       if (rawType === "exit_request") {
         if (isManagement) {
           return { route: "/admin/karyawan?tab=keluar", targetCompanyId };

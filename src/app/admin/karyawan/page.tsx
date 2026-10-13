@@ -6,6 +6,8 @@ import { useState, useMemo, useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
 import { QRCodeSVG } from "qrcode.react";
 import { useCompany } from "@/context/CompanyContext";
+import { useDialog } from "@/context/DialogContext";
+import { formatDate } from "@/lib/dateUtils";
 
 export default function KelolaKaryawanPage() {
   const router = useRouter();
@@ -80,6 +82,7 @@ export default function KelolaKaryawanPage() {
 function AdminKaryawanView() {
   const router = useRouter();
   const { activeCompanyId, activeCompany, activeRole, refreshMemberships } = useCompany();
+  const { showToast } = useDialog();
 
   // If user switches to a company where they are just a member, redirect back to dashboard
   useEffect(() => {
@@ -230,6 +233,7 @@ function AdminKaryawanView() {
         if (exitActionType === "approve") {
           fetchEmployeesData(token);
         }
+        showToast(exitActionType === "approve" ? "Permohonan keluar berhasil disetujui" : "Permohonan keluar telah ditolak", "info");
       } else {
         setExitActionError(data.message || `Gagal ${exitActionType === 'approve' ? 'mengeluarkan' : 'menolak'} anggota`);
       }
@@ -261,6 +265,7 @@ function AdminKaryawanView() {
         setIsDeleteConfirmOpen(false);
         setSelectedEmployeeForRole(null);
         fetchEmployeesData(token);
+        showToast("Karyawan berhasil dikeluarkan dari perusahaan", "success");
       } else {
         setDeleteMemberError(data.message || "Gagal mengeluarkan anggota");
       }
@@ -303,6 +308,7 @@ function AdminKaryawanView() {
         setSelectedEmployeeForRole(null);
         fetchEmployeesData(token);
         await refreshMemberships();
+        showToast("Hak akses berhasil disimpan", "success");
       } else {
         setSaveRoleError(data.message || "Gagal menyimpan hak akses");
       }
@@ -447,10 +453,11 @@ function AdminKaryawanView() {
       
       // Refetch employees to update list
       fetchEmployeesData(token);
+      showToast("Permintaan bergabung berhasil disetujui", "success");
 
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Gagal menyetujui permintaan");
+      showToast(err.message || "Gagal menyetujui permintaan", "error");
     } finally {
       setIsProcessingReq(false);
     }
@@ -483,6 +490,7 @@ function AdminKaryawanView() {
         setSelectedJoinReqForReject(null);
         setSelectedRequests(prev => prev.filter(id => id !== rejectedId));
         fetchRequestsData(token);
+        showToast("Permintaan bergabung berhasil ditolak", "info");
       } else {
         setRejectJoinReqError(data.message || "Gagal menolak permintaan bergabung");
       }
@@ -733,7 +741,7 @@ function AdminKaryawanView() {
 
                     <div className="flex items-center justify-between pt-1 border-t border-gray-100">
                       <span className="text-[10px] text-gray-400">
-                        Diajukan: {new Date(item.created_at).toLocaleDateString("id-ID", { day: 'numeric', month: 'short', year: 'numeric' })}
+                        Diajukan: {formatDate(item.created_at)}
                       </span>
                       <div className="flex items-center gap-2">
                         <button
@@ -840,7 +848,7 @@ function AdminKaryawanView() {
 
                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                    <span className="text-[10px] text-gray-400">
-                     {item.created_at ? `Diajukan: ${new Date(item.created_at).toLocaleDateString("id-ID", { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                     {item.created_at ? `Diajukan: ${formatDate(item.created_at)}` : ''}
                    </span>
                    <div className="flex items-center gap-2">
                      <button
@@ -945,14 +953,14 @@ function AdminKaryawanView() {
                      <div className="flex items-center gap-1.5 overflow-hidden">
                        <span className="text-[#111827] text-[14px] font-bold leading-none truncate">{item.full_name}</span>
                        {isSelf && (
-                         <span className="text-[10px] font-bold text-[#356E3B] bg-[#eef5f0] px-1.5 py-0.5 rounded-[6px] shrink-0">
+                         <span className="text-[10px] font-bold text-[#356E3B] bg-[#eef5f0] px-1.5 py-0.5 rounded-full shrink-0">
                            (Anda)
                          </span>
                        )}
                      </div>
                      <span className="text-gray-400 text-[11px] leading-none mb-1 truncate">{item.email}</span>
                      <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-[6px] ${roleColorClass}`}>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${roleColorClass}`}>
                           {roleText}
                         </span>
                      </div>
@@ -1043,7 +1051,7 @@ function AdminKaryawanView() {
                     <button 
                       onClick={() => {
                         navigator.clipboard.writeText(companyData.join_code);
-                        alert("Kode berhasil disalin!");
+                        showToast("Kode berhasil disalin!", "success");
                       }}
                       className="text-gray-400 hover:text-[#356E3B] transition-colors active:scale-95"
                     >

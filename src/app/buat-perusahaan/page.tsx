@@ -7,10 +7,12 @@ import { TopBar } from "@/components/TopBar";
 import { CustomSelect } from "@/components/CustomSelect";
 import { QRCodeSVG } from "qrcode.react";
 import { useCompany } from "@/context/CompanyContext";
+import { useDialog } from "@/context/DialogContext";
 
 export default function BuatPerusahaanPage() {
   const router = useRouter();
   const { refreshMemberships, switchCompany } = useCompany();
+  const { showToast } = useDialog();
 
   const [jenis, setJenis] = useState("Perusahaan");
   const [nama, setNama] = useState("");
@@ -28,7 +30,7 @@ export default function BuatPerusahaanPage() {
   const handleSalinKode = async () => {
     const kode = joinCode || "ABC123";
     if (!kode) {
-      alert("Kode perusahaan tidak tersedia.");
+      showToast("Kode perusahaan tidak tersedia.", "warning");
       return;
     }
 
@@ -67,9 +69,9 @@ export default function BuatPerusahaanPage() {
     if (berhasil) {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
-      alert("Kode berhasil disalin!");
+      showToast("Kode berhasil disalin!", "success");
     } else {
-      alert("Gagal menyalin kode. Silakan salin secara manual.");
+      showToast("Gagal menyalin kode. Silakan salin secara manual.", "error");
     }
   };
 
@@ -91,10 +93,10 @@ export default function BuatPerusahaanPage() {
     } else {
       try {
         await navigator.clipboard.writeText(`${text}\n${qrUrl}`);
-        alert("Link undangan berhasil disalin ke clipboard.");
+        showToast("Link undangan berhasil disalin ke clipboard.", "success");
       } catch (error) {
         console.error("Error copying to clipboard", error);
-        alert("Gagal menyalin link undangan.");
+        showToast("Gagal menyalin link undangan.", "error");
       }
     }
   };
@@ -133,6 +135,7 @@ export default function BuatPerusahaanPage() {
         downloadLink.download = `absenin-qr-${joinCode}.png`;
         downloadLink.href = pngFile;
         downloadLink.click();
+        showToast("QR Code berhasil disimpan!", "success");
       };
       
       img.onerror = () => {
@@ -141,7 +144,7 @@ export default function BuatPerusahaanPage() {
       
     } catch (error) {
       console.error(error);
-      alert("Gagal menyimpan QR Code. Silakan coba lagi.");
+      showToast("Gagal menyimpan QR Code. Silakan coba lagi.", "error");
     }
   };
 
@@ -159,7 +162,7 @@ export default function BuatPerusahaanPage() {
     try {
       const token = localStorage.getItem("accessToken");
       if (!token) {
-        alert("Sesi telah habis, silakan login kembali.");
+        showToast("Sesi telah habis, silakan login kembali.", "error");
         setIsLoading(false);
         return;
       }
@@ -189,11 +192,11 @@ export default function BuatPerusahaanPage() {
           switchCompany(data.data.id);
         }
       } else {
-        alert(data.message || "Gagal membuat perusahaan");
+        showToast(data.message || "Gagal membuat perusahaan", "error");
       }
     } catch (error) {
       console.error(error);
-      alert("Terjadi kesalahan jaringan");
+      showToast("Terjadi kesalahan jaringan", "error");
     } finally {
       setIsLoading(false);
     }

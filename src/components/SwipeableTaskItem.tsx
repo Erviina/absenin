@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Check, Pencil, Trash2 } from "lucide-react";
+import { formatDate } from "@/lib/dateUtils";
 
 interface Task {
   id: string;
@@ -9,6 +10,13 @@ interface Task {
   time: string;
   completed: boolean;
   date?: string; // For upcoming tasks
+  type?: "personal" | "group";
+  assignees?: Array<{
+    id: string;
+    name?: string;
+    full_name?: string;
+    avatar_url?: string | null;
+  }>;
 }
 
 interface SwipeableTaskItemProps {
@@ -141,8 +149,37 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }:
               <div className={`w-1.5 h-1.5 rounded-full ${task.completed ? "bg-[#D1D5DB]" : "bg-[#6EA874]"}`} />
             )}
             <span className={`text-[11px] font-medium ${task.completed ? "text-[#D1D5DB]" : "text-[#6B7280]"}`}>
-              {task.date ? `${task.date}, ${task.time}` : `Pukul ${task.time}`}
+              {task.date ? `${formatDate(task.date)}, ${task.time}` : `Pukul ${task.time}`}
             </span>
+
+            {task.assignees && task.assignees.length > 0 && (
+              <div className="flex items-center gap-1 ml-1.5 shrink-0">
+                <span className="text-[10px] text-gray-300 font-normal">•</span>
+                <div className="flex items-center -space-x-1.5">
+                  {task.assignees.slice(0, 3).map((a, idx) => {
+                    const displayName = a.name || a.full_name || "Anggota";
+                    return (
+                      <div 
+                        key={a.id || idx} 
+                        className="w-4 h-4 rounded-full border border-white bg-[#E8F3EB] text-[#356E3B] text-[8px] font-bold flex items-center justify-center overflow-hidden"
+                        title={displayName}
+                      >
+                        {a.avatar_url ? (
+                          <img src={a.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          displayName.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <span className="text-[10px] font-bold text-[#356E3B] truncate max-w-[85px]">
+                  {task.assignees.length === 1 
+                    ? `@${(task.assignees[0].name || task.assignees[0].full_name || "").split(" ")[0]}`
+                    : `${task.assignees.length} ditugaskan`}
+                </span>
+              </div>
+            )}
           </div>
         </div>
         

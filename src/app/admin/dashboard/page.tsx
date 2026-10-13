@@ -137,12 +137,8 @@ export default function AdminDashboardPage() {
           onClick={() => router.push("/admin/perusahaan")}
           className="bg-white rounded-[20px] p-4 flex gap-4 items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] cursor-pointer active:scale-[0.98] transition-transform"
         >
-          <div className="w-[52px] h-[52px] bg-[#e6f0ea] rounded-[16px] flex items-center justify-center shrink-0 overflow-hidden relative">
-            {company?.avatar_company_url ? (
-              <img src={company.avatar_company_url} alt="Logo Perusahaan" className="w-full h-full object-cover" />
-            ) : (
-              <Building2 className="w-6 h-6 text-[#1E4738]" />
-            )}
+          <div className="w-[52px] h-[52px] bg-[#F3F4F6] rounded-full flex items-center justify-center shrink-0">
+            <Building2 className="w-6 h-6 text-[#6B7280]" strokeWidth={2} />
           </div>
           <div className="flex flex-col flex-1 overflow-hidden">
             {isLoading ? (
