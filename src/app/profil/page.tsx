@@ -63,6 +63,9 @@ export default function ProfilPage() {
       const data = await res.json();
       if (data.success) {
         setUser(data.data.user);
+        try {
+          localStorage.setItem("user", JSON.stringify(data.data.user));
+        } catch {}
         setAvatarError(false);
       } else {
         setError(data.message || "Gagal memuat profil");
@@ -309,11 +312,11 @@ export default function ProfilPage() {
               <img 
                 src={user.avatarUrl} 
                 alt="Avatar" 
-                className="w-[84px] h-[84px] rounded-full object-cover"
+                className="w-[84px] h-[84px] rounded-full object-cover border-[3px] border-[#356E3B]/20 ring-2 ring-[#356E3B]/10 shadow-sm"
                 onError={() => setAvatarError(true)}
               />
             ) : (
-              <div className="w-[84px] h-[84px] bg-[#C1DFCD] rounded-full flex items-center justify-center">
+              <div className="w-[84px] h-[84px] bg-[#C1DFCD] rounded-full flex items-center justify-center border-[3px] border-[#356E3B]/20 ring-2 ring-[#356E3B]/10 shadow-sm">
                 <User className="w-8 h-8 text-[#1E4738]" />
               </div>
             )}
@@ -418,7 +421,7 @@ export default function ProfilPage() {
                 <button
                   onClick={handleCancelExitRequest}
                   disabled={isCancellingExit}
-                  className="w-full py-2 px-3 border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-[10px] text-[11px] font-bold transition-all active:scale-95 text-center disabled:opacity-50"
+                  className="w-full py-2.5 px-4 border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-full text-[12px] font-bold transition-all active:scale-95 text-center disabled:opacity-50"
                 >
                   {isCancellingExit ? "Membatalkan..." : "Batalkan Permohonan Keluar"}
                 </button>
@@ -430,7 +433,7 @@ export default function ProfilPage() {
                   setExitReason("");
                   setIsExitModalOpen(true);
                 }}
-                className="w-full py-2.5 px-3 border border-red-200 hover:bg-red-50 text-red-600 rounded-[14px] text-[12px] font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"
+                className="w-full py-3 px-4 border border-red-200 hover:bg-red-50 text-red-600 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Ajukan Keluar dari Organisasi</span>

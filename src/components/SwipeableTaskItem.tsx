@@ -136,7 +136,7 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }:
         onMouseLeave={(e) => touchStartX.current !== null && handleTouchEnd(e)}
       >
         <div className="flex flex-col flex-1 pr-4">
-          <span className={`text-[14px] font-bold leading-tight mb-1 ${task.completed ? "text-[#9CA3AF] line-through" : "text-[#111827]"}`}>
+          <span className={`text-[14px] font-bold leading-tight mb-1 ${task.completed ? "text-[#6B7280]" : "text-[#111827]"}`}>
             {task.title}
           </span>
           <div className="flex items-center gap-1.5">

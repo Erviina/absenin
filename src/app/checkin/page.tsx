@@ -683,60 +683,65 @@ export default function CheckinPage() {
       {step === 3 && (
         <div className="flex-1 flex flex-col p-6 overflow-y-auto pb-32">
           
-          {/* Captured Photo */}
-          <div className="relative w-full aspect-[4/2.8] rounded-[24px] overflow-visible mb-14">
-            {photoUrl ? (
-              <img 
-                src={photoUrl} 
-                alt="Hasil Foto" 
-                className="w-full h-full object-cover rounded-[24px] shadow-sm"
-              />
-            ) : (
-              <div className="w-full h-full bg-gray-200 rounded-[24px] animate-pulse" />
-            )}
-            {/* Retake Button Overlapping (half outside) */}
-            <button 
-              onClick={() => setStep(2)}
-              className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-[#eff6f2] border border-[#dce9df] text-[#1E4738] font-bold text-[13px] px-5 py-3 rounded-full flex items-center gap-2 shadow-md hover:bg-white transition-colors whitespace-nowrap"
-            >
-              <RefreshCcw className="w-4 h-4" strokeWidth={2.5} />
-              Ambil Ulang Foto
-            </button>
-          </div>
-
           {/* Details Card */}
           <div className="bg-white rounded-[24px] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-[#f3f7f4] flex flex-col mb-6">
-            <div className="flex flex-col items-center mb-6">
-              {userError ? (
-                <span className="text-red-500 text-[13px] font-medium">{userError}</span>
-              ) : userData ? (
-                <>
-                  <h2 className="text-[20px] font-bold text-[#1E4738] mb-1">{userData.name}</h2>
-                  <span className="text-[11px] font-bold text-[#356E3B] tracking-wide uppercase">{userData.role}</span>
-                </>
+            
+            {/* Foto Kehadiran di dalam Card */}
+            <div className="w-full aspect-[4/3] rounded-[20px] overflow-hidden bg-gray-100 shadow-xs">
+              {photoUrl ? (
+                <img 
+                  src={photoUrl} 
+                  alt="Hasil Foto" 
+                  className="w-full h-full object-cover"
+                />
               ) : (
-                <div className="flex flex-col items-center">
-                  <div className="w-32 h-6 bg-gray-200 animate-pulse rounded mb-2"></div>
-                  <div className="w-24 h-4 bg-gray-200 animate-pulse rounded"></div>
-                </div>
+                <div className="w-full h-full bg-gray-200 animate-pulse" />
               )}
             </div>
+
+            {/* Tombol Ambil Ulang Foto */}
+            <div className="flex justify-center -mt-5 mb-3 z-10">
+              <button 
+                type="button"
+                onClick={() => setStep(2)}
+                className="bg-[#eff6f2] hover:bg-white border border-[#dce9df] text-[#1E4738] font-bold text-[12.5px] px-5 py-2.5 rounded-full flex items-center gap-2 shadow-md active:scale-95 transition-all whitespace-nowrap cursor-pointer"
+              >
+                <RefreshCcw className="w-3.5 h-3.5" strokeWidth={2.5} />
+                <span>Ambil Ulang Foto</span>
+              </button>
+            </div>
+
+            {/* User Info jika tersedia */}
+            {(userData || userError) && (
+              <div className="flex flex-col items-center mb-3">
+                {userError ? (
+                  <span className="text-red-500 text-[13px] font-medium">{userError}</span>
+                ) : userData ? (
+                  <>
+                    <h2 className="text-[18px] font-bold text-[#1E4738] leading-tight">{userData.name}</h2>
+                    <span className="text-[11px] font-semibold text-[#356E3B] tracking-wide uppercase mt-0.5">{userData.role}</span>
+                  </>
+                ) : null}
+              </div>
+            )}
 
             <div className="flex flex-col gap-4">
               {/* Mode Kerja */}
               {!isCheckOutMode && (
                 <div className="flex justify-between items-center border-t border-gray-100 pt-4">
                   <span className="text-[13px] text-[#9ca3af] font-medium">Mode Kerja</span>
-                  <div className="bg-[#f5f8f6] p-1 rounded-[10px] flex gap-1 border border-gray-100">
+                  <div className="bg-[#f5f8f6] p-1 rounded-full flex gap-1 border border-gray-100">
                     <button 
+                      type="button"
                       onClick={() => setWorkMode("WFO")}
-                      className={`px-4 py-1.5 rounded-md text-[11px] font-bold transition-all ${workMode === 'WFO' ? 'bg-white text-[#1E4738] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                      className={`px-4 py-1.5 rounded-full text-[11px] font-bold transition-all ${workMode === 'WFO' ? 'bg-white text-[#1E4738] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                       WFO
                     </button>
                     <button 
+                      type="button"
                       onClick={() => setWorkMode("WFH")}
-                      className={`px-4 py-1.5 rounded-md text-[11px] font-bold transition-all ${workMode === 'WFH' ? 'bg-white text-[#1E4738] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                      className={`px-4 py-1.5 rounded-full text-[11px] font-bold transition-all ${workMode === 'WFH' ? 'bg-white text-[#1E4738] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                       WFH
                     </button>

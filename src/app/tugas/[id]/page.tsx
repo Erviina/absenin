@@ -107,7 +107,7 @@ export default function TugasDetailPage() {
         {/* Title Card */}
         <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
           <div className="flex justify-between items-start gap-4">
-            <h1 className={`text-[18px] font-bold leading-snug ${task.completed ? "text-[#9CA3AF] line-through" : "text-[#111827]"}`}>
+            <h1 className={`text-[18px] font-bold leading-snug ${task.completed ? "text-[#6B7280]" : "text-[#111827]"}`}>
               {task.title}
             </h1>
             <Badge variant={task.type === 'group' ? 'info' : 'success'} size="sm" uppercase>

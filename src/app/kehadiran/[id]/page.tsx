@@ -175,58 +175,91 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
         </div>
 
         {/* Status Card */}
-        <div className="bg-[#F6FAF7] border border-[#E8F3EB] rounded-[24px] p-5">
-          <div className="flex justify-between items-start mb-6">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-[12px] bg-[#5C8966] flex items-center justify-center shrink-0">
+        <div className="bg-[#F8FAF9] border border-[#E8F1EA] rounded-[24px] p-5 shadow-xs">
+          {/* Header Row */}
+          <div className="flex justify-between items-center mb-5">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-[14px] bg-[#183B2B] flex items-center justify-center text-white shrink-0 shadow-xs">
                 <ShieldCheck className="w-5 h-5 text-white" strokeWidth={2} />
               </div>
-              <div className="flex flex-col">
-                <span className="text-[#111827] text-[14px] font-bold uppercase">{data.work_mode} • {data.work_mode === "WFH" ? "Work From Home" : "Work From Office"}</span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[#111827] text-[14px] sm:text-[15px] font-bold leading-tight truncate">
+                  {data.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
+                </span>
+                <span className="text-[#5C786C] text-[11.5px] font-medium leading-none mt-1">
+                  Presensi Mandiri
+                </span>
               </div>
             </div>
-            <div className="bg-white border border-[#E8F3EB] rounded-full px-3 py-1.5 flex items-center">
-              <span className="text-[#6B7280] text-[11px] font-bold">Durasi: </span>
-              <span className="text-[#9CA3AF] text-[11px] font-medium ml-1">{durasiKerja}</span>
+            
+            <div className="bg-white border border-[#E8F0EA] rounded-full px-3 py-1.5 flex items-center shrink-0 shadow-2xs">
+              <span className="text-[#6B7280] text-[11px] font-semibold">Durasi:</span>
+              <span className="text-[#111827] text-[11px] font-bold ml-1.5">{durasiKerja}</span>
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {/* Jam Masuk */}
-            <div className="flex-1 bg-white border border-[#E8F3EB] rounded-[16px] p-4 flex flex-col justify-center">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-[#5C8966]" />
-                <span className="text-[#6B7280] text-[12px] font-medium">Jam Masuk</span>
+            <div className="bg-white border border-[#E8F0EA] rounded-[18px] p-4 flex flex-col justify-between min-h-[114px] shadow-2xs">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-[#16A34A]" />
+                <span className="text-[#6B7280] text-[12px] font-semibold">Jam Masuk</span>
               </div>
-              <div className="flex items-baseline gap-1 mb-2">
-                <span className="text-[#111827] text-[24px] font-bold leading-none">{extractTime(data.check_in_time)}</span>
-                <span className="text-[#9CA3AF] text-[12px] font-bold">WIB</span>
+              
+              <div className="flex items-baseline gap-1.5 my-1">
+                <span className="text-[#111827] text-[22px] sm:text-[24px] font-bold leading-none tracking-tight">
+                  {extractTime(data.check_in_time)}
+                </span>
+                <span className="text-[#9CA3AF] text-[11px] font-bold">WIB</span>
+              </div>
+
+              <div className="flex items-center">
+                <span className="text-[10.5px] font-bold text-[#15803D] bg-[#DCFCE7]/70 px-2.5 py-0.5 rounded-full">
+                  Tercatat
+                </span>
               </div>
             </div>
             
             {/* Jam Keluar */}
             {data.check_out_time ? (
-              <div className="flex-1 bg-white border border-[#E8F3EB] rounded-[16px] p-4 flex flex-col justify-center">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-[#5C8966]" />
-                  <span className="text-[#6B7280] text-[12px] font-medium">Jam Keluar</span>
+              <div className="bg-white border border-[#E8F0EA] rounded-[18px] p-4 flex flex-col justify-between min-h-[114px] shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[#EA580C]" />
+                  <span className="text-[#6B7280] text-[12px] font-semibold">Jam Keluar</span>
                 </div>
-                <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-[#111827] text-[24px] font-bold leading-none">{extractTime(data.check_out_time)}</span>
-                  <span className="text-[#9CA3AF] text-[12px] font-bold">WIB</span>
+                
+                <div className="flex items-baseline gap-1.5 my-1">
+                  <span className="text-[#111827] text-[22px] sm:text-[24px] font-bold leading-none tracking-tight">
+                    {extractTime(data.check_out_time)}
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px] font-bold">WIB</span>
+                </div>
+
+                <div className="flex items-center">
+                  <span className="text-[10.5px] font-bold text-[#EA580C] bg-[#FFEDD5]/80 px-2.5 py-0.5 rounded-full">
+                    Selesai
+                  </span>
                 </div>
               </div>
             ) : (
-              <div className="flex-1 bg-white border border-dashed border-[#E5E7EB] rounded-[16px] p-4 flex flex-col justify-center">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-[#D1D5DB]" />
+              <div className="bg-white border border-dashed border-[#D1D5DB]/80 rounded-[18px] p-4 flex flex-col justify-between min-h-[114px]">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[#CBD5E1]" />
                   <span className="text-[#9CA3AF] text-[12px] font-medium">Jam Keluar</span>
                 </div>
-                <div className="flex items-baseline gap-2 mb-2">
-                  <span className="text-[#9CA3AF] text-[20px] font-bold leading-none tracking-widest">- - : - -</span>
-                  <span className="text-[#9CA3AF] text-[12px] font-bold">WIB</span>
+                
+                <div className="flex items-baseline gap-1.5 my-1">
+                  <span className="text-[#9CA3AF] text-[20px] sm:text-[22px] font-bold leading-none tracking-wider">
+                    -- : --
+                  </span>
+                  <span className="text-[#9CA3AF] text-[11px] font-bold">WIB</span>
                 </div>
-                <span className="text-[#9CA3AF] text-[11px] font-medium">Belum Checkout</span>
+
+                <div className="flex items-center">
+                  <span className="text-[10.5px] font-medium text-[#6B7280] bg-[#F1F5F9] px-2.5 py-0.5 rounded-full">
+                    Belum Checkout
+                  </span>
+                </div>
               </div>
             )}
           </div>

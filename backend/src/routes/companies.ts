@@ -766,25 +766,19 @@ router.post("/avatar", authenticate, upload.single("avatar"), async (req: Reques
       return res.status(400).json({ success: false, message: "File foto tidak ditemukan." });
     }
 
-    // 1. Get Admin's company_id
-    const profileRes = await db.execute(sql`
-      SELECT company_id FROM profiles WHERE id = ${user.id}
-    `);
-    
-    if (profileRes.rows.length === 0 || !profileRes.rows[0].company_id) {
+    // 1. Resolve tenant & check authorization
+    const tenant = await resolveTenant(req, user.id);
+    if (!tenant) {
       return res.status(404).json({ success: false, message: "Anda tidak terhubung ke perusahaan manapun" });
     }
-    const companyId = profileRes.rows[0].company_id as string;
 
-    // 2. Verify if user is an Admin
-    const roleRes = await db.execute(sql`
-      SELECT role FROM profile_roles WHERE profile_id = ${user.id} AND role = 'Admin'
-    `);
-    if (roleRes.rows.length === 0) {
-      return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin yang dapat mengubah foto perusahaan" });
+    if (!tenant.isManagement) {
+      return res.status(403).json({ success: false, message: "Forbidden: Hanya Pemilik, Admin, atau Manager yang dapat mengubah foto perusahaan" });
     }
 
-    // 3. Upload photo to Supabase
+    const companyId = tenant.companyId;
+
+    // 2. Upload photo to Supabase
     let photoUrl;
     try {
       photoUrl = await uploadCompanyPhoto(file.buffer, file.mimetype, companyId);
@@ -792,7 +786,7 @@ router.post("/avatar", authenticate, upload.single("avatar"), async (req: Reques
       return res.status(400).json({ success: false, message: err.message });
     }
 
-    // 4. Update company with new avatar URL
+    // 3. Update company with new avatar URL
     const updateRes = await db.update(companies)
       .set({ avatar_company_url: photoUrl })
       .where(eq(companies.id, companyId))

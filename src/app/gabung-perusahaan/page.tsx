@@ -12,6 +12,7 @@ function GabungPerusahaanContent() {
   const searchParams = useSearchParams();
   const { showToast } = useDialog();
   const [kode, setKode] = useState("");
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [status, setStatus] = useState<'idle' | 'pending' | 'accepted'>('idle');
   const [companyName, setCompanyName] = useState("Perusahaan");
@@ -36,9 +37,23 @@ function GabungPerusahaanContent() {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
-        if (data.success && data.data && data.data.status === 'pending') {
+        if (data.success && data.data) {
+          setActiveRequestId(data.data.id);
           setCompanyName(data.data.company_name || "Perusahaan");
-          setStatus('pending');
+
+          if (data.data.status === 'pending') {
+            setStatus('pending');
+          } else if (data.data.status === 'approved') {
+            const seen = localStorage.getItem(`join_accepted_seen_${data.data.id}`);
+            const forceSuccess = searchParams.get("success") === "true";
+            if (!seen || forceSuccess) {
+              setStatus('accepted');
+            } else {
+              setStatus('idle');
+            }
+          } else {
+            setStatus('idle');
+          }
         } else {
           setStatus('idle');
         }
@@ -47,7 +62,48 @@ function GabungPerusahaanContent() {
       }
     };
     fetchStatus();
-  }, []);
+  }, [searchParams]);
+
+  // Polling saat status pending sehingga ketika admin meng-ACC langsung otomatis berubah ke Berhasil Bergabung
+  useEffect(() => {
+    if (status !== 'pending') return;
+
+    const interval = setInterval(async () => {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      try {
+        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && data.data && data.data.status === 'approved') {
+          setActiveRequestId(data.data.id);
+          setCompanyName(data.data.company_name || "Perusahaan");
+          setStatus('accepted');
+
+          // Sinkronisasi data user dan company di localStorage
+          try {
+            const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const meData = await meRes.json();
+            if (meData.success && meData.data?.user) {
+              localStorage.setItem("user", JSON.stringify(meData.data.user));
+              if (meData.data.user.company?.id) {
+                localStorage.setItem("activeCompanyId", meData.data.user.company.id);
+              }
+            }
+          } catch (e) {
+            console.error("Gagal update profil:", e);
+          }
+        }
+      } catch (err) {
+        console.error("Polling join status error:", err);
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [status]);
 
   useEffect(() => {
     if (isScannerOpen) {
@@ -142,6 +198,7 @@ function GabungPerusahaanContent() {
         const dataMe = await resMe.json();
         if (dataMe.success && dataMe.data) {
           setCompanyName(dataMe.data.company_name);
+          setActiveRequestId(dataMe.data.id);
         }
         setStatus('pending');
       } else {
@@ -153,6 +210,30 @@ function GabungPerusahaanContent() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleLanjutKeBeranda = async () => {
+    if (activeRequestId) {
+      localStorage.setItem(`join_accepted_seen_${activeRequestId}`, "true");
+    }
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      try {
+        const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const meData = await meRes.json();
+        if (meData.success && meData.data?.user) {
+          localStorage.setItem("user", JSON.stringify(meData.data.user));
+          if (meData.data.user.company?.id) {
+            localStorage.setItem("activeCompanyId", meData.data.user.company.id);
+          }
+        }
+      } catch (e) {
+        console.error("Gagal refresh user di beranda:", e);
+      }
+    }
+    router.push("/dashboard");
   };
 
   const handleBack = () => {
@@ -205,25 +286,25 @@ function GabungPerusahaanContent() {
       <div className="flex flex-col min-h-[100dvh] bg-white items-center justify-center px-6 text-center animate-in zoom-in-95 duration-500 relative">
         
         {/* Success Icon */}
-        <div className="w-[84px] h-[84px] bg-[#356E3B] rounded-full flex items-center justify-center shadow-[0_8px_24px_rgba(53,110,59,0.3)] mb-8">
-          <Check className="w-10 h-10 text-white" strokeWidth={3} />
+        <div className="w-[84px] h-[84px] bg-[#2D5A3F] rounded-full flex items-center justify-center shadow-[0_8px_24px_rgba(45,90,63,0.25)] mb-8">
+          <Check className="w-10 h-10 text-white stroke-[3]" />
         </div>
 
         {/* Text Content */}
-        <h1 className="text-[20px] font-bold text-[#1E293B] mb-1.5">Berhasil Bergabung!</h1>
-        <h2 className="text-[#356E3B] font-bold text-[15px] mb-4">
+        <h1 className="text-[22px] font-bold text-[#111827] mb-1.5">Berhasil Bergabung!</h1>
+        <h2 className="text-[#2D5A3F] font-bold text-[16px] mb-3.5">
           {companyName}
         </h2>
         
-        <p className="text-gray-500 text-[13px] px-6 leading-relaxed max-w-[280px]">
+        <p className="text-[#6B7280] text-[13.5px] px-6 leading-relaxed max-w-[290px]">
           Selamat datang di tim! Sekarang Anda sudah menjadi anggota dari perusahaan ini.
         </p>
 
         {/* Bottom Button */}
-        <div className="absolute bottom-6 left-6 right-6 flex justify-center">
+        <div className="absolute bottom-8 left-6 right-6 flex justify-center max-w-md mx-auto">
           <button 
-            onClick={() => router.push("/dashboard")}
-            className="w-full max-w-md bg-[#356E3B] hover:bg-[#2b5930] text-white py-4 rounded-full text-[15px] font-bold transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] active:scale-[0.98]"
+            onClick={handleLanjutKeBeranda}
+            className="w-full bg-[#2D5A3F] hover:bg-[#234731] text-white py-4 rounded-full text-[15px] font-bold transition-all shadow-[0_6px_20px_rgba(45,90,63,0.25)] active:scale-[0.98] cursor-pointer"
           >
             Lanjut ke Beranda
           </button>

@@ -43,19 +43,19 @@ export function AdminBottomNav({ activeTab = "beranda" }: AdminBottomNavProps) {
       ),
     },
     {
-      id: "izin",
-      label: "Izin & Cuti",
-      path: "/admin/izin", // adjust path as needed later
-      icon: (active: boolean) => (
-        <FileText className="w-6 h-6" strokeWidth={active ? 2.2 : 2} />
-      ),
-    },
-    {
       id: "tugas",
       label: "Daftar Tugas",
       path: "/admin/tugas", // adjust path as needed later
       icon: (active: boolean) => (
         <ClipboardEdit className="w-6 h-6" strokeWidth={active ? 2.2 : 2} />
+      ),
+    },
+    {
+      id: "izin",
+      label: "Izin & Cuti",
+      path: "/admin/izin", // adjust path as needed later
+      icon: (active: boolean) => (
+        <FileText className="w-6 h-6" strokeWidth={active ? 2.2 : 2} />
       ),
     },
   ];

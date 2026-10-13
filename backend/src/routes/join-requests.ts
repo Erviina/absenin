@@ -140,7 +140,8 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
   try {
     const user = (req as any).user;
 
-    const requestRes = await db.execute(sql`
+    // 1. Check if there is a pending request
+    const pendingRes = await db.execute(sql`
       SELECT cjr.id, cjr.status, cjr.created_at, c.name as company_name 
       FROM company_join_requests cjr
       JOIN companies c ON c.id = cjr.company_id
@@ -149,18 +150,36 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
       LIMIT 1
     `);
 
-    if (requestRes.rows.length === 0) {
+    if (pendingRes.rows.length > 0) {
       return res.status(200).json({
         success: true,
-        message: "Tidak ada request",
-        data: null,
+        message: "Berhasil mengambil request",
+        data: pendingRes.rows[0],
+      });
+    }
+
+    // 2. If no pending request, check if there is an approved request
+    const approvedRes = await db.execute(sql`
+      SELECT cjr.id, cjr.status, cjr.created_at, c.name as company_name 
+      FROM company_join_requests cjr
+      JOIN companies c ON c.id = cjr.company_id
+      WHERE cjr.profile_id = ${user.id} AND cjr.status = 'approved' AND cjr.deleted_at IS NULL
+      ORDER BY cjr.updated_at DESC
+      LIMIT 1
+    `);
+
+    if (approvedRes.rows.length > 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Berhasil mengambil request yang disetujui",
+        data: approvedRes.rows[0],
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "Berhasil mengambil request",
-      data: requestRes.rows[0],
+      message: "Tidak ada request",
+      data: null,
     });
 
   } catch (error: any) {

@@ -39,7 +39,31 @@ function CekPerusahaanContent() {
         return;
       }
 
-      // First, fetch the latest user profile to see if they are already in a company
+      // Check if user has an approved or pending join request
+      try {
+        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        
+        if (data.success && data.data) {
+          if (data.data.status === 'approved') {
+            const seen = localStorage.getItem(`join_accepted_seen_${data.data.id}`);
+            if (!seen) {
+              router.replace("/gabung-perusahaan");
+              return;
+            }
+          } else if (data.data.status === 'pending') {
+            setCompanyName(data.data.company_name || "Perusahaan");
+            setStatus('pending');
+            return;
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+
+      // Fetch user profile
       try {
         const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
           headers: { Authorization: `Bearer ${token}` }
@@ -58,28 +82,34 @@ function CekPerusahaanContent() {
         console.error("Error fetching /auth/me", e);
       }
 
-      // If no company yet, check if there's a pending join request
+      setStatus('idle');
+    };
+    
+    fetchStatus();
+  }, [router, from]);
+
+  // Polling saat status pending sehingga ketika admin meng-ACC langsung dialihkan ke layar sukses
+  useEffect(() => {
+    if (status !== 'pending') return;
+
+    const interval = setInterval(async () => {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
       try {
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
-        
-        // Ensure we only show pending if it's literally pending
-        if (data.success && data.data && data.data.status === 'pending') {
-          setCompanyName(data.data.company_name || "Perusahaan");
-          setStatus('pending');
-        } else {
-          setStatus('idle');
+        if (data.success && data.data && data.data.status === 'approved') {
+          router.replace("/gabung-perusahaan");
         }
-      } catch (err) {
-        console.error(err);
-        setStatus('idle');
+      } catch (e) {
+        console.error("Polling error in cek-perusahaan:", e);
       }
-    };
-    
-    fetchStatus();
-  }, [router, from]);
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [status, router]);
 
   if (status === 'checking') {
     return (

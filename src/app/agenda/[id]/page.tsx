@@ -8,7 +8,7 @@ import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
 import { formatDateWithDay } from "@/lib/dateUtils";
 import { shareContent } from "@/lib/shareUtils";
-import { isAgendaUrl, formatAgendaUrl } from "@/app/agenda/page";
+import { isAgendaUrl, formatAgendaUrl, getAgendaCategoryColor } from "@/app/agenda/page";
 import { Badge } from "@/components/Badge";
 import { PrimaryButton } from "@/components/PrimaryButton";
 
@@ -144,7 +144,7 @@ export default function AgendaDetailPage() {
         <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
           <div className="flex justify-between items-start gap-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="success" size="sm" icon={<Tag className="w-3 h-3" />}>
+              <Badge variant={getAgendaCategoryColor(categoryName).variant} size="sm" icon={<Tag className="w-3 h-3" />}>
                 {categoryName}
               </Badge>
               <Badge variant={isCompany ? "company" : "personal"} size="xs" uppercase>

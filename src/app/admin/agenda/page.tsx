@@ -21,6 +21,8 @@ import { TopBar } from "@/components/TopBar";
 import { CustomSelect } from "@/components/CustomSelect";
 import { DateTimeRollerPicker } from "@/components/DateTimeRollerPicker";
 import { useDialog } from "@/context/DialogContext";
+import { Badge } from "@/components/Badge";
+import { getAgendaCategoryColor } from "@/app/agenda/page";
 
 // Tipe Data untuk Agenda
 type AgendaItem = {
@@ -823,27 +825,27 @@ export default function AdminAgendaPage() {
               </div>
 
               {displayedAgendas.length > 0 ? (
-                displayedAgendas.map(({ agenda, dateStr }) => (
-                  <div 
-                    key={agenda.id} 
-                    onClick={() => setSelectedAgendaDetail(agenda)}
-                    className="bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 hover:border-[#356E3B] transition-colors group relative overflow-hidden cursor-pointer"
-                  >
-                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#356E3B] rounded-l-[20px]" />
-                    
-                    <div className="flex justify-between items-start pl-2">
-                      <div className="flex flex-col gap-1">
-                        <div className={`px-2.5 py-1 w-fit rounded-full flex items-center border ${
-                          agenda.type === "Rapat" ? "bg-[#E8F3EB] border-[#D1E5D5] text-[#356E3B]" :
-                          agenda.type === "Acara" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
-                          agenda.type === "Hari Penting" ? "bg-[#FAF5FF] border-[#E9D5FF] text-[#9333EA]" :
-                          agenda.type === "Tenggat" ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]" :
-                          "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]"
-                        }`}>
-                          <span className="text-[10px] font-bold uppercase tracking-wider">{agenda.type}</span>
+                displayedAgendas.map(({ agenda, dateStr }) => {
+                  const catColor = getAgendaCategoryColor(agenda.type);
+                  return (
+                    <div 
+                      key={agenda.id} 
+                      onClick={() => setSelectedAgendaDetail(agenda)}
+                      className={`bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 ${catColor.hoverBorder} transition-colors group relative overflow-hidden cursor-pointer`}
+                    >
+                      <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
+                      
+                      <div className="flex justify-between items-start pl-2">
+                        <div className="flex flex-col gap-1">
+                          <Badge 
+                            variant={catColor.variant}
+                            size="xs"
+                            uppercase
+                          >
+                            {agenda.type}
+                          </Badge>
+                          <h3 className="text-[#111827] text-[16px] font-bold leading-tight pr-4 mt-1">{agenda.title}</h3>
                         </div>
-                        <h3 className="text-[#111827] text-[16px] font-bold leading-tight pr-4 mt-1">{agenda.title}</h3>
-                      </div>
                       
                       {/* More Action Menu (Titik Tiga) */}
                       <div className="relative">
@@ -939,7 +941,8 @@ export default function AdminAgendaPage() {
                       )}
                     </div>
                   </div>
-                ))
+                );
+              })
               ) : (
                 <div className="flex flex-col items-center justify-center py-10 opacity-60">
                   <CalendarIcon className="w-12 h-12 text-[#9CA3AF] mb-3" strokeWidth={1.5} />
@@ -957,15 +960,13 @@ export default function AdminAgendaPage() {
           <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => setSelectedAgendaDetail(null)} />
           <div className="relative w-full max-w-sm bg-white rounded-[24px] shadow-xl z-10 p-6 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
-              <div className={`px-3 py-1 w-fit rounded-full flex items-center border ${
-                selectedAgendaDetail.type === "Rapat" ? "bg-[#E8F3EB] border-[#D1E5D5] text-[#356E3B]" :
-                selectedAgendaDetail.type === "Acara" ? "bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]" :
-                selectedAgendaDetail.type === "Hari Penting" ? "bg-[#FAF5FF] border-[#E9D5FF] text-[#9333EA]" :
-                selectedAgendaDetail.type === "Tenggat" ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]" :
-                "bg-[#F3F4F6] border-[#E5E7EB] text-[#4B5563]"
-              }`}>
-                <span className="text-[11px] font-bold uppercase tracking-wider">{selectedAgendaDetail.type}</span>
-              </div>
+              <Badge 
+                variant={getAgendaCategoryColor(selectedAgendaDetail.type).variant}
+                size="sm"
+                uppercase
+              >
+                {selectedAgendaDetail.type}
+              </Badge>
               <div className="flex items-center gap-1.5">
                 <div className="relative">
                   <button

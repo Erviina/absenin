@@ -165,8 +165,12 @@ export function AccountContextDrawer({
                 currentMode === "management" ? (
                   <div className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F2FAF5] border-[1.5px] border-[#6EE7B7] rounded-[20px] shadow-[0_2px_8px_rgba(34,197,94,0.04)]">
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-12 h-12 rounded-[16px] bg-[#183B2B] flex items-center justify-center text-white shrink-0">
-                        <Building2 className="w-5 h-5" strokeWidth={2} />
+                      <div className="w-12 h-12 rounded-[16px] bg-[#183B2B] flex items-center justify-center text-white shrink-0 overflow-hidden border-2 border-[#1E4738]/20 ring-1 ring-[#1E4738]/10">
+                        {activeCompany?.avatar_company_url ? (
+                          <img src={activeCompany.avatar_company_url} alt={activeCompany.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Building2 className="w-5 h-5" strokeWidth={2} />
+                        )}
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span className="text-[#111827] text-[15px] font-bold leading-tight">
@@ -190,8 +194,12 @@ export function AccountContextDrawer({
                     className="flex items-center justify-between p-3.5 sm:p-4 bg-white hover:bg-gray-50/80 border border-[#E5E7EB] rounded-[20px] cursor-pointer transition-all active:scale-[0.99] group"
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-12 h-12 rounded-[16px] bg-[#F8FAFC] border border-[#E2E8F0]/80 group-hover:bg-[#EAF3ED] flex items-center justify-center text-[#334155] group-hover:text-[#183B2B] shrink-0 transition-colors">
-                        <Building2 className="w-5 h-5" strokeWidth={1.8} />
+                      <div className="w-12 h-12 rounded-[16px] bg-[#F8FAFC] border border-[#E2E8F0]/80 group-hover:bg-[#EAF3ED] flex items-center justify-center text-[#334155] group-hover:text-[#183B2B] shrink-0 transition-colors overflow-hidden border-2 border-[#1E4738]/20 ring-1 ring-[#1E4738]/10">
+                        {activeCompany?.avatar_company_url ? (
+                          <img src={activeCompany.avatar_company_url} alt={activeCompany.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Building2 className="w-5 h-5" strokeWidth={1.8} />
+                        )}
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span className="text-[#111827] text-[15px] font-bold leading-tight group-hover:text-[#183B2B] transition-colors">
@@ -245,12 +253,16 @@ export function AccountContextDrawer({
                       }`}
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
-                        <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 ${
+                        <div className={`w-12 h-12 rounded-[16px] flex items-center justify-center shrink-0 overflow-hidden border-2 border-[#1E4738]/20 ring-1 ring-[#1E4738]/10 ${
                           isSelected 
                             ? "bg-[#183B2B] text-white" 
-                            : "bg-[#F8FAFC] border border-[#E2E8F0]/80 text-[#334155] group-hover:bg-[#EAF3ED] group-hover:text-[#183B2B] transition-colors"
+                            : "bg-[#F8FAFC] text-[#334155] group-hover:bg-[#EAF3ED] group-hover:text-[#183B2B] transition-colors"
                         }`}>
-                          <CatIcon className="w-5 h-5" strokeWidth={isSelected ? 2 : 1.8} />
+                          {m.company?.avatar_company_url ? (
+                            <img src={m.company.avatar_company_url} alt={m.company.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <CatIcon className="w-5 h-5" strokeWidth={isSelected ? 2 : 1.8} />
+                          )}
                         </div>
                         <div className="flex flex-col min-w-0">
                           <span className={`text-[15px] font-bold leading-tight truncate ${

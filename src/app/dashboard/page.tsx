@@ -9,15 +9,25 @@ import {
   Users,
   Building2,
   User,
-  Newspaper
+  Newspaper,
+  ClipboardList,
+  Calendar,
+  Check,
+  Clock,
+  ChevronRight,
+  Plus,
+  CheckCircle2
 } from "lucide-react";
 import { sanitizeText, truncateText } from "@/lib/sanitize";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { useCompany } from "@/context/CompanyContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 import { getPersonalModePreference } from "@/lib/personalMode";
+import { Badge } from "@/components/Badge";
+import { getAgendaCategoryColor } from "@/app/agenda/page";
+import { formatDateWithDay } from "@/lib/dateUtils";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -34,6 +44,10 @@ export default function DashboardPage() {
 
   const [user, setUser] = useState<any>(null);
   const [news, setNews] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [agendas, setAgendas] = useState<any[]>([]);
+  const [isTasksAgendasLoading, setIsTasksAgendasLoading] = useState(true);
+  const [resumeTab, setResumeTab] = useState<"all" | "tasks" | "agendas">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [avatarError, setAvatarError] = useState(false);
   const [attendanceStatus, setAttendanceStatus] = useState<"NOT_CHECKED_IN" | "CHECKED_IN" | "CHECKED_OUT" | null>(null);
@@ -66,11 +80,13 @@ export default function DashboardPage() {
           headers["x-company-id"] = activeCompanyId;
         }
 
-        const [authRes, newsRes, attendRes, notifRes] = await Promise.all([
+        const [authRes, newsRes, attendRes, notifRes, tasksRes, agendasRes] = await Promise.all([
           fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/news", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/attendances/today", { headers }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications/unread-count", { headers })
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications/unread-count", { headers }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", { headers }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/agendas", { headers })
         ]);
 
         try {
@@ -83,6 +99,23 @@ export default function DashboardPage() {
             if (!authData.data.user?.company && !activeCompanyId && !skipCompanyPrompt) {
               router.push("/cek-perusahaan");
               return;
+            }
+
+            // Cek jika pengguna baru saja di-ACC oleh admin dan belum melihat layar "Berhasil Bergabung!"
+            try {
+              const joinReqRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              const joinReqData = await joinReqRes.json();
+              if (joinReqData.success && joinReqData.data && joinReqData.data.status === 'approved') {
+                const seen = localStorage.getItem(`join_accepted_seen_${joinReqData.data.id}`);
+                if (!seen) {
+                  router.push("/gabung-perusahaan");
+                  return;
+                }
+              }
+            } catch (e) {
+              // Abaikan jika error
             }
           }
         } catch (e) {
@@ -119,16 +152,95 @@ export default function DashboardPage() {
           console.error("Failed to parse attendance data", e);
           setAttendanceError(true);
         }
+
+        try {
+          if (tasksRes.ok) {
+            const tasksData = await tasksRes.json();
+            if (Array.isArray(tasksData)) {
+              setTasks(tasksData);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to parse tasks data", e);
+        }
+
+        try {
+          if (agendasRes.ok) {
+            const agendasData = await agendasRes.json();
+            if (agendasData.success && Array.isArray(agendasData.data)) {
+              setAgendas(agendasData.data);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to parse agendas data", e);
+        }
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
         setAttendanceError(true);
       } finally {
         setIsLoading(false);
         setIsAttendanceLoading(false);
+        setIsTasksAgendasLoading(false);
       }
     };
     fetchData();
   }, [router, activeCompanyId, isCompanyLoading]);
+
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }, []);
+
+  const todayTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      if (!t.date) return true;
+      return t.date.startsWith(todayStr);
+    });
+  }, [tasks, todayStr]);
+
+  const todayAgendas = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    return agendas.filter((a) => {
+      if (!a.start_time || !a.end_time) return false;
+      const s = new Date(a.start_time);
+      const e = new Date(a.end_time);
+      return s <= endOfToday && e >= startOfToday;
+    });
+  }, [agendas]);
+
+  const uncompletedTasksCount = useMemo(() => {
+    return todayTasks.filter((t) => !t.completed).length;
+  }, [todayTasks]);
+
+  const handleToggleTask = async (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const target = tasks.find((t) => t.id === taskId);
+    if (!target) return;
+
+    const nextCompleted = !target.completed;
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, completed: nextCompleted } : t)));
+
+    try {
+      const token = localStorage.getItem("accessToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tasks/${taskId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ completed: nextCompleted }),
+      });
+    } catch (err) {
+      console.error("Failed to toggle task", err);
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, completed: target.completed } : t)));
+    }
+  };
 
   const isManagement = activeRole 
     ? ["owner", "admin", "manager"].includes(activeRole) 
@@ -176,11 +288,11 @@ export default function DashboardPage() {
               <img
                 src={user.avatarUrl}
                 alt="Avatar"
-                className="w-[46px] h-[46px] rounded-full shrink-0 object-cover ring-2 ring-[#1E4738]/10 group-hover:ring-[#1E4738]/30 transition-all shadow-xs"
+                className="w-[46px] h-[46px] rounded-full shrink-0 object-cover border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 group-hover:ring-[#1E4738]/30 transition-all shadow-xs"
                 onError={() => setAvatarError(true)}
               />
             ) : (
-              <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full flex items-center justify-center text-[#1E4738] font-bold text-[16px] shadow-xs">
+              <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full flex items-center justify-center text-[#1E4738] font-bold text-[16px] border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 shadow-xs">
                 {user?.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
               </div>
             )}
@@ -219,8 +331,10 @@ export default function DashboardPage() {
         >
           {/* Active Company & Category */}
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-10 h-10 rounded-[14px] bg-[#1E4738] text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
-              {(() => {
+            <div className="w-10 h-10 rounded-[14px] bg-[#1E4738] text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform overflow-hidden border-2 border-[#1E4738]/20 ring-1 ring-[#1E4738]/10">
+              {activeCompany?.avatar_company_url ? (
+                <img src={activeCompany.avatar_company_url} alt={activeCompany.name} className="w-full h-full object-cover" />
+              ) : (() => {
                 const CatIcon = activeCompany ? getCategoryIcon(activeCompany?.category?.code) : User;
                 return <CatIcon className="w-5 h-5" />;
               })()}
@@ -277,23 +391,195 @@ export default function DashboardPage() {
             </h1>
           </div>
 
-          {/* CTA Check In Overlapping at Bottom Right (Half Pill) */}
-          <div className="absolute bottom-0 right-0 z-20 flex items-end">
+          {/* CTA Check In / Out Floating Full Rounded Pill at Bottom Right */}
+          <div className="absolute bottom-3.5 right-3.5 z-20">
             <button 
-              onClick={() => window.location.href = '/checkin'}
+              onClick={() => router.push('/checkin')}
               disabled={isAttendanceLoading || attendanceError}
-              className="bg-[#1E4738] hover:bg-[#153428] text-white rounded-l-full pl-5 pr-4 py-3 flex items-center gap-2 shadow-sm border-[4px] border-r-0 border-white transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="bg-[#1E4738] hover:bg-[#153428] text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] border-[3px] border-white transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
             >
-              <MapPin className="w-[18px] h-[18px]" strokeWidth={2.5} />
-              <span className="font-bold text-[14px]">
+              <MapPin className="w-4 h-4 text-white shrink-0" strokeWidth={2.5} />
+              <span className="font-bold text-[13.5px] leading-none">
                 {isAttendanceLoading 
                   ? "Memuat..." 
                   : attendanceError 
                     ? "Gagal Memuat" 
                     : (attendanceStatus === "CHECKED_IN" ? "Keluar" : "Masuk")}
               </span>
-              <ArrowRight className="w-5 h-5 ml-1" strokeWidth={2.5} />
+              <ArrowRight className="w-4 h-4 text-white shrink-0" strokeWidth={2.5} />
             </button>
+          </div>
+        </div>
+
+        {/* Aktivitas Hari Ini (Resume Tugas & Agenda) */}
+        <div className="flex flex-col gap-3.5">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[18px] font-bold text-[#1E4738]">Aktivitas Hari Ini</h2>
+              {(todayTasks.length > 0 || todayAgendas.length > 0) && (
+                <span className="text-[10.5px] font-bold text-[#356E3B] bg-[#E8F3EB] px-2.5 py-0.5 rounded-full">
+                  {uncompletedTasksCount > 0 ? `${uncompletedTasksCount} tugas aktif` : `${todayTasks.length + todayAgendas.length} jadwal`}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => router.push(resumeTab === "agendas" ? "/agenda" : "/tugas")}
+              className="text-[#356E3B] text-[13px] font-medium flex items-center gap-1 hover:underline active:scale-95 transition-transform"
+            >
+              Lihat Semua
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Clean Pill Switcher */}
+          <div className="flex items-center gap-1.5 p-1 bg-[#EEF5F0] rounded-full w-fit">
+            <button
+              onClick={() => setResumeTab("all")}
+              className={`px-3 py-1 rounded-full text-[12px] font-bold transition-all cursor-pointer ${
+                resumeTab === "all" ? "bg-white text-[#1E4738] shadow-xs" : "text-[#5C786C] hover:text-[#1E4738]"
+              }`}
+            >
+              Semua {todayTasks.length + todayAgendas.length > 0 && `(${todayTasks.length + todayAgendas.length})`}
+            </button>
+            <button
+              onClick={() => setResumeTab("tasks")}
+              className={`px-3 py-1 rounded-full text-[12px] font-bold transition-all cursor-pointer ${
+                resumeTab === "tasks" ? "bg-white text-[#1E4738] shadow-xs" : "text-[#5C786C] hover:text-[#1E4738]"
+              }`}
+            >
+              Tugas {todayTasks.length > 0 && `(${todayTasks.length})`}
+            </button>
+            <button
+              onClick={() => setResumeTab("agendas")}
+              className={`px-3 py-1 rounded-full text-[12px] font-bold transition-all cursor-pointer ${
+                resumeTab === "agendas" ? "bg-white text-[#1E4738] shadow-xs" : "text-[#5C786C] hover:text-[#1E4738]"
+              }`}
+            >
+              Agenda {todayAgendas.length > 0 && `(${todayAgendas.length})`}
+            </button>
+          </div>
+
+          {/* Clean Activity Cards Stack */}
+          <div className="flex flex-col gap-3">
+            {isTasksAgendasLoading ? (
+              <div className="text-center text-[#7d998c] text-[13px] font-medium py-4 animate-pulse">
+                Memuat aktivitas hari ini...
+              </div>
+            ) : (() => {
+              const showTasks = resumeTab === "all" || resumeTab === "tasks";
+              const showAgendas = resumeTab === "all" || resumeTab === "agendas";
+
+              const itemsToRender: React.ReactNode[] = [];
+
+              if (showTasks) {
+                todayTasks.forEach((task) => {
+                  itemsToRender.push(
+                    <div
+                      key={`task-${task.id}`}
+                      onClick={() => router.push(`/tugas/${task.id}`)}
+                      className="bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                        <button
+                          onClick={(e) => handleToggleTask(task.id, e)}
+                          className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                            task.completed
+                              ? "bg-[#2D5A3F] border-[#2D5A3F]"
+                              : "bg-white border-[#D1E0D6] hover:border-[#356E3B]"
+                          }`}
+                          title={task.completed ? "Tandai belum selesai" : "Tandai selesai"}
+                        >
+                          {task.completed && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                        </button>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <h3
+                            className={`text-[13.5px] font-bold leading-tight truncate ${
+                              task.completed ? "text-[#6B7280]" : "text-[#111827]"
+                            }`}
+                          >
+                            {task.title}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
+                            <span className="flex items-center gap-1 font-medium">
+                              <Clock className="w-3 h-3 text-[#356E3B]" />
+                              {task.time ? `Pukul ${task.time}` : "Hari Ini"}
+                            </span>
+                            <span className="text-gray-300">•</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#356E3B]">
+                              {task.type === "group" ? "Tugas Grup" : "Personal"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+                    </div>
+                  );
+                });
+              }
+
+              if (showAgendas) {
+                todayAgendas.forEach((agenda) => {
+                  const catColor = getAgendaCategoryColor(agenda.category?.name || agenda.type);
+                  itemsToRender.push(
+                    <div
+                      key={`agenda-${agenda.id}`}
+                      onClick={() => router.push(`/agenda/${agenda.id}`)}
+                      className={`bg-white rounded-[20px] p-4 pl-4.5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3`}
+                    >
+                      <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
+                      <div className="flex flex-col min-w-0 flex-1 pl-1">
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                          <Badge variant={catColor.variant} size="xs" uppercase>
+                            {agenda.category?.name || agenda.type || "Kegiatan"}
+                          </Badge>
+                          <Badge
+                            variant={agenda.scope === "company" || agenda.type === "COMPANY" ? "company" : "personal"}
+                            size="xs"
+                            uppercase
+                          >
+                            {agenda.scope === "company" || agenda.type === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
+                          </Badge>
+                        </div>
+                        <h3 className="text-[13.5px] font-bold text-[#111827] leading-tight truncate">
+                          {agenda.title}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
+                          <span className="flex items-center gap-1 font-medium shrink-0">
+                            <Clock className="w-3 h-3 text-[#356E3B]" />
+                            {agenda.time_range || "Hari ini"}
+                          </span>
+                          {agenda.link_or_location && (
+                            <>
+                              <span className="text-gray-300">•</span>
+                              <span className="truncate max-w-[160px] font-medium">{agenda.link_or_location}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+                    </div>
+                  );
+                });
+              }
+
+              if (itemsToRender.length === 0) {
+                return (
+                  <div className="bg-white rounded-[20px] p-6 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center">
+                    <p className="text-[#7d998c] text-[13px] font-medium">
+                      {resumeTab === "tasks"
+                        ? "Belum ada tugas untuk hari ini."
+                        : resumeTab === "agendas"
+                        ? "Belum ada agenda untuk hari ini."
+                        : "Belum ada tugas atau agenda untuk hari ini."}
+                    </p>
+                  </div>
+                );
+              }
+
+              return itemsToRender.slice(0, 4);
+            })()}
           </div>
         </div>
 

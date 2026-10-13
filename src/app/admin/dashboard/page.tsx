@@ -15,7 +15,6 @@ import {
   User, 
   ChevronRight 
 } from "lucide-react";
-import { AdminBottomNav } from "@/components/admin-bottom-nav";
 import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -24,14 +23,39 @@ import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const { activeCompanyId, activeRole, memberships, switchCompany, isLoading: isCompanyLoading } = useCompany();
+  const { activeCompanyId, activeCompany, activeRole, memberships, switchCompany, isLoading: isCompanyLoading } = useCompany();
   
   const [company, setCompany] = useState<{ name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [attendanceStats, setAttendanceStats] = useState<{ hadir: number; terlambat: number; izin: number; belum: number; total: number } | null>(null);
+  const [attendanceStats, setAttendanceStats] = useState<{
+    hadir: number;
+    terlambat: number;
+    izin: number;
+    belum: number;
+    total: number;
+    monthly?: {
+      month: number;
+      year: number;
+      month_name: string;
+      working_days: number;
+      on_time: number;
+      hadir: number;
+      terlambat: number;
+      izin: number;
+    };
+  } | null>(null);
   const [isStatsLoading, setIsStatsLoading] = useState(true);
   
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const currentMonthName = monthNames[selectedDate.getMonth()];
+  const currentYear = selectedDate.getFullYear();
+
   const [leaveStats, setLeaveStats] = useState<{ total: number; sakit: number; cuti: number; izin: number } | null>(null);
   const [activities, setActivities] = useState<any[]>([]);
   const [isLeaveStatsLoading, setIsLeaveStatsLoading] = useState(true);
@@ -54,6 +78,42 @@ export default function AdminDashboardPage() {
     if (hours < 24) return `${hours} jam yang lalu`;
     const days = Math.floor(hours / 24);
     return `${days} hari yang lalu`;
+  };
+
+  const fetchAttendanceStatsForDate = async (targetDate: Date) => {
+    try {
+      setIsStatsLoading(true);
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
+      const m = targetDate.getMonth() + 1;
+      const y = targetDate.getFullYear();
+      const resStats = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/attendance-stats?month=${m}&year=${y}`, {
+        headers
+      });
+      const dataStats = await resStats.json();
+      if (dataStats.success) {
+        setAttendanceStats(dataStats.data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch attendance stats:", e);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  };
+
+  const handlePrevMonth = () => {
+    const prev = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
+    setSelectedDate(prev);
+    fetchAttendanceStatsForDate(prev);
+  };
+
+  const handleNextMonth = () => {
+    const next = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1);
+    setSelectedDate(next);
+    fetchAttendanceStatsForDate(next);
   };
 
   useEffect(() => {
@@ -84,7 +144,9 @@ export default function AdminDashboardPage() {
         }
         setIsLoading(false);
 
-        const resStats = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/attendance-stats", {
+        const m = selectedDate.getMonth() + 1;
+        const y = selectedDate.getFullYear();
+        const resStats = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/attendance-stats?month=${m}&year=${y}`, {
           headers
         });
         const dataStats = await resStats.json();
@@ -123,6 +185,30 @@ export default function AdminDashboardPage() {
     fetchDashboardData();
   }, [router, activeCompanyId]);
 
+  // Dynamic calculation for working days in month
+  const calcWorkingDays = (y: number, m: number) => {
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    let count = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayOfWeek = new Date(y, m, day).getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+    }
+    return count;
+  };
+
+  const monthlyData = attendanceStats?.monthly;
+  const totalWorkingDays = monthlyData?.working_days || calcWorkingDays(currentYear, selectedDate.getMonth());
+  const onTimeCount = monthlyData ? monthlyData.on_time : Math.max(0, (attendanceStats?.hadir || 0) - (attendanceStats?.terlambat || 0));
+  const lateCount = monthlyData ? monthlyData.terlambat : (attendanceStats?.terlambat || 0);
+  const leaveCount = monthlyData ? monthlyData.izin : (attendanceStats?.izin || 0);
+
+  const memberCount = company?.memberCount || 1;
+  const totalSlots = Math.max(totalWorkingDays * memberCount, onTimeCount + lateCount + leaveCount, 1);
+
+  const onTimePercent = Math.min(100, Math.round((onTimeCount / totalSlots) * 100));
+  const latePercent = Math.min(100 - onTimePercent, Math.round((lateCount / totalSlots) * 100));
+  const leavePercent = Math.min(100 - onTimePercent - latePercent, Math.round((leaveCount / totalSlots) * 100));
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       
@@ -137,8 +223,16 @@ export default function AdminDashboardPage() {
           onClick={() => router.push("/admin/perusahaan")}
           className="bg-white rounded-[20px] p-4 flex gap-4 items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] cursor-pointer active:scale-[0.98] transition-transform"
         >
-          <div className="w-[52px] h-[52px] bg-[#F3F4F6] rounded-full flex items-center justify-center shrink-0">
-            <Building2 className="w-6 h-6 text-[#6B7280]" strokeWidth={2} />
+          <div className="w-[52px] h-[52px] bg-[#F3F4F6] rounded-full flex items-center justify-center shrink-0 border-[2.5px] border-[#356E3B]/20 ring-2 ring-[#356E3B]/10 shadow-sm overflow-hidden">
+            {(company?.avatar_company_url || activeCompany?.avatar_company_url) ? (
+              <img 
+                src={company?.avatar_company_url || activeCompany?.avatar_company_url || ""} 
+                alt={company?.name || activeCompany?.name || "Company"} 
+                className="w-full h-full object-cover" 
+              />
+            ) : (
+              <Building2 className="w-6 h-6 text-[#6B7280]" strokeWidth={2} />
+            )}
           </div>
           <div className="flex flex-col flex-1 overflow-hidden">
             {isLoading ? (
@@ -167,85 +261,78 @@ export default function AdminDashboardPage() {
           <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
         </div>
 
-        {/* Stats Row */}
-        <div className="flex gap-3">
-          {/* Kehadiran Stats */}
-          <div className="flex-[1.2] bg-white rounded-[20px] p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full border border-[#eef5f0] flex items-center justify-center shrink-0">
-              <CalendarCheck className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
-            </div>
-            <div className="flex flex-col flex-1 gap-1.5 justify-center">
-              {isStatsLoading ? (
-                <div className="animate-pulse flex flex-col gap-2">
-                  <div className="h-[5px] bg-gray-200 rounded-full w-full"></div>
-                  <div className="h-4 bg-gray-200 rounded w-full"></div>
-                </div>
-              ) : attendanceStats ? (
-                <>
-                  <div className="h-[5px] w-full bg-gray-100 rounded-full flex overflow-hidden">
-                    <div className="h-full bg-[#1E4738]" style={{ width: attendanceStats.total > 0 ? `${(attendanceStats.hadir / attendanceStats.total) * 100}%` : '0%' }}></div>
-                    <div className="h-full bg-[#F59E0B]" style={{ width: attendanceStats.total > 0 ? `${(attendanceStats.terlambat / attendanceStats.total) * 100}%` : '0%' }}></div>
-                    <div className="h-full bg-[#EF4444]" style={{ width: attendanceStats.total > 0 ? `${(attendanceStats.izin / attendanceStats.total) * 100}%` : '0%' }}></div>
-                    <div className="h-full bg-[#9CA3AF]" style={{ width: attendanceStats.total > 0 ? `${(attendanceStats.belum / attendanceStats.total) * 100}%` : '0%' }}></div>
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] text-gray-500 font-medium mb-0.5">Hadir</span>
-                      <span className="text-[10px] font-bold text-[#1E4738]">{attendanceStats.hadir}</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] text-gray-500 font-medium mb-0.5">Terlambat</span>
-                      <span className="text-[10px] font-bold text-[#F59E0B]">{attendanceStats.terlambat}</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] text-gray-500 font-medium mb-0.5">Izin</span>
-                      <span className="text-[10px] font-bold text-[#EF4444]">{attendanceStats.izin}</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] text-gray-500 font-medium mb-0.5">Belum</span>
-                      <span className="text-[10px] font-bold text-[#9CA3AF]">{attendanceStats.belum}</span>
-                    </div>
-                  </div>
-                </>
-              ) : null}
-            </div>
+        {/* Monthly Attendance Recap Card */}
+        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col gap-4">
+          {/* Header Row: Month & Year */}
+          <div className="flex items-center gap-1.5">
+            <button 
+              onClick={handlePrevMonth}
+              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-[#1E4738] hover:bg-[#eef5f0] rounded-full active:scale-95 transition-all"
+              title="Bulan sebelumnya"
+              aria-label="Bulan sebelumnya"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <h2 className="text-[16px] font-bold text-[#1E4738] tracking-tight">
+              {monthlyData?.month_name || currentMonthName} {monthlyData?.year || currentYear}
+            </h2>
+            <button 
+              onClick={handleNextMonth}
+              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-[#1E4738] hover:bg-[#eef5f0] rounded-full active:scale-95 transition-all"
+              title="Bulan berikutnya"
+              aria-label="Bulan berikutnya"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
 
-          {/* Perizinan Stats */}
-          <div className="flex-1 bg-white rounded-[20px] p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full border border-[#eef5f0] flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
-            </div>
-            {isLeaveStatsLoading ? (
-              <div className="animate-pulse flex flex-col flex-1 gap-2">
-                <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
-                <div className="h-[5px] bg-gray-200 rounded-full w-full"></div>
-              </div>
+          {/* Multi-Color Progress Bar */}
+          <div className="h-3 w-full bg-[#E5E7EB] rounded-full flex overflow-hidden">
+            {isStatsLoading ? (
+              <div className="h-full w-full bg-gray-200 animate-pulse rounded-full" />
             ) : (
               <>
-                <div className="flex flex-col items-center justify-center shrink-0">
-                  <span className="text-[15px] font-bold text-[#1E4738] leading-none">{leaveStats?.total || 0}</span>
-                  <span className="text-[9px] text-gray-500 font-medium mt-0.5">Izin</span>
-                </div>
-                <div className="flex flex-col flex-1 gap-1.5 justify-center">
-                  <div className="h-[5px] w-full bg-gray-100 rounded-full flex overflow-hidden">
-                    <div className="h-full bg-[#1E4738]" style={{ width: (leaveStats?.total || 0) > 0 ? `${((leaveStats?.sakit || 0) / (leaveStats?.total || 1)) * 100}%` : '0%' }}></div>
-                    <div className="h-full bg-[#4ADE80]" style={{ width: (leaveStats?.total || 0) > 0 ? `${((leaveStats?.cuti || 0) / (leaveStats?.total || 1)) * 100}%` : '0%' }}></div>
-                    <div className="h-full bg-[#F59E0B]" style={{ width: (leaveStats?.total || 0) > 0 ? `${((leaveStats?.izin || 0) / (leaveStats?.total || 1)) * 100}%` : '0%' }}></div>
-                  </div>
-                  <div className="flex justify-around items-end">
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] text-gray-500 font-medium mb-0.5">Sakit</span>
-                      <span className="text-[10px] font-bold text-[#1E4738]">{leaveStats?.sakit || 0}</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] text-gray-500 font-medium mb-0.5">Cuti</span>
-                      <span className="text-[10px] font-bold text-[#4ADE80]">{leaveStats?.cuti || 0}</span>
-                    </div>
-                  </div>
-                </div>
+                <div 
+                  className="h-full bg-[#22C55E] transition-all duration-300"
+                  style={{ width: `${onTimePercent}%` }}
+                  title={`Hadir: ${onTimeCount}`}
+                />
+                <div 
+                  className="h-full bg-[#EF4444] transition-all duration-300"
+                  style={{ width: `${latePercent}%` }}
+                  title={`Terlambat: ${lateCount}`}
+                />
+                <div 
+                  className="h-full bg-[#EAB308] transition-all duration-300"
+                  style={{ width: `${leavePercent}%` }}
+                  title={`Izin: ${leaveCount}`}
+                />
               </>
             )}
+          </div>
+
+          {/* Legend Row */}
+          <div className="flex justify-between items-center text-[11.5px] font-medium pt-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#22C55E] shrink-0" />
+              <span className="text-[#64748b]">
+                Hadir : <strong className="text-[#1E4738] font-bold">{onTimeCount}</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shrink-0" />
+              <span className="text-[#64748b]">
+                Terlambat : <strong className="text-[#1E4738] font-bold">{lateCount}</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#EAB308] shrink-0" />
+              <span className="text-[#64748b]">
+                Izin : <strong className="text-[#1E4738] font-bold">{leaveCount}</strong>
+              </span>
+            </div>
           </div>
         </div>
 

@@ -70,8 +70,8 @@ export function getNotificationDestination(
       return { route: "/dashboard", targetCompanyId };
 
     case "JOIN_REQUEST_APPROVED":
-      // Pelamar diterima, langsung ke dashboard perusahaan
-      return { route: "/dashboard", targetCompanyId };
+      // Pelamar diterima, tampilkan layar sukses bergabung terlebih dahulu sebelum ke beranda
+      return { route: "/gabung-perusahaan?success=true", targetCompanyId };
 
     case "JOIN_REQUEST_REJECTED":
       // Pelamar ditolak, diarahkan ke halaman registrasi/pencarian perusahaan

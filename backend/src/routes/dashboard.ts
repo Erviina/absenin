@@ -16,6 +16,33 @@ router.get("/attendance-stats", authenticate, async (req: Request, res: Response
     }
     const companyId = tenant.companyId;
 
+    // Get company info
+    const companyRes = await db.execute(sql`
+      SELECT work_start_time, work_days FROM companies WHERE id = ${companyId}
+    `);
+    const companyRow = companyRes.rows[0] as { work_start_time?: string | null; work_days?: string[] | null } | undefined;
+    const workStartTime = companyRow?.work_start_time || null;
+    const workDaysConfig = (companyRow?.work_days as string[]) || ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
+
+    // Date calculations for Jakarta
+    const now = new Date();
+    const jakartaDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+    const targetMonth = req.query.month ? parseInt(req.query.month as string) : (jakartaDate.getMonth() + 1);
+    const targetYear = req.query.year ? parseInt(req.query.year as string) : jakartaDate.getFullYear();
+
+    // 1. Calculate working days in targetMonth
+    const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+    const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+    let workingDaysCount = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(targetYear, targetMonth - 1, day);
+      const name = dayNames[d.getDay()];
+      if (workDaysConfig.includes(name)) {
+        workingDaysCount++;
+      }
+    }
+    if (workingDaysCount === 0) workingDaysCount = 20;
+
     // 2. Query today's attendance stats
     const statsQuery = await db.execute(sql`
       WITH company_info AS (
@@ -62,6 +89,44 @@ router.get("/attendance-stats", authenticate, async (req: Request, res: Response
 
     const stats = statsQuery.rows[0];
 
+    // 3. Query monthly attendance stats
+    const monthlyAttRes = await db.execute(sql`
+      SELECT 
+        count(a.id) as total_hadir,
+        count(CASE WHEN ${workStartTime}::time IS NOT NULL AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${workStartTime}::time THEN 1 END) as total_terlambat
+      FROM attendances a
+      WHERE a.company_id = ${companyId}
+        AND a.deleted_at IS NULL
+        AND EXTRACT(MONTH FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${targetMonth}
+        AND EXTRACT(YEAR FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${targetYear}
+    `);
+
+    // 4. Query monthly leaves
+    const monthlyLeavesRes = await db.execute(sql`
+      SELECT count(id) as total_izin
+      FROM leave_requests
+      WHERE company_id = ${companyId}
+        AND status = 'Disetujui'
+        AND deleted_at IS NULL
+        AND (
+          (EXTRACT(MONTH FROM start_date) = ${targetMonth} AND EXTRACT(YEAR FROM start_date) = ${targetYear})
+          OR
+          (EXTRACT(MONTH FROM end_date) = ${targetMonth} AND EXTRACT(YEAR FROM end_date) = ${targetYear})
+        )
+    `);
+
+    const mAtt = monthlyAttRes.rows[0];
+    const mLeave = monthlyLeavesRes.rows[0];
+    const mTotalHadir = parseInt(mAtt?.total_hadir as string) || 0;
+    const mTotalTerlambat = parseInt(mAtt?.total_terlambat as string) || 0;
+    const mOnTime = Math.max(0, mTotalHadir - mTotalTerlambat);
+    const mTotalIzin = parseInt(mLeave?.total_izin as string) || 0;
+
+    const monthNames = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+
     return res.status(200).json({
       success: true,
       message: "Berhasil mendapatkan statistik kehadiran",
@@ -71,6 +136,16 @@ router.get("/attendance-stats", authenticate, async (req: Request, res: Response
         izin: parseInt(stats.total_izin as string) || 0,
         belum: parseInt(stats.total_belum as string) || 0,
         total: parseInt(stats.total_members as string) || 0,
+        monthly: {
+          month: targetMonth,
+          year: targetYear,
+          month_name: monthNames[targetMonth - 1],
+          working_days: workingDaysCount,
+          on_time: mOnTime,
+          hadir: mTotalHadir,
+          terlambat: mTotalTerlambat,
+          izin: mTotalIzin,
+        }
       }
     });
 

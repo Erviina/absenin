@@ -3,7 +3,6 @@
 import { ChevronLeft, Search, Check, AlertCircle, XCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { AdminBottomNav } from "@/components/admin-bottom-nav";
 import { TopBar } from "@/components/TopBar";
 import { formatDateRange } from "@/lib/dateUtils";
 
@@ -267,10 +266,13 @@ export default function KelolaIzinPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
+    <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-8">
       
       {/* Header */}
-      <TopBar title="Kelola Izin & Cuti" />
+      <TopBar 
+        title="Kelola Izin & Cuti" 
+        onBack={() => router.push("/admin/dashboard")} 
+      />
 
       {/* Main Content */}
       <div className="flex-1 px-5 py-5 flex flex-col gap-4 z-10 relative">
@@ -483,8 +485,6 @@ export default function KelolaIzinPage() {
           </div>
         </div>
       </div>
-
-      <AdminBottomNav activeTab="izin" />
 
       {/* Modal Konfirmasi Persetujuan Satuan */}
       {confirmApproveItem && (

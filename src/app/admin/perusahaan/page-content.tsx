@@ -12,6 +12,7 @@ import { MapContainer, TileLayer, Marker, Circle, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useDialog } from "@/context/DialogContext";
+import { useCompany } from "@/context/CompanyContext";
 
 const getCustomIcon = (label: string) => new L.DivIcon({
   className: "custom-leaflet-icon",
@@ -51,6 +52,7 @@ function MapUpdater({ lat, lng }: { lat: number, lng: number }) {
 export default function KelolaPerusahaanPage() {
   const router = useRouter();
   const { showToast } = useDialog();
+  const { refreshMemberships } = useCompany();
 
   const [initialData, setInitialData] = useState({ name: "", address: "", latitude: -6.9175, longitude: 107.6191 });
   const [companyData, setCompanyData] = useState({ 
@@ -206,6 +208,7 @@ export default function KelolaPerusahaanPage() {
       } else {
         showToast("Data perusahaan berhasil diperbarui.", "success");
         setInitialData(prev => ({ ...prev, name: companyData.name, address: companyData.address }));
+        await refreshMemberships().catch(console.error);
       }
     } catch (error) {
       console.error(error);
@@ -258,6 +261,7 @@ export default function KelolaPerusahaanPage() {
       const data = await res.json();
       if (data.success) {
         setCompanyImage(data.data.avatar_company_url);
+        await refreshMemberships().catch(console.error);
         showToast("Foto profil perusahaan berhasil diperbarui!", "success");
       } else {
         showToast(data.message || "Gagal mengupload foto", "error");
@@ -406,7 +410,7 @@ export default function KelolaPerusahaanPage() {
         {/* Profile Header */}
         <div className="flex items-center gap-4 mb-2">
           <div className="relative cursor-pointer active:scale-95 transition-transform" onClick={() => !isUploadingImage && fileInputRef.current?.click()}>
-            <div className="w-[84px] h-[84px] rounded-full overflow-hidden border-2 border-white shadow-sm bg-gray-100">
+            <div className="w-[84px] h-[84px] rounded-full overflow-hidden border-[3px] border-[#356E3B]/20 ring-2 ring-[#356E3B]/10 shadow-sm bg-gray-100">
               <img src={companyImage} alt="Company" className="w-full h-full object-cover" />
             </div>
             <div className="absolute bottom-0 right-0 w-7 h-7 bg-[#1E4738] rounded-full border-[3px] border-white flex items-center justify-center">

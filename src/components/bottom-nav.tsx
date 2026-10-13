@@ -43,14 +43,6 @@ export function BottomNav({ activeTab = "beranda" }: BottomNavProps) {
       ),
     },
     {
-      id: "izin",
-      label: "Izin & Cuti",
-      path: "/izin",
-      icon: (active: boolean) => (
-        <FileText className="w-6 h-6" strokeWidth={active ? 2.2 : 2} />
-      ),
-    },
-    {
       id: "tugas",
       label: "Daftar Tugas",
       path: "/tugas",
@@ -64,6 +56,14 @@ export function BottomNav({ activeTab = "beranda" }: BottomNavProps) {
       path: "/agenda",
       icon: (active: boolean) => (
         <Calendar className="w-6 h-6" strokeWidth={active ? 2.2 : 2} />
+      ),
+    },
+    {
+      id: "izin",
+      label: "Izin & Cuti",
+      path: "/izin",
+      icon: (active: boolean) => (
+        <FileText className="w-6 h-6" strokeWidth={active ? 2.2 : 2} />
       ),
     },
   ];

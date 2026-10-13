@@ -86,6 +86,43 @@ export function formatAgendaUrl(str: string): string {
   return `https://${trimmed}`;
 }
 
+export function getAgendaCategoryColor(type?: string | null) {
+  const t = (type || "").toLowerCase().trim();
+  if (t === "rapat") {
+    return {
+      variant: "success" as const,
+      stripeBg: "bg-[#356E3B]",
+      hoverBorder: "hover:border-[#356E3B]",
+    };
+  }
+  if (t === "acara") {
+    return {
+      variant: "info" as const,
+      stripeBg: "bg-[#2563EB]",
+      hoverBorder: "hover:border-[#2563EB]",
+    };
+  }
+  if (t === "hari penting" || t === "review") {
+    return {
+      variant: "purple" as const,
+      stripeBg: "bg-[#9333EA]",
+      hoverBorder: "hover:border-[#9333EA]",
+    };
+  }
+  if (t === "tenggat") {
+    return {
+      variant: "danger" as const,
+      stripeBg: "bg-[#DC2626]",
+      hoverBorder: "hover:border-[#DC2626]",
+    };
+  }
+  return {
+    variant: "neutral" as const,
+    stripeBg: "bg-[#6B7280]",
+    hoverBorder: "hover:border-[#6B7280]",
+  };
+}
+
 function AgendaPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -666,39 +703,36 @@ function AgendaPageContent() {
               </div>
 
               {displayedAgendas.length > 0 ? (
-                displayedAgendas.map(({ agenda, dateStr }) => (
-                  <div 
-                    key={agenda.id} 
-                    onClick={() => setSelectedAgendaDetail(agenda)}
-                    className="bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 hover:border-[#356E3B] transition-colors group relative overflow-hidden cursor-pointer"
-                  >
-                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${agenda.scope === 'COMPANY' ? 'bg-[#356E3B]' : 'bg-[#F59E0B]'}`} />
-                    
-                    <div className="flex justify-between items-start pl-2">
-                      <div className="flex flex-col gap-1 flex-1 pr-2">
-                        <div className="flex items-center gap-2">
-                          <Badge 
-                            variant={
-                              agenda.type === "Rapat" ? "success" :
-                              agenda.type === "Acara" ? "info" :
-                              agenda.type === "Hari Penting" ? "purple" :
-                              agenda.type === "Tenggat" ? "danger" : "neutral"
-                            }
-                            size="xs"
-                            uppercase
-                          >
-                            {agenda.type}
-                          </Badge>
-                          <Badge
-                            variant={agenda.scope === "COMPANY" ? "company" : "personal"}
-                            size="xs"
-                            uppercase
-                          >
-                            {agenda.scope === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
-                          </Badge>
+                displayedAgendas.map(({ agenda, dateStr }) => {
+                  const catColor = getAgendaCategoryColor(agenda.type);
+                  return (
+                    <div 
+                      key={agenda.id} 
+                      onClick={() => setSelectedAgendaDetail(agenda)}
+                      className={`bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 ${catColor.hoverBorder} transition-colors group relative overflow-hidden cursor-pointer`}
+                    >
+                      <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
+                      
+                      <div className="flex justify-between items-start pl-2">
+                        <div className="flex flex-col gap-1 flex-1 pr-2">
+                          <div className="flex items-center gap-2">
+                            <Badge 
+                              variant={catColor.variant}
+                              size="xs"
+                              uppercase
+                            >
+                              {agenda.type}
+                            </Badge>
+                            <Badge
+                              variant={agenda.scope === "COMPANY" ? "company" : "personal"}
+                              size="xs"
+                              uppercase
+                            >
+                              {agenda.scope === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
+                            </Badge>
+                          </div>
+                          <h3 className="text-[#111827] text-[16px] font-bold leading-tight pr-2 mt-1">{agenda.title}</h3>
                         </div>
-                        <h3 className="text-[#111827] text-[16px] font-bold leading-tight pr-2 mt-1">{agenda.title}</h3>
-                      </div>
 
                       {/* More Action Menu (Titik Tiga) */}
                       {(agenda.scope === "PERSONAL" || canCreate("agendas")) && (
@@ -791,7 +825,8 @@ function AgendaPageContent() {
                       )}
                     </div>
                   </div>
-                ))
+                );
+              })
               ) : (
                 <div className="flex flex-col items-center justify-center py-10 opacity-60">
                   <CalendarIcon className="w-12 h-12 text-[#9CA3AF] mb-3" strokeWidth={1.5} />
@@ -812,12 +847,7 @@ function AgendaPageContent() {
           <div className="relative w-full max-w-sm bg-white rounded-[24px] shadow-xl z-10 p-6 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
               <Badge 
-                variant={
-                  selectedAgendaDetail.type === "Rapat" ? "success" :
-                  selectedAgendaDetail.type === "Acara" ? "info" :
-                  selectedAgendaDetail.type === "Hari Penting" ? "purple" :
-                  selectedAgendaDetail.type === "Tenggat" ? "danger" : "neutral"
-                }
+                variant={getAgendaCategoryColor(selectedAgendaDetail.type).variant}
                 size="sm"
                 uppercase
               >

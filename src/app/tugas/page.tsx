@@ -289,6 +289,9 @@ export default function TugasPage() {
   const upcomingTasks = filteredTasks.filter(t => !isTodayTask(t.date));
   const activeTodayCount = todayTasks.filter(t => !t.completed).length;
 
+  const uncompletedPersonalCount = tasks.filter(t => t.type === "personal" && !t.completed).length;
+  const uncompletedGroupCount = tasks.filter(t => t.type === "group" && !t.completed).length;
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
       {/* Header */}
@@ -327,8 +330,8 @@ export default function TugasPage() {
             >
               <User className={`w-4 h-4 ${activeTab === "personal" ? "text-white" : "text-[#6B7280]"}`} strokeWidth={2.5} />
               <span className={`text-[14px] font-bold ${activeTab === "personal" ? "text-white" : "text-[#4B5563]"}`}>Personal</span>
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${activeTab === "personal" ? "bg-[#5C8966]" : "bg-[#F3F4F6]"}`}>
-                <span className={`text-[11px] font-bold ${activeTab === "personal" ? "text-white" : "text-[#6B7280]"}`}>{tasks.filter(t => t.type === "personal").length}</span>
+              <div className={`min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center ${activeTab === "personal" ? "bg-[#5C8966]" : "bg-[#F3F4F6]"}`}>
+                <span className={`text-[11px] font-bold ${activeTab === "personal" ? "text-white" : "text-[#6B7280]"}`}>{uncompletedPersonalCount}</span>
               </div>
             </div>
             
@@ -338,8 +341,8 @@ export default function TugasPage() {
             >
               <Users className={`w-4 h-4 ${activeTab === "group" ? "text-white" : "text-[#6B7280]"}`} strokeWidth={2.5} />
               <span className={`text-[14px] font-bold ${activeTab === "group" ? "text-white" : "text-[#4B5563]"}`}>Grup</span>
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${activeTab === "group" ? "bg-[#5C8966]" : "bg-[#F3F4F6]"}`}>
-                <span className={`text-[11px] font-bold ${activeTab === "group" ? "text-white" : "text-[#6B7280]"}`}>{tasks.filter(t => t.type === "group").length}</span>
+              <div className={`min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center ${activeTab === "group" ? "bg-[#5C8966]" : "bg-[#F3F4F6]"}`}>
+                <span className={`text-[11px] font-bold ${activeTab === "group" ? "text-white" : "text-[#6B7280]"}`}>{uncompletedGroupCount}</span>
               </div>
             </div>
           </div>

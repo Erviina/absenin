@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, Image as ImageIcon, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
-import { AdminBottomNav } from "@/components/admin-bottom-nav";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
@@ -105,9 +104,10 @@ export default function KelolaBeritaPage() {
   });
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
+    <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-8">
       <TopBar 
         title="Manajemen Berita" 
+        onBack={() => router.push("/admin/dashboard")}
         rightAction={
           <button 
             onClick={handleOpenCreate}
@@ -202,8 +202,6 @@ export default function KelolaBeritaPage() {
           )}
         </div>
       </div>
-
-      <AdminBottomNav activeTab="berita" />
     </div>
   );
 }
