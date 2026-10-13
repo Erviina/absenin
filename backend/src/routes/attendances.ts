@@ -79,25 +79,24 @@ router.post("/check-in", authenticate, upload.single("photo"), async (req: AuthR
       }
     }
 
-    // Validasi work_start_time (Check-in hanya dibuka 15 menit sebelum work_start_time)
-    if (compRow.work_start_time) {
-      const [startHour, startMin] = String(compRow.work_start_time).split(":").map(Number);
-      const startTotalMinutes = (isNaN(startHour) ? 8 : startHour) * 60 + (isNaN(startMin) ? 0 : startMin);
-      const openTotalMinutes = Math.max(0, startTotalMinutes - 15);
+    // Validasi work_start_time (Check-in hanya dibuka 15 menit sebelum work_start_time, default standar 08:00)
+    const rawStartTime = compRow.work_start_time || "08:00";
+    const [startHour, startMin] = String(rawStartTime).split(":").map(Number);
+    const startTotalMinutes = (isNaN(startHour) ? 8 : startHour) * 60 + (isNaN(startMin) ? 0 : startMin);
+    const openTotalMinutes = Math.max(0, startTotalMinutes - 15);
 
-      const currentTimeStr = String(compRow.current_time_wib);
-      const [curHour, curMin] = currentTimeStr.split(":").map(Number);
-      const curTotalMinutes = (isNaN(curHour) ? 0 : curHour) * 60 + (isNaN(curMin) ? 0 : curMin);
+    const currentTimeStr = String(compRow.current_time_wib);
+    const [curHour, curMin] = currentTimeStr.split(":").map(Number);
+    const curTotalMinutes = (isNaN(curHour) ? 0 : curHour) * 60 + (isNaN(curMin) ? 0 : curMin);
 
-      if (curTotalMinutes < openTotalMinutes) {
-        const openHour = Math.floor(openTotalMinutes / 60);
-        const openMinute = openTotalMinutes % 60;
-        const openTimeFormatted = `${String(openHour).padStart(2, '0')}:${String(openMinute).padStart(2, '0')}`;
-        return res.status(400).json({
-          success: false,
-          message: `Check-in belum dibuka. Check-in hanya dapat dilakukan mulai 15 menit sebelum jam masuk (pukul ${openTimeFormatted} WIB).`
-        });
-      }
+    if (curTotalMinutes < openTotalMinutes) {
+      const openHour = Math.floor(openTotalMinutes / 60);
+      const openMinute = openTotalMinutes % 60;
+      const openTimeFormatted = `${String(openHour).padStart(2, '0')}:${String(openMinute).padStart(2, '0')}`;
+      return res.status(400).json({
+        success: false,
+        message: `Check-in belum dibuka. Check-in hanya dapat dilakukan mulai 15 menit sebelum jam masuk (pukul ${openTimeFormatted} WIB).`
+      });
     }
 
     // 4. Check for existing attendance today in this company (mencegah check-in ganda baik yang masih aktif maupun yang sudah checkout)
@@ -278,7 +277,7 @@ router.get("/today", authenticate, async (req: AuthRequest, res: Response): Prom
     if (tenant?.companyId) {
       const compRes = await db.execute(sql`
         SELECT id, name, work_start_time, work_end_time, work_days,
-               to_char(now() AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS') as server_time,
+               to_char(now() AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS"+07:00"') as server_time,
                to_char(now() AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD') as server_date,
                to_char(now() AT TIME ZONE 'Asia/Jakarta', 'HH24:MI') as server_clock,
                EXTRACT(ISODOW FROM now() AT TIME ZONE 'Asia/Jakarta') as current_isodow

@@ -488,7 +488,7 @@ export default function AdminAgendaPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-8">
       {/* Header */}
       <TopBar 
-        title={isAddingAgenda ? (editingAgendaId ? "Ubah Agenda Karyawan" : "Tambah Agenda Karyawan") : "Kelola Agenda (Admin)"}
+        title={isAddingAgenda ? (editingAgendaId ? "Ubah Agenda Karyawan" : "Tambah Agenda Karyawan") : "Kelola Agenda"}
         onBack={() => isAddingAgenda ? setIsAddingAgenda(false) : router.push("/admin/dashboard")}
         rightAction={
           !isAddingAgenda ? (

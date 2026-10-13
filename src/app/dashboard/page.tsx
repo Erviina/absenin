@@ -25,9 +25,12 @@ import { BottomNav } from "@/components/bottom-nav";
 import { useCompany } from "@/context/CompanyContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 import { getPersonalModePreference } from "@/lib/personalMode";
-import { Badge } from "@/components/Badge";
-import { getAgendaCategoryColor } from "@/app/agenda/page";
-import { formatDateWithDay } from "@/lib/dateUtils";
+import { 
+  evaluateSchedule, 
+  getNextCheckInSchedule, 
+  calculateServerOffsetMs, 
+  CompanyScheduleData 
+} from "@/lib/schedule";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -54,6 +57,17 @@ export default function DashboardPage() {
   const [isAttendanceLoading, setIsAttendanceLoading] = useState(true);
   const [attendanceError, setAttendanceError] = useState(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [companySchedule, setCompanySchedule] = useState<CompanyScheduleData | null>(null);
+  const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
+  const [currentTimeMs, setCurrentTimeMs] = useState<number>(Date.now());
+
+  // Timer berkala untuk pembaruan waktu lokal & evaluasi jendela absensi otomatis tanpa refresh
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTimeMs(Date.now());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Close drawer whenever active company or active role changes
   useEffect(() => {
@@ -145,6 +159,11 @@ export default function DashboardPage() {
           if (attendData.success && attendData.data) {
             setAttendanceStatus(attendData.data.status);
             setAttendanceError(false);
+            if (attendData.data.company) {
+              setCompanySchedule(attendData.data.company);
+              const offset = calculateServerOffsetMs(attendData.data.company.server_time);
+              setServerOffsetMs(offset);
+            }
           } else {
             setAttendanceError(true);
           }
@@ -272,6 +291,66 @@ export default function DashboardPage() {
     }
   };
 
+  const scheduleEval = evaluateSchedule(
+    companySchedule,
+    serverOffsetMs,
+    new Date(currentTimeMs + serverOffsetMs)
+  );
+
+  const nextSchedule = getNextCheckInSchedule(
+    companySchedule,
+    serverOffsetMs,
+    {
+      afterCheckout: attendanceStatus === "CHECKED_OUT",
+      referenceDate: new Date(currentTimeMs + serverOffsetMs)
+    }
+  );
+
+  // Evaluasi status dan gaya tombol absensi
+  let isBtnDisabled = false;
+  let btnLabel = "Masuk";
+  let btnHelperText: string | null = null;
+  let btnColorClass = "bg-[#1E4738] hover:bg-[#153428] text-white active:scale-95 cursor-pointer";
+
+  if (isAttendanceLoading) {
+    isBtnDisabled = true;
+    btnLabel = "Memuat...";
+    btnColorClass = "bg-[#1E4738] text-white opacity-70 cursor-not-allowed";
+  } else if (attendanceError) {
+    isBtnDisabled = true;
+    btnLabel = "Gagal Memuat";
+    btnColorClass = "bg-gray-400 text-white cursor-not-allowed";
+    btnHelperText = "Gagal memuat status kehadiran";
+  } else if (attendanceStatus === "CHECKED_IN") {
+    // Sedang dalam status check-in -> tombol bertindak untuk check-out
+    isBtnDisabled = false;
+    btnLabel = "Keluar";
+    btnColorClass = "bg-[#1E4738] hover:bg-[#153428] text-white active:scale-95 cursor-pointer";
+  } else if (attendanceStatus === "CHECKED_OUT") {
+    // Selesai check-out hari ini -> tombol disabled abu-abu hingga jadwal berikutnya
+    isBtnDisabled = true;
+    btnLabel = "Selesai";
+    btnColorClass = "bg-gray-400 text-white cursor-not-allowed";
+    btnHelperText = `Jadwal berikutnya: ${nextSchedule.isTomorrow ? `Besok (${nextSchedule.dayName})` : nextSchedule.dayName}, ${nextSchedule.openTimeFormatted} WIB`;
+  } else {
+    // Status NOT_CHECKED_IN / belum absen hari ini
+    if (!scheduleEval.isWorkDay) {
+      isBtnDisabled = true;
+      btnLabel = "Libur";
+      btnColorClass = "bg-gray-400 text-white cursor-not-allowed";
+      btnHelperText = `Hari ini (${scheduleEval.currentDayName}) bukan hari kerja. Buka ${nextSchedule.isTomorrow ? `Besok (${nextSchedule.dayName})` : nextSchedule.dayName} ${nextSchedule.openTimeFormatted} WIB`;
+    } else if (!scheduleEval.isCheckInOpen) {
+      isBtnDisabled = true;
+      btnLabel = `Buka ${scheduleEval.openTimeFormatted}`;
+      btnColorClass = "bg-gray-400 text-white cursor-not-allowed";
+      btnHelperText = `Check-in dibuka pukul ${scheduleEval.openTimeFormatted} WIB (15 menit sebelum masuk ${scheduleEval.startTimeFormatted} WIB)`;
+    } else {
+      isBtnDisabled = false;
+      btnLabel = "Masuk";
+      btnColorClass = "bg-[#1E4738] hover:bg-[#153428] text-white active:scale-95 cursor-pointer";
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       
@@ -389,22 +468,27 @@ export default function DashboardPage() {
               mulai dari hadir tepat<br/>
               waktu!
             </h1>
+            {btnHelperText && (
+              <div className="mt-2 flex items-center gap-1.5 bg-white/85 backdrop-blur-xs px-2.5 py-1 rounded-full w-fit shadow-2xs border border-white/60">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1E4738]/60 shrink-0" />
+                <span className="text-[10.5px] font-semibold text-[#1E4738] truncate max-w-[190px]" title={btnHelperText}>
+                  {btnHelperText}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* CTA Check In / Out Floating Full Rounded Pill at Bottom Right */}
           <div className="absolute bottom-3.5 right-3.5 z-20">
             <button 
               onClick={() => router.push('/checkin')}
-              disabled={isAttendanceLoading || attendanceError}
-              className="bg-[#1E4738] hover:bg-[#153428] text-white rounded-full px-4 py-2.5 flex items-center gap-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] border-[3px] border-white transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+              disabled={isBtnDisabled}
+              title={btnHelperText || (attendanceStatus === "CHECKED_IN" ? "Rekam Check-out" : "Rekam Kehadiran")}
+              className={`${btnColorClass} rounded-l-full pl-5 pr-4 py-3 flex items-center gap-2 shadow-sm border-[4px] border-r-0 border-white transition-all`}
             >
-              <MapPin className="w-4 h-4 text-white shrink-0" strokeWidth={2.5} />
-              <span className="font-bold text-[13.5px] leading-none">
-                {isAttendanceLoading 
-                  ? "Memuat..." 
-                  : attendanceError 
-                    ? "Gagal Memuat" 
-                    : (attendanceStatus === "CHECKED_IN" ? "Keluar" : "Masuk")}
+              <MapPin className="w-[18px] h-[18px]" strokeWidth={2.5} />
+              <span className="font-bold text-[14px]">
+                {btnLabel}
               </span>
               <ArrowRight className="w-4 h-4 text-white shrink-0" strokeWidth={2.5} />
             </button>

@@ -343,27 +343,26 @@ export default function KelolaIzinPage() {
             <div className="flex flex-col gap-3">
               {pendingLeaves.map((item) => (
                 <div key={item.id} className="border border-gray-100 p-3.5 rounded-[16px] flex flex-col gap-3 transition-colors hover:border-[#dce9df]">
-                  <div className="flex justify-between items-start">
-                    <div className="flex gap-3">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
                       <div 
-                        className="mt-0.5 cursor-pointer"
+                        className="cursor-pointer"
                         onClick={() => toggleItem(item.id)}
                       >
                         <div className={`w-[18px] h-[18px] rounded-[4px] border flex items-center justify-center transition-colors ${selectedItems.includes(item.id) ? 'bg-[#356E3B] border-[#356E3B]' : 'bg-white border-gray-300'}`}>
                           {selectedItems.includes(item.id) && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
                         </div>
                       </div>
-                      <div className="flex flex-col gap-1.5">
-                        <h3 className="text-[#1E4738] text-[15px] font-bold leading-none">{item.name}</h3>
-                        {item.type.toLowerCase().includes("cuti") ? (
-                          <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">Cuti</span>
-                        ) : item.type.toLowerCase().includes("sakit") ? (
-                          <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit border border-[#ffedd5]">Izin Sakit</span>
-                        ) : (
-                          <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">{item.type}</span>
-                        )}
-                      </div>
+                      <h3 className="text-[#1E4738] text-[15px] font-bold leading-tight">{item.name}</h3>
                     </div>
+
+                    {item.type.toLowerCase().includes("cuti") ? (
+                      <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2.5 py-0.5 rounded-full shrink-0">Cuti</span>
+                    ) : item.type.toLowerCase().includes("sakit") ? (
+                      <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 border border-[#ffedd5]">Izin Sakit</span>
+                    ) : (
+                      <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2.5 py-0.5 rounded-full shrink-0">{item.type}</span>
+                    )}
                   </div>
 
                   <div className="bg-[#f8faf9] rounded-xl p-3 flex flex-col gap-1 mt-1 ml-7">
@@ -422,26 +421,24 @@ export default function KelolaIzinPage() {
           <div className="flex flex-col gap-3">
             {historyLeaves.map((item) => (
               <div key={item.id} className="border border-gray-100 p-3.5 rounded-[16px] flex flex-col gap-3 transition-colors hover:border-[#dce9df]">
-                <div className="flex justify-between items-start">
-                  <div className="flex gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <h3 className="text-[#1E4738] text-[15px] font-bold leading-none">{item.name}</h3>
-                      {item.type.toLowerCase().includes("cuti") ? (
-                        <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">Cuti</span>
-                      ) : item.type.toLowerCase().includes("sakit") ? (
-                        <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit border border-[#ffedd5]">Izin Sakit</span>
-                      ) : (
-                        <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit">{item.type}</span>
-                      )}
-                    </div>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-[#1E4738] text-[15px] font-bold leading-tight">{item.name}</h3>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {item.type.toLowerCase().includes("cuti") ? (
+                      <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2.5 py-0.5 rounded-full">Cuti</span>
+                    ) : item.type.toLowerCase().includes("sakit") ? (
+                      <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2.5 py-0.5 rounded-full border border-[#ffedd5]">Izin Sakit</span>
+                    ) : (
+                      <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2.5 py-0.5 rounded-full">{item.type}</span>
+                    )}
+                    
+                    {item.status === "Disetujui" && (
+                      <span className="bg-[#ecfdf5] border border-[#d1fae5] text-[#10b981] text-[11px] font-semibold px-3 py-0.5 rounded-full">Disetujui</span>
+                    )}
+                    {item.status === "Ditolak" && (
+                      <span className="bg-[#fef2f2] border border-[#fee2e2] text-[#ef4444] text-[11px] font-semibold px-3 py-0.5 rounded-full">Ditolak</span>
+                    )}
                   </div>
-                  
-                  {item.status === "Disetujui" && (
-                    <span className="bg-[#ecfdf5] border border-[#d1fae5] text-[#10b981] text-[11px] font-semibold px-3 py-1 rounded-full shrink-0">Disetujui</span>
-                  )}
-                  {item.status === "Ditolak" && (
-                    <span className="bg-[#fef2f2] border border-[#fee2e2] text-[#ef4444] text-[11px] font-semibold px-3 py-1 rounded-full shrink-0">Ditolak</span>
-                  )}
                 </div>
 
                 <div className="bg-[#f8faf9] rounded-xl p-3 flex flex-col gap-1 mt-1">

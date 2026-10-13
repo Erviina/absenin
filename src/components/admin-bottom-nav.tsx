@@ -3,12 +3,49 @@
 import { Home, FileText, ClipboardEdit } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { useState, useEffect } from "react";
+
 interface AdminBottomNavProps {
   activeTab?: "beranda" | "absensi" | "izin" | "tugas" | "berita";
+  pendingIzinCount?: number;
 }
 
-export function AdminBottomNav({ activeTab = "beranda" }: AdminBottomNavProps) {
+export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: AdminBottomNavProps) {
   const router = useRouter();
+  const [internalIzinCount, setInternalIzinCount] = useState<number>(pendingIzinCount ?? 0);
+
+  useEffect(() => {
+    if (typeof pendingIzinCount === "number") {
+      setInternalIzinCount(pendingIzinCount);
+      return;
+    }
+
+    const fetchBadge = async () => {
+      try {
+        const token = localStorage.getItem("accessToken");
+        if (!token) return;
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        const activeCompanyId = localStorage.getItem("activeCompanyId");
+        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
+        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/badge-counts", { headers });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setInternalIzinCount(data.data.pendingLeaves || 0);
+          return;
+        }
+
+        const resLeaves = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/admin", { headers });
+        const dataLeaves = await resLeaves.json();
+        if (dataLeaves.success && Array.isArray(dataLeaves.data)) {
+          const pending = dataLeaves.data.filter((l: any) => l.status === "Menunggu").length;
+          setInternalIzinCount(pending);
+        }
+      } catch {}
+    };
+
+    fetchBadge();
+  }, [pendingIzinCount]);
 
   const handleNav = (tab: string, path: string) => {
     if (activeTab !== tab) {
@@ -43,6 +80,15 @@ export function AdminBottomNav({ activeTab = "beranda" }: AdminBottomNavProps) {
       ),
     },
     {
+      id: "izin",
+      label: "Izin & Cuti",
+      path: "/admin/izin",
+      badge: internalIzinCount,
+      icon: (active: boolean) => (
+        <FileText className="w-6 h-6" strokeWidth={active ? 2.2 : 2} />
+      ),
+    },
+    {
       id: "tugas",
       label: "Daftar Tugas",
       path: "/admin/tugas", // adjust path as needed later
@@ -72,8 +118,13 @@ export function AdminBottomNav({ activeTab = "beranda" }: AdminBottomNavProps) {
               isActive ? "text-[#1E4738]" : "text-[#7d998c] hover:text-[#5C786C]"
             }`}
           >
-            <div className="mb-1">
+            <div className="mb-1 relative">
               {item.icon(isActive)}
+              {"badge" in item && typeof item.badge === "number" && item.badge > 0 && (
+                <span className="absolute -top-1.5 -right-2 min-w-[17px] h-[17px] px-1 bg-[#EF4444] text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-sm border border-white leading-none">
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              )}
             </div>
             <span className={`text-[10px] leading-none ${isActive ? "font-bold" : "font-medium"}`}>
               {item.label}
@@ -86,4 +137,5 @@ export function AdminBottomNav({ activeTab = "beranda" }: AdminBottomNavProps) {
       })}
     </div>
   );
+
 }
