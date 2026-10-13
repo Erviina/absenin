@@ -101,7 +101,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       profile = profileResultRaw.rows[0] as any;
     }
 
-    // Fetch active company
+    // Fetch active company — hanya berdasarkan company_members aktif (konsisten dengan resolveTenant di /auth/me)
     let company = null;
     let targetCompanyId: string | null = null;
     const activeMemRes = await db.execute(sql`
@@ -115,19 +115,9 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
     `);
     if (activeMemRes.rows.length > 0) {
       targetCompanyId = activeMemRes.rows[0].company_id as string;
-    } else if (profile.company_id) {
-      const checkInactive = await db.execute(sql`
-        SELECT status, deleted_at FROM company_members
-        WHERE profile_id = ${profile.id} AND company_id = ${profile.company_id}
-        LIMIT 1
-      `);
-      if (checkInactive.rows.length === 0) {
-        targetCompanyId = profile.company_id;
-      } else {
-        await db.execute(sql`UPDATE profiles SET company_id = NULL WHERE id = ${profile.id}`);
-        targetCompanyId = null;
-      }
     }
+    // Catatan: profile.company_id tidak digunakan sebagai fallback karena bisa tidak sinkron
+    // dengan status keanggotaan aktual di company_members. Sumber kebenaran adalah company_members.
 
     if (targetCompanyId) {
       const companyResult = await db.select().from(companies).where(eq(companies.id, targetCompanyId));

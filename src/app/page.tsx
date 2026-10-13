@@ -2,23 +2,12 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { isTokenValid, getAuthenticatedRedirectPath } from "@/lib/personalMode";
 
 export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-    const isAuthenticated = isTokenValid(token);
-
-    if (isAuthenticated) {
-      // Pengguna sudah login dengan token valid: langsung arahkan tanpa mengulang onboarding
-      const targetPath = getAuthenticatedRedirectPath("/dashboard");
-      router.replace(targetPath);
-      return;
-    }
-
-    // Pengguna belum login atau token kedaluwarsa: tampilkan splash screen selama 2 detik lalu ke onboarding
+    // Berpindah ke halaman onboarding setelah 2 detik
     const timer = setTimeout(() => {
       router.push("/login/onboard");
     }, 2000);

@@ -26,7 +26,8 @@ export default function DashboardPage() {
     activeCompany, 
     activeRole, 
     memberships, 
-    switchCompany 
+    switchCompany,
+    isLoading: isCompanyLoading,
   } = useCompany();
 
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
@@ -46,6 +47,11 @@ export default function DashboardPage() {
   }, [activeCompanyId, activeRole]);
 
   useEffect(() => {
+    // Tunggu hingga CompanyContext selesai memverifikasi membership dari backend.
+    // Ini mencegah cache lama (activeCompanyId dari localStorage) memblokir redirect
+    // ke /cek-perusahaan yang seharusnya terjadi.
+    if (isCompanyLoading) return;
+
     const fetchData = async () => {
       try {
         const token = localStorage.getItem("accessToken");
@@ -55,9 +61,9 @@ export default function DashboardPage() {
         }
 
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        const compId = activeCompanyId || (typeof window !== "undefined" ? localStorage.getItem("activeCompanyId") : null);
-        if (compId) {
-          headers["x-company-id"] = compId;
+        // Setelah isCompanyLoading selesai, activeCompanyId sudah terverifikasi dari backend
+        if (activeCompanyId) {
+          headers["x-company-id"] = activeCompanyId;
         }
 
         const [authRes, newsRes, attendRes, notifRes] = await Promise.all([
@@ -72,6 +78,8 @@ export default function DashboardPage() {
           if (authData.success) {
             setUser(authData.data.user);
             const skipCompanyPrompt = getPersonalModePreference(authData.data.user?.id);
+            // activeCompanyId di sini sudah diverifikasi backend (isCompanyLoading sudah false),
+            // jadi aman digunakan sebagai penentu apakah pengguna punya perusahaan aktif.
             if (!authData.data.user?.company && !activeCompanyId && !skipCompanyPrompt) {
               router.push("/cek-perusahaan");
               return;
@@ -120,7 +128,7 @@ export default function DashboardPage() {
       }
     };
     fetchData();
-  }, [router, activeCompanyId]);
+  }, [router, activeCompanyId, isCompanyLoading]);
 
   const isManagement = activeRole 
     ? ["owner", "admin", "manager"].includes(activeRole) 

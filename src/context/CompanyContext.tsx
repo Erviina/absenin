@@ -57,7 +57,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Hydrate from localStorage cache immediately after mounting on client (avoids SSR mismatch)
+  // Hydrate from localStorage cache immediately after mounting on client (avoids SSR mismatch).
+  // Cache hanya digunakan untuk tampilan sementara (optimistik) — isLoading tetap true
+  // sampai fetchMemberships dari backend selesai, agar tidak ada keputusan routing berdasarkan data basi.
   useEffect(() => {
     try {
       const cached = localStorage.getItem(MEMBERSHIPS_CACHE_KEY);
@@ -66,7 +68,8 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setMemberships(parsed);
-          setIsLoading(false);
+          // Sengaja TIDAK memanggil setIsLoading(false) di sini.
+          // isLoading hanya dimatikan oleh fetchMemberships setelah verifikasi backend.
         }
       }
       if (storedActiveId) {

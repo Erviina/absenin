@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
 import { Loader2 } from "lucide-react";
 
-import { getPersonalModePreference, isTokenValid, getAuthenticatedRedirectPath } from "@/lib/personalMode";
+import { getPersonalModePreference, isTokenValid } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
 
 function LoginForm() {
@@ -15,18 +15,16 @@ function LoginForm() {
   const { showToast } = useDialog();
   const [isLoading, setIsLoading] = useState(false);
 
-  // Jika pengguna sudah login dengan token valid, langsung arahkan ke target redirect atau dashboard/cek-perusahaan
+  // Jika terdapat target redirectParam dari tautan eksternal dan pengguna sudah memiliki token valid, arahkan ke target tersebut
   useEffect(() => {
+    if (!redirectParam || !redirectParam.startsWith("/")) return;
+
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
     if (token) {
       if (isTokenValid(token)) {
-        if (redirectParam && redirectParam.startsWith("/")) {
-          router.replace(redirectParam);
-        } else {
-          router.replace(getAuthenticatedRedirectPath("/dashboard"));
-        }
+        router.replace(redirectParam);
       } else {
-        // Token tidak valid atau kedaluwarsa: bersihkan sesi usang agar tidak terjadi redirect loop
+        // Token tidak valid atau kedaluwarsa: bersihkan sesi usang
         localStorage.removeItem("accessToken");
         localStorage.removeItem("user");
       }
