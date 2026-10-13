@@ -53,7 +53,7 @@ export default function OnboardingPage() {
       image: "/img/assets/onboard1.png",
     },
     {
-      title: <>Kelola Jadwal, <br/>Tugas & Izin Praktis</>,
+      title: <>Kelola Jadwal, <br />Tugas & Izin Praktis</>,
       description: <>Cek agenda, tugas kerja dan ajukan izin tanpa ribet.</>,
       image: "/img/assets/onboard2.png",
     },
@@ -108,9 +108,8 @@ export default function OnboardingPage() {
           {slides.map((_, index) => (
             <div
               key={index}
-              className={`h-2 rounded-full transition-all duration-300 ease-out ${
-                current === index ? "w-8 bg-primary" : "w-2 bg-primary/20"
-              }`}
+              className={`h-2 rounded-full transition-all duration-300 ease-out ${current === index ? "w-8 bg-primary" : "w-2 bg-primary/20"
+                }`}
             />
           ))}
         </div>
@@ -118,17 +117,17 @@ export default function OnboardingPage() {
         {/* Buttons Row */}
         <div className="flex w-full gap-3 mt-4">
           {current > 0 && (
-            <Button 
+            <Button
               size="icon"
-              className="h-14 w-14 shrink-0 rounded-full shadow-sm hover:shadow-md transition-all bg-[#356E3B] hover:bg-[#356E3B]/90 text-white" 
+              className="h-14 w-14 shrink-0 rounded-full shadow-sm hover:shadow-md transition-all bg-[#356E3B] hover:bg-[#356E3B]/90 text-white"
               onClick={onPrev}
             >
               <ChevronLeft className="w-6 h-6" />
             </Button>
           )}
-          <Button 
-            size="lg" 
-            className="flex-1 text-[15px] font-semibold h-14 rounded-full shadow-sm hover:shadow-md transition-all bg-[#356E3B] hover:bg-[#356E3B]/90 text-white" 
+          <Button
+            size="lg"
+            className="flex-1 text-[15px] font-semibold h-14 rounded-full shadow-sm hover:shadow-md transition-all bg-[#356E3B] hover:bg-[#356E3B]/90 text-white"
             onClick={onNext}
           >
             {current === 2 ? "Mulai Sekarang" : "Lanjutkan"}

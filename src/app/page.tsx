@@ -2,12 +2,23 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { isTokenValid, getAuthenticatedRedirectPath } from "@/lib/personalMode";
 
 export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    // Berpindah ke halaman onboarding setelah 2 detik
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const isAuthenticated = isTokenValid(token);
+
+    if (isAuthenticated) {
+      // Pengguna sudah login dengan token valid: langsung arahkan tanpa mengulang onboarding
+      const targetPath = getAuthenticatedRedirectPath("/dashboard");
+      router.replace(targetPath);
+      return;
+    }
+
+    // Pengguna belum login atau token kedaluwarsa: tampilkan splash screen selama 2 detik lalu ke onboarding
     const timer = setTimeout(() => {
       router.push("/login/onboard");
     }, 2000);
@@ -20,12 +31,12 @@ export default function SplashScreen() {
       {/* Efek glow halus di latar belakang */}
       <div className="absolute -top-16 -right-16 w-64 h-64 bg-[#7FAF8B]/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-[#7FAF8B]/10 rounded-full blur-3xl pointer-events-none" />
-      
+
       {/* Logo di tengah layar */}
-      <img 
-        src="/img/assets/Logo.png" 
-        alt="AbsenIn Logo" 
-        className="w-56 h-auto object-contain z-10 animate-in fade-in zoom-in-95 duration-1000" 
+      <img
+        src="/img/assets/Logo.png"
+        alt="AbsenIn Logo"
+        className="w-56 h-auto object-contain z-10 animate-in fade-in zoom-in-95 duration-1000"
       />
     </div>
   );
