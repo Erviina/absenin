@@ -19,10 +19,11 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { sanitizeText, truncateText } from "@/lib/sanitize";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { useCompany } from "@/context/CompanyContext";
+import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 import { getPersonalModePreference } from "@/lib/personalMode";
 import { 
@@ -36,6 +37,18 @@ import { getAgendaCategoryColor } from "@/app/agenda/page";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { showToast } = useDialog();
+  const [showScheduleNotice, setShowScheduleNotice] = useState(false);
+  const scheduleNoticeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (scheduleNoticeTimeoutRef.current) {
+        clearTimeout(scheduleNoticeTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const { 
     activeCompanyId, 
     activeCompany, 
@@ -353,6 +366,25 @@ export default function DashboardPage() {
     }
   }
 
+  const handleCtaClick = () => {
+    if (isBtnDisabled) {
+      if (btnHelperText) {
+        showToast(btnHelperText, "info");
+        setShowScheduleNotice(true);
+        if (scheduleNoticeTimeoutRef.current) {
+          clearTimeout(scheduleNoticeTimeoutRef.current);
+        }
+        scheduleNoticeTimeoutRef.current = setTimeout(() => {
+          setShowScheduleNotice(false);
+        }, 4000);
+      } else {
+        showToast("Presensi belum dapat diakses saat ini", "info");
+      }
+      return;
+    }
+    router.push('/checkin');
+  };
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       
@@ -470,21 +502,20 @@ export default function DashboardPage() {
               mulai dari hadir tepat<br/>
               waktu!
             </h1>
-            {btnHelperText && (
-              <div className="mt-2 flex items-center gap-1.5 bg-white/85 backdrop-blur-xs px-2.5 py-1 rounded-full w-fit shadow-2xs border border-white/60">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#1E4738]/60 shrink-0" />
-                <span className="text-[10.5px] font-semibold text-[#1E4738] truncate max-w-[190px]" title={btnHelperText}>
-                  {btnHelperText}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* CTA Check In / Out Floating Full Rounded Pill at Bottom Right */}
-          <div className="absolute bottom-3.5 right-3.5 z-20">
+          <div className="absolute bottom-3.5 right-3.5 z-20 flex flex-col items-end">
+            {showScheduleNotice && btnHelperText && (
+              <div className="mb-2 bg-[#1E4738] text-white text-[11px] font-medium px-3.5 py-2 rounded-[14px] shadow-lg flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200 max-w-[260px] text-left relative border border-white/20">
+                <Clock className="w-3.5 h-3.5 text-white/90 shrink-0" strokeWidth={2} />
+                <span className="leading-tight">{btnHelperText}</span>
+                <div className="absolute -bottom-1 right-8 w-2.5 h-2.5 bg-[#1E4738] rotate-45 transform" />
+              </div>
+            )}
             <button 
-              onClick={() => router.push('/checkin')}
-              disabled={isBtnDisabled}
+              type="button"
+              onClick={handleCtaClick}
               title={btnHelperText || (attendanceStatus === "CHECKED_IN" ? "Rekam Check-out" : "Rekam Kehadiran")}
               className={`${btnColorClass} rounded-full px-4 py-2.5 flex items-center gap-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] border-[3px] border-white transition-all`}
             >
