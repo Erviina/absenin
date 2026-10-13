@@ -424,7 +424,7 @@ export default function IzinPage() {
             <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
                 <label className="text-[13px] font-bold text-[#374151]">
-                  Lampiran Bukti <span className="text-[#EF4444]">*</span>
+                  Lampiran Bukti
                 </label>
                 <p className="text-[11px] font-medium text-[#6B7280] leading-snug pr-4">
                   Wajib menyertakan surat dokter untuk Izin Sakit

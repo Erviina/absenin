@@ -37,6 +37,8 @@ export default function AdminDashboardPage() {
   const [isLeaveStatsLoading, setIsLeaveStatsLoading] = useState(true);
   const [isActivitiesLoading, setIsActivitiesLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("Semua");
+  const [pendingLeavesCount, setPendingLeavesCount] = useState<number>(0);
+  const [karyawanBadgeCount, setKaryawanBadgeCount] = useState<number>(0);
 
   // Guard: If activeRole is member, redirect back to dashboard immediately
   useEffect(() => {
@@ -110,6 +112,40 @@ export default function AdminDashboardPage() {
           setActivities(dataAct.data);
         }
         setIsActivitiesLoading(false);
+
+        // Fetch badge counts (Perizinan pending and Karyawan join/exit requests)
+        try {
+          const resBadge = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/badge-counts", { headers });
+          const dataBadge = await resBadge.json();
+          if (dataBadge.success && dataBadge.data) {
+            setPendingLeavesCount(dataBadge.data.pendingLeaves || 0);
+            setKaryawanBadgeCount(dataBadge.data.karyawanBadge || 0);
+          } else {
+            throw new Error("Fallback to direct endpoints");
+          }
+        } catch {
+          // Fallback if /dashboard/badge-counts is not available
+          const [resLeavesAdmin, resJoin, resExit] = await Promise.allSettled([
+            fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/admin", { headers }).then(r => r.json()),
+            fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", { headers }).then(r => r.json()),
+            fetch(process.env.NEXT_PUBLIC_API_URL + "/company/exit-requests", { headers }).then(r => r.json()),
+          ]);
+
+          if (resLeavesAdmin.status === "fulfilled" && resLeavesAdmin.value?.success && Array.isArray(resLeavesAdmin.value.data)) {
+            const pendingLeaves = resLeavesAdmin.value.data.filter((l: any) => l.status === "Menunggu").length;
+            setPendingLeavesCount(pendingLeaves);
+          }
+
+          let joinCount = 0;
+          let exitCount = 0;
+          if (resJoin.status === "fulfilled" && resJoin.value?.success && Array.isArray(resJoin.value.data)) {
+            joinCount = resJoin.value.data.length;
+          }
+          if (resExit.status === "fulfilled" && resExit.value?.success && Array.isArray(resExit.value.data)) {
+            exitCount = resExit.value.data.length;
+          }
+          setKaryawanBadgeCount(joinCount + exitCount);
+        }
 
       } catch (error) {
         console.error("Failed to fetch dashboard data", error);
@@ -253,8 +289,8 @@ export default function AdminDashboardPage() {
         <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex justify-between items-start mt-1">
           {[
             { icon: Calendar, label: "Jadwal", path: "/admin/agenda" },
-            { icon: FileCheck, label: "Perizinan", path: "/admin/izin" },
-            { icon: Users2, label: "Karyawan", path: "/admin/karyawan" },
+            { icon: FileCheck, label: "Perizinan", path: "/admin/izin", badge: pendingLeavesCount },
+            { icon: Users2, label: "Karyawan", path: "/admin/karyawan", badge: karyawanBadgeCount },
             { icon: FileText, label: "Laporan", path: "/admin/laporan-kehadiran" },
             { icon: Megaphone, label: "Berita", path: "/admin/berita" }
           ].map((item, i) => (
@@ -263,8 +299,13 @@ export default function AdminDashboardPage() {
               onClick={() => router.push(item.path)}
               className="flex flex-col items-center gap-2 text-center w-[55px] active:scale-95 transition-transform group"
             >
-              <div className="w-[48px] h-[48px] bg-[#f4f9f6] border border-[#eef5f0] rounded-[16px] flex items-center justify-center group-hover:bg-[#e6f0ea] transition-colors">
+              <div className="relative w-[48px] h-[48px] bg-[#f4f9f6] border border-[#eef5f0] rounded-[16px] flex items-center justify-center group-hover:bg-[#e6f0ea] transition-colors">
                 <item.icon className="w-[20px] h-[20px] text-[#356E3B]" strokeWidth={1.5} />
+                {typeof item.badge === "number" && item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1 bg-[#EF4444] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-[0_2px_5px_rgba(239,68,68,0.35)] border-2 border-white leading-none z-10 animate-in fade-in zoom-in-75 duration-200">
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                )}
               </div>
               <span className="text-[10px] font-bold text-[#1E4738] leading-[1.2]">{item.label}</span>
             </button>

@@ -1113,7 +1113,7 @@ function AdminKaryawanView() {
                  className={`flex items-center justify-between p-4 border rounded-[16px] cursor-pointer transition-colors group ${selectedRole === 'Employee' ? 'border-[#356E3B] bg-[#f4f9f6]' : 'border-gray-100 hover:border-gray-300 bg-[#fbfdfc]'}`}
                >
                  <div className="flex flex-col gap-0.5">
-                   <span className="text-[#111827] text-[14px] font-bold">Karyawan (Dasar)</span>
+                   <span className="text-[#111827] text-[14px] font-bold">Karyawan</span>
                    <span className="text-gray-500 text-[11px] leading-relaxed max-w-[220px]">
                      Akses fitur presensi, pengajuan izin, dan melihat berita.
                    </span>

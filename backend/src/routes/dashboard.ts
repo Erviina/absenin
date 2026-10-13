@@ -135,6 +135,64 @@ router.get("/leave-stats", authenticate, async (req: Request, res: Response): Pr
   }
 });
 
+router.get("/badge-counts", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+    const tenant = await resolveTenant(req, user.id);
+
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+    }
+    const companyId = tenant.companyId;
+
+    const countsRes = await db.execute(sql`
+      SELECT 
+        (
+          SELECT count(*) 
+          FROM leave_requests 
+          WHERE company_id = ${companyId} 
+            AND status = 'Menunggu' 
+            AND deleted_at IS NULL
+        ) as pending_leaves,
+        (
+          SELECT count(*) 
+          FROM company_join_requests 
+          WHERE company_id = ${companyId} 
+            AND status = 'pending' 
+            AND deleted_at IS NULL
+        ) as pending_joins,
+        (
+          SELECT count(*) 
+          FROM company_exit_requests 
+          WHERE company_id = ${companyId} 
+            AND status = 'pending' 
+            AND deleted_at IS NULL
+        ) as pending_exits
+    `);
+
+    const row = countsRes.rows[0];
+    const pendingLeaves = parseInt(row?.pending_leaves as string) || 0;
+    const pendingJoins = parseInt(row?.pending_joins as string) || 0;
+    const pendingExits = parseInt(row?.pending_exits as string) || 0;
+
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil mendapatkan badge counts",
+      data: {
+        pendingLeaves,
+        pendingJoins,
+        pendingExits,
+        karyawanBadge: pendingJoins + pendingExits,
+      }
+    });
+
+  } catch (error: any) {
+    console.error("Badge counts error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error", errors: [error.message] });
+  }
+});
+
+
 router.get("/activities", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
