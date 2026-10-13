@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
 import { Loader2 } from "lucide-react";
 
-import { getPersonalModePreference } from "@/lib/personalMode";
+import { getPersonalModePreference, isTokenValid, getAuthenticatedRedirectPath } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
 
 function LoginForm() {
@@ -15,21 +15,27 @@ function LoginForm() {
   const { showToast } = useDialog();
   const [isLoading, setIsLoading] = useState(false);
 
-  // Jika pengguna sudah login, langsung arahkan ke target redirect atau dashboard
+  // Jika pengguna sudah login dengan token valid, langsung arahkan ke target redirect atau dashboard/cek-perusahaan
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
     if (token) {
-      if (redirectParam && redirectParam.startsWith("/")) {
-        router.replace(redirectParam);
+      if (isTokenValid(token)) {
+        if (redirectParam && redirectParam.startsWith("/")) {
+          router.replace(redirectParam);
+        } else {
+          router.replace(getAuthenticatedRedirectPath("/dashboard"));
+        }
       } else {
-        router.replace("/dashboard");
+        // Token tidak valid atau kedaluwarsa: bersihkan sesi usang agar tidak terjadi redirect loop
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("user");
       }
     }
   }, [redirectParam, router]);
 
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) return;
-    
+
     setIsLoading(true);
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/google", {
@@ -49,12 +55,12 @@ function LoginForm() {
         showToast(data?.message || `Gagal login (Error ${res.status})`, "error");
         return;
       }
-      
+
       if (data?.success) {
         localStorage.setItem("accessToken", data.data.accessToken);
         localStorage.setItem("user", JSON.stringify(data.data.user));
         showToast("Login berhasil!", "success");
-        
+
         // Cek jika terdapat target redirect dari tautan yang dibagikan
         if (redirectParam && redirectParam.startsWith("/")) {
           router.replace(redirectParam);
@@ -83,13 +89,13 @@ function LoginForm() {
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
-      
+
       {/* Top Section */}
       <div className="flex flex-col items-center pt-20 px-6 z-10">
         <img src="/img/assets/Logo.png" alt="AbsenIn Logo" className="h-10 w-auto object-contain mb-8" />
-        
+
         <h1 className="text-[20px] leading-[1.4] font-bold text-[#1E4738] text-center mb-10 max-w-[500px]">
-          Mulai hari dengan langkah kecil,<br/>untuk hasil yang lebih besar.
+          Mulai hari dengan langkah kecil,<br />untuk hasil yang lebih besar.
         </h1>
 
         {/* Login Card */}
@@ -99,7 +105,7 @@ function LoginForm() {
               Selamat Datang!
             </h2>
             <p className="text-[#5C786C] text-[13px] leading-[1.6]">
-              Masuk dengan akun pilihanmu untuk<br/>melanjutkan ke AbsenIN.
+              Masuk dengan akun pilihanmu untuk<br />melanjutkan ke AbsenIN.
             </p>
           </div>
 
@@ -127,10 +133,10 @@ function LoginForm() {
       <div className="absolute bottom-0 left-0 w-full h-[60vh] pointer-events-none z-0">
         {/* Soft fade out at the top of the illustration */}
         <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#edf3ef] to-transparent z-10" />
-        
-        <img 
-          src="/img/assets/imagelogin.png" 
-          alt="Login Workspace Illustration" 
+
+        <img
+          src="/img/assets/imagelogin.png"
+          alt="Login Workspace Illustration"
           className="w-full h-full object-cover object-bottom opacity-90"
         />
       </div>
