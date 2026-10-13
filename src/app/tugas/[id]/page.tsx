@@ -38,6 +38,11 @@ export default function TugasDetailPage() {
         }
         
         const headers: Record<string, string> = { Authorization: "Bearer " + token };
+        const activeCompanyId = localStorage.getItem("activeCompanyId");
+        if (activeCompanyId) {
+          headers["x-company-id"] = activeCompanyId;
+        }
+
         let res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tasks/${id}`, { headers });
         if (res.ok) {
           const t = await res.json();

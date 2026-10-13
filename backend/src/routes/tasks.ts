@@ -59,22 +59,41 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
     }
 
     const tenant = await resolveTenant(req, profileId);
-    const companyId = tenant?.companyId;
+    const companyId = tenant?.companyId || (req.headers["x-company-id"] as string) || null;
 
-    const conditions = [];
-    conditions.push(and(eq(tasks.profile_id, profileId), isNull(tasks.company_id), isNull(tasks.deleted_at)));
-    
-    if (companyId) {
-      conditions.push(and(eq(tasks.company_id, companyId), isNull(tasks.deleted_at)));
-    }
+    // Filter tasks based on company:
+    // If companyId is present, strictly fetch tasks for this active company.
+    // If no companyId, fetch tasks where company_id is null.
+    const companyCondition = companyId 
+      ? eq(tasks.company_id, String(companyId)) 
+      : isNull(tasks.company_id);
 
-    // Also include tasks explicitly assigned to profileId
-    conditions.push(and(eq(tasks.assigned_to, profileId), isNull(tasks.deleted_at)));
+    const allCompanyTasks = await db.select().from(tasks)
+      .where(and(companyCondition, isNull(tasks.deleted_at)))
+      .orderBy(desc(tasks.created_at));
 
-    const userTasks = await db.select().from(tasks).where(or(...conditions)).orderBy(desc(tasks.created_at));
+    // Visible tasks rule:
+    // 1. Personal tasks: ONLY visible to creator (profile_id === profileId)
+    // 2. Group tasks: ONLY visible to creator OR persons mentioned in assignees / assigned_to
+    const visibleTasks = allCompanyTasks.filter(t => {
+      const isCreator = t.profile_id === profileId || t.created_by === profileId;
+      const isGroup = t.type === "group" || (!t.type && Array.isArray(t.assignees) && t.assignees.length > 0);
 
-    const formattedTasks = userTasks.map(t => {
+      if (isGroup) {
+        if (isCreator) return true;
+        if (t.assigned_to === profileId) return true;
+        if (Array.isArray(t.assignees)) {
+          return t.assignees.some((a: any) => (typeof a === "string" ? a === profileId : a?.id === profileId));
+        }
+        return false;
+      } else {
+        return isCreator;
+      }
+    });
+
+    const formattedTasks = visibleTasks.map(t => {
       const d = t.deadline ? new Date(t.deadline) : null;
+      const isGroup = t.type === "group" || (!t.type && Array.isArray(t.assignees) && t.assignees.length > 0);
       return {
         id: t.id,
         title: t.title,
@@ -82,11 +101,12 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
         time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
         note: t.notes || "",
         completed: t.is_completed,
-        type: t.company_id ? "group" : "personal",
+        type: t.type || (isGroup ? "group" : "personal"),
         company_id: t.company_id,
         assignees: t.assignees || [],
         assigned_to: t.assigned_to || null,
-        created_at: t.created_at
+        created_at: t.created_at,
+        created_by: t.created_by || t.profile_id
       };
     });
 
@@ -118,10 +138,8 @@ router.get("/:id", authenticate, async (req: Request, res: Response): Promise<vo
     }
 
     const t = existingTask[0];
-    const tenant = await resolveTenant(req, profileId);
-    const companyId = tenant?.companyId;
-
-    const isGroup = t.company_id !== null;
+    const isGroup = t.type === "group" || (!t.type && Array.isArray(t.assignees) && t.assignees.length > 0);
+    const isCreator = t.profile_id === profileId || t.created_by === profileId;
     let isAssignee = false;
     if (Array.isArray(t.assignees)) {
       isAssignee = t.assignees.some((a: any) => (typeof a === "string" ? a === profileId : a?.id === profileId));
@@ -130,12 +148,16 @@ router.get("/:id", authenticate, async (req: Request, res: Response): Promise<vo
       isAssignee = true;
     }
 
-    if (!isGroup && t.profile_id !== profileId) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    } else if (isGroup && t.company_id !== companyId && t.profile_id !== profileId && !isAssignee) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
+    if (isGroup) {
+      if (!isCreator && !isAssignee) {
+        res.status(403).json({ error: "Forbidden: Anda tidak memiliki akses ke tugas grup ini" });
+        return;
+      }
+    } else {
+      if (!isCreator) {
+        res.status(403).json({ error: "Forbidden: Anda tidak memiliki akses ke tugas personal ini" });
+        return;
+      }
     }
 
     const d = t.deadline ? new Date(t.deadline) : null;
@@ -146,11 +168,12 @@ router.get("/:id", authenticate, async (req: Request, res: Response): Promise<vo
       time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
       note: t.notes || "",
       completed: t.is_completed,
-      type: t.company_id ? "group" : "personal",
+      type: t.type || (isGroup ? "group" : "personal"),
       company_id: t.company_id,
       assignees: t.assignees || [],
       assigned_to: t.assigned_to || null,
-      created_at: t.created_at
+      created_at: t.created_at,
+      created_by: t.created_by || t.profile_id
     });
   } catch (error: any) {
     console.error("Error fetching task details:", error);
@@ -175,13 +198,13 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
     }
 
     const tenant = await resolveTenant(req, profileId);
-    let companyId = null;
-    if (type === "group") {
-      companyId = tenant?.companyId || null;
-      if (!companyId) {
-        res.status(400).json({ error: "Cannot create group task: No active company associated" });
-        return;
-      }
+    const targetCompanyId = tenant?.companyId || (req.headers["x-company-id"] as string) || req.body.company_id || null;
+
+    const taskType = type === "group" ? "group" : "personal";
+
+    if (taskType === "group" && !targetCompanyId) {
+      res.status(400).json({ error: "Cannot create group task: No active company associated" });
+      return;
     }
 
     const deadlineStr = `${date || new Date().toISOString().split("T")[0]}T${time || "00:00"}:00Z`;
@@ -197,11 +220,12 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
       .values({
         id: crypto.randomUUID(),
         profile_id: profileId,
-        company_id: companyId,
+        company_id: targetCompanyId ? String(targetCompanyId) : null,
         title,
         deadline,
         notes: note || null,
         is_completed: false,
+        type: taskType,
         assignees: safeAssignees,
         assigned_to: safeAssignedTo,
         created_at: new Date(),
@@ -211,8 +235,8 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
       .returning();
 
     // Send notifications to assignees for group tasks
-    if (companyId && safeAssignees.length > 0) {
-      await notifyAssignees(companyId, safeAssignees, profileId, newTask.id, newTask.title || "Tugas Baru");
+    if (targetCompanyId && safeAssignees.length > 0) {
+      await notifyAssignees(String(targetCompanyId), safeAssignees, profileId, newTask.id, newTask.title || "Tugas Baru");
     }
 
     const d = newTask.deadline ? new Date(newTask.deadline) : null;
@@ -223,11 +247,12 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
       time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
       note: newTask.notes || "",
       completed: newTask.is_completed,
-      type: newTask.company_id ? "group" : "personal",
+      type: newTask.type || taskType,
       company_id: newTask.company_id,
       assignees: newTask.assignees || [],
       assigned_to: newTask.assigned_to || null,
-      created_at: newTask.created_at
+      created_at: newTask.created_at,
+      created_by: newTask.created_by || newTask.profile_id
     });
   } catch (error: any) {
     console.error("Error creating task:", error);
@@ -255,17 +280,26 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
     }
 
     const currentTask = existingTask[0];
-    const tenant = await resolveTenant(req, profileId);
-    const companyId = tenant?.companyId;
+    const isGroup = currentTask.type === "group" || (!currentTask.type && Array.isArray(currentTask.assignees) && currentTask.assignees.length > 0);
+    const isCreator = currentTask.profile_id === profileId || currentTask.created_by === profileId;
+    let isAssignee = false;
+    if (Array.isArray(currentTask.assignees)) {
+      isAssignee = currentTask.assignees.some((a: any) => (typeof a === "string" ? a === profileId : a?.id === profileId));
+    }
+    if (currentTask.assigned_to === profileId) {
+      isAssignee = true;
+    }
 
-    const isGroup = currentTask.company_id !== null;
-
-    if (!isGroup && currentTask.profile_id !== profileId) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    } else if (isGroup && currentTask.company_id !== companyId && currentTask.profile_id !== profileId) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
+    if (isGroup) {
+      if (!isCreator && !isAssignee) {
+        res.status(403).json({ error: "Forbidden: Anda tidak memiliki akses ke tugas ini" });
+        return;
+      }
+    } else {
+      if (!isCreator) {
+        res.status(403).json({ error: "Forbidden: Anda tidak dapat mengubah tugas personal orang lain" });
+        return;
+      }
     }
 
     let updatedDeadline = currentTask.deadline;
@@ -294,12 +328,6 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
           ? assigned_to
           : (safeAssignees[0] ? (typeof safeAssignees[0] === "string" ? safeAssignees[0] : safeAssignees[0].id) : null);
 
-      // Check which assignees are new
-      const oldAssigneeIds = new Set(
-        Array.isArray(currentTask.assignees)
-          ? currentTask.assignees.map((a: any) => (typeof a === "string" ? a : a?.id))
-          : []
-      );
       newAssigneesToNotify = safeAssignees;
     } else if (assigned_to !== undefined) {
       updateData.assigned_to = assigned_to;
@@ -336,11 +364,12 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
       time: rd ? rd.toISOString().split("T")[1].substring(0, 5) : "00:00",
       note: updatedTask.notes || "",
       completed: updatedTask.is_completed,
-      type: updatedTask.company_id ? "group" : "personal",
+      type: updatedTask.type || (isGroup ? "group" : "personal"),
       company_id: updatedTask.company_id,
       assignees: updatedTask.assignees || [],
       assigned_to: updatedTask.assigned_to || null,
-      created_at: updatedTask.created_at
+      created_at: updatedTask.created_at,
+      created_by: updatedTask.created_by || updatedTask.profile_id
     });
   } catch (error: any) {
     console.error("Error updating task:", error);
@@ -366,16 +395,10 @@ router.delete("/:id", authenticate, async (req: Request, res: Response): Promise
       return;
     }
 
-    const tenant = await resolveTenant(req, profileId);
-    const companyId = tenant?.companyId;
+    const isCreator = existingTask[0].profile_id === profileId || existingTask[0].created_by === profileId;
 
-    const isGroup = existingTask[0].company_id !== null;
-
-    if (!isGroup && existingTask[0].profile_id !== profileId) {
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    } else if (isGroup && existingTask[0].company_id !== companyId && existingTask[0].profile_id !== profileId) {
-      res.status(403).json({ error: "Forbidden" });
+    if (!isCreator) {
+      res.status(403).json({ error: "Forbidden: Hanya pembuat tugas yang dapat menghapus tugas ini" });
       return;
     }
 

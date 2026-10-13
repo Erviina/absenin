@@ -35,15 +35,12 @@ export default function TugasPage() {
   const [selectedAssignees, setSelectedAssignees] = useState<any[]>([]);
   const [searchMember, setSearchMember] = useState("");
 
-  const [tasks, setTasks] = useState<any[]>([
-    { id: "dummy-1", title: "Review sprint backlog dengan Tim Dev", time: "10:00", completed: true, type: "personal", date: new Date().toISOString().split("T")[0], note: "" },
-    { id: "dummy-2", title: "Kirim draft laporan absensi mingguan", time: "15:30", completed: false, type: "personal", date: new Date().toISOString().split("T")[0], note: "" },
-    { id: "dummy-3", title: "Belanja perlengkapan pantry kantor", time: "14:00", completed: false, type: "personal", date: "2026-12-25", note: "" },
-    { id: "dummy-4", title: "Meeting mingguan bersama Klien", time: "09:00", completed: false, type: "group", date: "2026-12-26", note: "" },
-  ]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
 
   useEffect(() => {
     const fetchTasks = async () => {
+      setIsLoadingTasks(true);
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) return;
@@ -64,6 +61,8 @@ export default function TugasPage() {
         }
       } catch (err) {
         console.error("Failed to fetch tasks", err);
+      } finally {
+        setIsLoadingTasks(false);
       }
     };
     fetchTasks();
@@ -227,13 +226,14 @@ export default function TugasPage() {
       date: taskDate,
       time: taskTime,
       note: noteText,
-      type: activeTab, // Use current tab
+      type: activeTab, // "personal" or "group"
     };
 
+    if (activeCompanyId) {
+      payload.company_id = activeCompanyId;
+    }
+
     if (activeTab === "group") {
-      if (activeCompanyId) {
-        payload.company_id = activeCompanyId;
-      }
       payload.assignees = selectedAssignees;
       if (selectedAssignees.length > 0) {
         payload.assigned_to = selectedAssignees[0].id;
@@ -529,6 +529,11 @@ export default function TugasPage() {
             >
               Simpan Tugas
             </PrimaryButton>
+          </div>
+        ) : isLoadingTasks ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
+            <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+            <span className="text-[13px] font-medium text-[#7d998c]">Memuat daftar tugas...</span>
           </div>
         ) : isViewingUpcoming ? (
           /* ALL UPCOMING TASKS VIEW */

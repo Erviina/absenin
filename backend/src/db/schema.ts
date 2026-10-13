@@ -157,6 +157,7 @@ export const tasks = pgTable("tasks", {
   deadline: timestamp("deadline", { withTimezone: true }),
   is_completed: boolean("is_completed").default(false),
   task_category_id: uuid("task_category_id"),
+  type: varchar("type").default("personal"),
   assignees: jsonb("assignees").default([]),
   assigned_to: uuid("assigned_to").references(() => profiles.id),
   created_at: timestamp("created_at", { withTimezone: true }),
