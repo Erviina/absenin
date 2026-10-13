@@ -147,16 +147,16 @@ export default function DashboardPage() {
   };
 
   const getRoleBadgeStyle = (role?: string | null) => {
-    switch (role) {
+    switch (role?.toLowerCase()) {
       case "owner":
-        return "bg-amber-50 text-amber-800 border-amber-200/80 font-bold";
+        return "bg-[#FFF7ED] text-[#C2410C] border-[#FDBA74] font-bold";
       case "admin":
-        return "bg-emerald-50 text-emerald-800 border-emerald-200/80 font-semibold";
+        return "bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0] font-bold";
       case "manager":
-        return "bg-sky-50 text-sky-800 border-sky-200/80 font-semibold";
+        return "bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD] font-bold";
       case "member":
       default:
-        return "bg-slate-50 text-slate-700 border-slate-200/60 font-medium";
+        return "bg-[#F8FAFC] text-[#475569] border-[#E2E8F0] font-semibold";
     }
   };
 
@@ -230,9 +230,11 @@ export default function DashboardPage() {
                 <span className="text-[14px] font-bold text-[#111827] truncate group-hover:text-[#1E4738] transition-colors">
                   {activeCompany?.name || "Mode Personal"}
                 </span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border capitalize shrink-0 font-bold ${getRoleBadgeStyle(activeRole)}`}>
-                  {activeCompany ? (activeRole || "Member") : "Personal"}
-                </span>
+                {activeCompany && (
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full border capitalize shrink-0 font-bold ${getRoleBadgeStyle(activeRole)}`}>
+                    {activeRole || "Member"}
+                  </span>
+                )}
               </div>
               <span className="text-[11.5px] text-[#5C786C] font-medium leading-none mt-1 truncate">
                 {activeCompany?.category?.name || "Belum terhubung organisasi"}
@@ -240,13 +242,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Active Mode Tag & Trigger */}
-          <div className="flex items-center gap-2 pl-3 border-l border-gray-100 shrink-0">
-            <div className="flex items-center gap-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#1E4738] border border-[#DCFCE7] px-2.5 py-1 rounded-full text-[11px] font-bold shadow-2xs transition-colors">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse" />
-              <span>Personal</span>
-            </div>
-            <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
+          {/* Trigger Icon */}
+          <div className="flex items-center pl-3 border-l border-gray-100 shrink-0 text-gray-400 group-hover:text-[#1E4738] transition-colors">
+            <ChevronDown className="w-4 h-4 stroke-[2.5]" />
           </div>
         </div>
       </div>

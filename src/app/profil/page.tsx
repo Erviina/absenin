@@ -20,6 +20,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
+import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 
 export default function ProfilPage() {
   const router = useRouter();
@@ -31,6 +32,7 @@ export default function ProfilPage() {
   const [avatarError, setAvatarError] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
 
   // Exit Request States
   const [myExitRequest, setMyExitRequest] = useState<any>(null);
@@ -336,9 +338,17 @@ export default function ProfilPage() {
               <User className="w-3.5 h-3.5" />
               <span className="text-[13px] font-medium">{getRoleDisplay()}</span>
             </div>
-            <div className="flex items-center gap-1.5 text-[#6B7280]">
+            <div 
+              onClick={() => setIsContextDrawerOpen(true)}
+              className="flex items-center gap-1.5 text-[#6B7280] hover:text-[#183B2B] cursor-pointer transition-colors group"
+            >
               <Building2 className="w-3.5 h-3.5" />
-              <span className="text-[13px] font-medium">{activeCompany?.name || user.company?.name || "Belum ada organisasi"}</span>
+              <span className="text-[13px] font-medium group-hover:underline">
+                {activeCompany?.name || user.company?.name || "Belum ada organisasi"}
+              </span>
+              <span className="text-[10px] font-bold text-[#183B2B] bg-[#EAF3ED] px-2 py-0.5 rounded-full ml-1">
+                Ganti
+              </span>
             </div>
           </div>
         </div>
@@ -434,6 +444,23 @@ export default function ProfilPage() {
           </div>
         )}
 
+        {/* Akses & Perusahaan Card */}
+        <div 
+          onClick={() => setIsContextDrawerOpen(true)}
+          className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-9 flex justify-center">
+              <Building2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[#111827] text-[14px] font-bold">Akses & Perusahaan</span>
+              <span className="text-[#6B7280] text-[12px]">Kelola mode tampilan dan organisasi aktif.</span>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+        </div>
+
         {/* Keluar dari Akun Card */}
         <div 
           onClick={handleLogout}
@@ -516,6 +543,13 @@ export default function ProfilPage() {
           </div>
         </div>
       )}
+
+      {/* Drawer Peralihan Akun & Perusahaan */}
+      <AccountContextDrawer 
+        isOpen={isContextDrawerOpen}
+        onClose={() => setIsContextDrawerOpen(false)}
+        currentMode="personal"
+      />
     </div>
   );
 }
