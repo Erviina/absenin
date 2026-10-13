@@ -13,7 +13,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { Badge } from "@/components/Badge";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
-import { evaluateSchedule, CompanyScheduleData } from "@/lib/schedule";
+import { evaluateSchedule, getNextCheckInSchedule, calculateServerOffsetMs, CompanyScheduleData } from "@/lib/schedule";
 import { formatDateTime } from "@/lib/dateUtils";
 const LeafletMap = dynamic(() => import('@/components/MapLocation'), { 
   ssr: false,
@@ -36,9 +36,18 @@ export default function CheckinPage() {
   const [isStatusLoading, setIsStatusLoading] = useState(true);
   const [companySchedule, setCompanySchedule] = useState<CompanyScheduleData | null>(null);
   const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
+  const [currentTimeMs, setCurrentTimeMs] = useState<number>(Date.now());
   const [showEarlyCheckoutModal, setShowEarlyCheckoutModal] = useState<boolean>(false);
   const [showLowAccuracyModal, setShowLowAccuracyModal] = useState<boolean>(false);
   const [lowAccuracyConfirmed, setLowAccuracyConfirmed] = useState<boolean>(false);
+
+  // Live timer interval untuk evaluasi jadwal secara dinamis tanpa reload halaman
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTimeMs(Date.now());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Submit State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -216,12 +225,8 @@ export default function CheckinPage() {
           setAttendanceStatus(data.data.status);
           if (data.data?.company) {
             setCompanySchedule(data.data.company);
-            if (data.data.company.server_time) {
-              const serverMs = new Date(data.data.company.server_time).getTime();
-              if (!isNaN(serverMs)) {
-                setServerOffsetMs(serverMs - Date.now());
-              }
-            }
+            const offset = calculateServerOffsetMs(data.data.company.server_time);
+            setServerOffsetMs(offset);
           } else {
             // Fallback ke /companies/me jika company belum disertakan
             try {
@@ -377,6 +382,21 @@ export default function CheckinPage() {
     );
   }
 
+  const scheduleEval = evaluateSchedule(
+    companySchedule,
+    serverOffsetMs,
+    new Date(currentTimeMs + serverOffsetMs)
+  );
+
+  const nextSchedule = getNextCheckInSchedule(
+    companySchedule,
+    serverOffsetMs,
+    {
+      afterCheckout: attendanceStatus === "CHECKED_OUT",
+      referenceDate: new Date(currentTimeMs + serverOffsetMs)
+    }
+  );
+
   if (attendanceStatus === "CHECKED_OUT") {
     return (
       <div className="flex flex-col min-h-[100dvh] w-full bg-[#fbfdfc] relative">
@@ -386,12 +406,23 @@ export default function CheckinPage() {
             <CheckCircle2 className="w-10 h-10 text-[#2D5A3F]" strokeWidth={2} />
           </div>
           <h2 className="text-[20px] font-bold text-[#111827] mb-2">Absensi Hari Ini Selesai</h2>
-          <p className="text-[#6B7280] text-[14px] leading-relaxed mb-8 max-w-[280px]">
-            Anda telah berhasil melakukan Check-in dan Check-out untuk hari ini. Sampai jumpa besok!
+          <p className="text-[#6B7280] text-[14px] leading-relaxed mb-8 max-w-[320px]">
+            Anda telah berhasil melakukan Check-in dan Check-out untuk hari ini.
+            <br /><br />
+            Check-in berikutnya dibuka pada hari{" "}
+            <strong className="text-[#1E4738] font-bold">
+              {nextSchedule.isTomorrow ? `Besok (${nextSchedule.dayName})` : nextSchedule.dayName}
+            </strong>
+            {nextSchedule.dateFormatted !== "-" ? `, ${nextSchedule.dateFormatted}` : ""}{" "}
+            pukul{" "}
+            <strong className="text-[#1E4738] font-bold">
+              {nextSchedule.openTimeFormatted} WIB
+            </strong>
+            .
           </p>
           <button 
             onClick={() => router.push("/dashboard")}
-            className="w-full max-w-[200px] h-12 bg-[#356E3B] text-white rounded-full font-bold text-[14px]"
+            className="w-full max-w-[200px] h-12 bg-[#356E3B] hover:bg-[#153428] text-white rounded-full font-bold text-[14px] transition-colors shadow-sm"
           >
             Kembali ke Beranda
           </button>
@@ -400,7 +431,6 @@ export default function CheckinPage() {
     );
   }
 
-  const scheduleEval = evaluateSchedule(companySchedule, serverOffsetMs);
   const isCheckOutMode = attendanceStatus === "CHECKED_IN";
   const isCheckInBlocked = !isCheckOutMode && !scheduleEval.isCheckInOpen;
   const titleText = isCheckOutMode ? "Check-out" : "Check-in";
