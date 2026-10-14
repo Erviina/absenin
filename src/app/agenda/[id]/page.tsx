@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
-import { Calendar, Clock, MapPin, ExternalLink, Info, ArrowLeft, Share2, Tag } from "lucide-react";
+import { Calendar, Clock, MapPin, ExternalLink, Info, ArrowLeft, Share2, Tag, FileText } from "lucide-react";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
 import { formatDateWithDay } from "@/lib/dateUtils";
 import { shareContent } from "@/lib/shareUtils";
-import { isAgendaUrl, formatAgendaUrl, getAgendaCategoryColor } from "@/app/agenda/page";
+import { isAgendaUrl, formatAgendaUrl, getAgendaCategoryColor, LocationPinIcon } from "@/app/agenda/page";
 import { Badge } from "@/components/Badge";
 import { PrimaryButton } from "@/components/PrimaryButton";
 
@@ -195,7 +195,9 @@ export default function AgendaDetailPage() {
               <div className="h-[1px] w-full bg-[#E5E7EB]" />
               <div className="flex flex-col gap-3">
                 <h3 className="text-[13px] font-bold text-[#374151] uppercase tracking-wide">
-                  Lokasi / Tautan
+                  {isAgendaUrl(agenda.link_or_location || agenda.link)
+                    ? "Tautan / Link"
+                    : "Lokasi"}
                 </h3>
 
                 <div className="flex items-center gap-3 bg-[#F9FAFB] p-3.5 rounded-[16px] border border-[#E5E7EB]">
@@ -214,7 +216,7 @@ export default function AgendaDetailPage() {
                     </>
                   ) : (
                     <>
-                      <MapPin className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
+                      <LocationPinIcon className="w-5 h-5 text-[#356E3B] shrink-0" />
                       <span className="text-[#374151] text-[14px] font-medium truncate flex-1">
                         {agenda.link_or_location || agenda.link}
                       </span>

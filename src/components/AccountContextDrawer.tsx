@@ -114,7 +114,7 @@ export function AccountContextDrawer({
             <div className="flex flex-col gap-2.5">
               {/* Mode Personal Card */}
               {currentMode === "personal" ? (
-                <div className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F2FAF5] border-[1.5px] border-[#6EE7B7] rounded-[20px] shadow-[0_2px_8px_rgba(34,197,94,0.04)]">
+                <div className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F4F9F6] border-[1.5px] border-[#356E3B] rounded-[20px] shadow-[0_2px_8px_rgba(53,110,59,0.06)]">
                   <div className="flex items-center gap-3.5 min-w-0">
                     <div className="w-12 h-12 rounded-[16px] bg-[#183B2B] flex items-center justify-center text-white shrink-0">
                       <User className="w-5 h-5" strokeWidth={2} />
@@ -163,7 +163,7 @@ export function AccountContextDrawer({
               {/* Mode Manajemen Card */}
               {isManagement && (
                 currentMode === "management" ? (
-                  <div className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F2FAF5] border-[1.5px] border-[#6EE7B7] rounded-[20px] shadow-[0_2px_8px_rgba(34,197,94,0.04)]">
+                  <div className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F4F9F6] border-[1.5px] border-[#356E3B] rounded-[20px] shadow-[0_2px_8px_rgba(53,110,59,0.06)]">
                     <div className="flex items-center gap-3.5 min-w-0">
                       <div className="w-12 h-12 rounded-[16px] bg-[#183B2B] flex items-center justify-center text-white shrink-0 overflow-hidden border-2 border-[#1E4738]/20 ring-1 ring-[#1E4738]/10">
                         {activeCompany?.avatar_company_url ? (
@@ -248,7 +248,7 @@ export function AccountContextDrawer({
                       }}
                       className={`p-3.5 sm:p-4 rounded-[20px] cursor-pointer transition-all flex items-center justify-between border ${
                         isSelected 
-                          ? "bg-[#F2FAF5] border-[1.5px] border-[#6EE7B7] shadow-[0_2px_8px_rgba(34,197,94,0.04)]" 
+                          ? "bg-[#F4F9F6] border-[1.5px] border-[#356E3B] shadow-[0_2px_8px_rgba(53,110,59,0.06)]" 
                           : "bg-white hover:bg-gray-50/80 border-[#E5E7EB] active:scale-[0.99] group"
                       }`}
                     >

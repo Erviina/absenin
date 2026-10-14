@@ -24,7 +24,7 @@ import { CustomSelect } from "@/components/CustomSelect";
 import { DateTimeRollerPicker } from "@/components/DateTimeRollerPicker";
 import { useDialog } from "@/context/DialogContext";
 import { Badge } from "@/components/Badge";
-import { getAgendaCategoryColor, sortAgendaCategories, countWords } from "@/app/agenda/page";
+import { getAgendaCategoryColor, sortAgendaCategories, countWords, LocationPinIcon } from "@/app/agenda/page";
 import { shareContent } from "@/lib/shareUtils";
 
 // Tipe Data untuk Agenda
@@ -992,20 +992,14 @@ export default function AdminAgendaPage() {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 min-w-0">
-                            <MapPin className="w-[14px] h-[14px] text-[#6B7280] shrink-0" strokeWidth={2.5} />
+                            <LocationPinIcon className="w-[14px] h-[14px] text-[#6B7280] shrink-0" />
                             <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.link_or_location}>
                               {agenda.link_or_location}
                             </span>
                           </div>
                         )
-                      ) : agenda.notes ? (
-                        <div className="flex items-center gap-2 min-w-0">
-                          <FileText className="w-[14px] h-[14px] text-[#6B7280] shrink-0" strokeWidth={2.5} />
-                          <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.notes}>
-                            {agenda.notes}
-                          </span>
-                        </div>
                       ) : null}
+
                     </div>
                   </div>
                 );
@@ -1118,7 +1112,7 @@ export default function AdminAgendaPage() {
                     </>
                   ) : (
                     <>
-                      <MapPin className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
+                      <LocationPinIcon className="w-5 h-5 text-[#356E3B] shrink-0" />
                       <span className="text-[#374151] text-[14px] font-medium truncate flex-1">
                         {selectedAgendaDetail.link_or_location}
                       </span>
@@ -1129,7 +1123,12 @@ export default function AdminAgendaPage() {
 
               {selectedAgendaDetail.notes && (
                 <div className="flex flex-col gap-1.5 bg-[#F9FAFB] p-4 rounded-[14px]">
-                  <h3 className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">Catatan Tambahan</h3>
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#356E3B] shrink-0" strokeWidth={2} />
+                    <h3 className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">
+                      Catatan Tambahan
+                    </h3>
+                  </div>
                   <p className="text-[#374151] text-[14px] leading-relaxed whitespace-pre-wrap">
                     {selectedAgendaDetail.notes}
                   </p>
