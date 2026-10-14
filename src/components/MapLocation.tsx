@@ -238,6 +238,7 @@ export interface MapLocationProps {
   isLocating?: boolean;
   bottomOffset?: number;
   onRecenter?: () => void;
+  showRadius?: boolean;
 }
 
 export default function MapLocation({ 
@@ -250,6 +251,7 @@ export default function MapLocation({
   isLocating = false,
   bottomOffset = 0,
   onRecenter,
+  showRadius = false,
 }: MapLocationProps) {
   const activeMarkers: MapMarkerPoint[] =
     markers && markers.length > 0
@@ -301,17 +303,19 @@ export default function MapLocation({
 
           return (
             <div key={`marker-group-${index}-${marker.lat}-${marker.lng}`}>
-              <Circle 
-                center={[marker.lat, marker.lng]} 
-                radius={80}
-                pathOptions={{ 
-                  color: circleColor, 
-                  fillColor: circleColor, 
-                  fillOpacity: 0.1, 
-                  weight: 2, 
-                  dashArray: "5, 5" 
-                }} 
-              />
+              {showRadius && (
+                <Circle 
+                  center={[marker.lat, marker.lng]} 
+                  radius={80}
+                  pathOptions={{ 
+                    color: circleColor, 
+                    fillColor: circleColor, 
+                    fillOpacity: 0.1, 
+                    weight: 2, 
+                    dashArray: "5, 5" 
+                  }} 
+                />
+              )}
               <Marker 
                 position={[marker.lat, marker.lng]} 
                 icon={getCustomIcon(marker.label, marker.type)} 

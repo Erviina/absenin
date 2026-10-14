@@ -13,8 +13,7 @@ import {
   ShieldCheck, 
   UserCheck, 
   Crown,
-  ChevronRight,
-  LogOut
+  ChevronRight
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -312,22 +311,6 @@ export function CompanySwitcher({ compact = false, variant = "light" }: CompanyS
               </div>
               <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
             </button>
-
-            {activeCompany && activeRole !== "owner" && (
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push("/profil");
-                }}
-                className="w-full text-left px-3 py-2 text-[12px] font-semibold text-red-600 hover:bg-red-50 rounded-[12px] transition-colors flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2">
-                  <LogOut className="w-3.5 h-3.5 text-red-500" />
-                  <span>Ajukan Keluar Organisasi</span>
-                </div>
-                <ChevronRight className="w-3.5 h-3.5 text-red-300" />
-              </button>
-            )}
           </div>
 
         </div>

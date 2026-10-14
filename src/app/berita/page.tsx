@@ -326,7 +326,7 @@ export default function BeritaPage() {
             filteredNews.map((item) => (
               <div
                 key={item.id}
-                onClick={() => router.push(`/berita/${item.id}`)}
+                onClick={() => router.push(`/berita/${item.id}?from=/berita`)}
                 className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#dce9df] hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
               >
                 {/* Thumbnail / Image */}

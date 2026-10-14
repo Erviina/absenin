@@ -162,7 +162,7 @@ export default function KelolaBeritaPage() {
             filteredNews.map(item => (
               <div key={item.id} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#dce9df]">
                 <div 
-                  onClick={() => router.push(`/berita/${item.id}`)}
+                  onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
                   className="cursor-pointer shrink-0 group/img"
                   title="Klik untuk langsung melihat berita"
                 >
@@ -187,7 +187,7 @@ export default function KelolaBeritaPage() {
                     </span>
                   )}
                   <h3 
-                    onClick={() => router.push(`/berita/${item.id}`)}
+                    onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
                     className="text-[#1E4738] hover:text-[#356E3B] hover:underline cursor-pointer text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors"
                     title="Klik untuk langsung melihat berita"
                   >
@@ -199,7 +199,7 @@ export default function KelolaBeritaPage() {
                   
                   <div className="flex gap-2 mt-auto flex-wrap">
                     <button 
-                      onClick={() => router.push(`/berita/${item.id}`)}
+                      onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
                       className="text-[#1E4738] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
                       title="Lihat Berita"
                     >

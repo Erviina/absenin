@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { TopBar } from "@/components/TopBar";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { CustomSelect } from "@/components/CustomSelect";
 import { createClient } from "@supabase/supabase-js";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
@@ -227,16 +228,12 @@ function BuatBeritaForm() {
 
           <div className="flex flex-col gap-2 relative">
             <label className="text-[#1E4738] text-[13px] font-bold">Kategori</label>
-            <select
+            <CustomSelect
+              options={categories.map(cat => ({ value: cat.id, label: cat.name }))}
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="w-full border border-gray-200 rounded-[16px] px-4 py-3.5 text-[14px] text-[#1E4738] focus:border-[#356E3B] outline-none bg-white appearance-none"
-            >
-              <option value="">Pilih Kategori...</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
+              onChange={(val) => setCategoryId(val)}
+              placeholder="Pilih Kategori..."
+            />
           </div>
 
           <div className="flex flex-col gap-2">
