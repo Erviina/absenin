@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   ExternalLink,
   MoreVertical,
-  Share2 
+  Share2,
+  FileText
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
@@ -76,6 +77,41 @@ export function isAgendaUrl(str?: string | null): boolean {
   if (/^(meet\.google\.com|zoom\.us|teams\.microsoft\.com|maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(trimmed)) return true;
   if (/^[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\/[^\s]*)?$/i.test(trimmed)) return true;
   return false;
+}
+
+export function LocationPinIcon({ className = "w-[14px] h-[14px]", strokeWidth = 2, ...props }: React.SVGProps<SVGSVGElement> & { strokeWidth?: number }) {
+  return (
+    <svg 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth={strokeWidth} 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className={className} 
+      {...props}
+    >
+      <path d="M12 13V21" strokeWidth={2.5} />
+      <circle cx="12" cy="7.5" r="5.5" fill="currentColor" />
+      <circle cx="10.5" cy="6" r="1.3" fill="white" fillOpacity={0.45} />
+    </svg>
+  );
+}
+
+export function sortAgendaCategories<T extends { name: string }>(cats: T[]): T[] {
+  return [...cats].sort((a, b) => {
+    const isALainnya = /lainnya|lain-lain|other/i.test(a.name);
+    const isBLainnya = /lainnya|lain-lain|other/i.test(b.name);
+    if (isALainnya && !isBLainnya) return 1;
+    if (!isALainnya && isBLainnya) return -1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+export function countWords(str: string): number {
+  const trimmed = str.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
 }
 
 export function formatAgendaUrl(str: string): string {
@@ -204,7 +240,7 @@ function AgendaPageContent() {
       const res = await fetch(`${apiUrl}/agendas/categories`, { headers });
       const data = await res.json();
       if (data.success) {
-        setCategories(data.data);
+        setCategories(sortAgendaCategories(data.data));
       }
     } catch (err) {
       console.error("Fetch categories error:", err);
@@ -255,11 +291,18 @@ function AgendaPageContent() {
         const eMonth = FULL_MONTH_NAMES[endDate.getMonth()];
         const eYear = endDate.getFullYear();
 
-        const timeDisplay = isSameDay 
-          ? `${startTimeStr} - ${endTimeStr} WIB`
-          : sYear === eYear
-            ? `${sDay} ${sMonth} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`
-            : `${sDay} ${sMonth} ${sYear} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`;
+        const isAllDay = Boolean(item.is_all_day);
+        const timeDisplay = isAllDay
+          ? isSameDay
+            ? "Seharian"
+            : sYear === eYear
+              ? `${sDay} ${sMonth} - ${eDay} ${eMonth} ${eYear} (Seharian)`
+              : `${sDay} ${sMonth} ${sYear} - ${eDay} ${eMonth} ${eYear} (Seharian)`
+          : isSameDay 
+            ? `${startTimeStr} - ${endTimeStr} WIB`
+            : sYear === eYear
+              ? `${sDay} ${sMonth} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`
+              : `${sDay} ${sMonth} ${sYear} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`;
 
         const linkOrLoc = item.link_or_location || item.link || null;
         const agendaNotes = item.notes || null;
@@ -276,7 +319,8 @@ function AgendaPageContent() {
           scope: item.type === "COMPANY" ? "COMPANY" : "PERSONAL",
           start_time: item.start_time,
           end_time: item.end_time,
-          link: linkOrLoc
+          link: linkOrLoc,
+          is_all_day: isAllDay,
         };
 
         // Populate every single day in the date range
@@ -325,6 +369,32 @@ function AgendaPageContent() {
     }
   };
 
+  const handleToggleAllDay = () => {
+    const nextVal = !isAllDay;
+    setIsAllDay(nextVal);
+    if (nextVal) {
+      const s = new Date(startTime);
+      s.setHours(0, 0, 0, 0);
+      setStartTime(s);
+      const e = new Date(endTime);
+      e.setHours(23, 59, 59, 999);
+      if (e < s) {
+        e.setDate(s.getDate());
+      }
+      setEndTime(e);
+    }
+  };
+
+  const handleCatatanChange = (val: string) => {
+    const words = val.trim() ? val.trim().split(/\s+/) : [];
+    if (words.length <= 200 || val.length < formCatatan.length) {
+      setFormCatatan(val);
+    } else {
+      const limited = words.slice(0, 200).join(" ");
+      setFormCatatan(limited);
+    }
+  };
+
   const handleOpenAddModal = () => {
     setFormId("");
     setFormScope("PERSONAL");
@@ -354,7 +424,8 @@ function AgendaPageContent() {
 
   const handleOpenEditModal = (agenda: AgendaItem) => {
     setFormId(agenda.id);
-    setFormScope(agenda.scope);
+    const isCompany = (agenda.scope || "").toUpperCase() === "COMPANY" || agenda.type === "COMPANY";
+    setFormScope(isCompany ? "COMPANY" : "PERSONAL");
     setFormKegiatan(agenda.title);
     setFormKategoriId(agenda.category_id || (categories.length > 0 ? categories[0].id : ""));
     
@@ -403,6 +474,7 @@ function AgendaPageContent() {
         end_time: endTime.toISOString(),
         agenda_category_id: formKategoriId || null,
         company_id: activeCompanyId,
+        is_all_day: isAllDay,
       };
 
       let url = `${apiUrl}/agendas`;
@@ -577,13 +649,6 @@ function AgendaPageContent() {
           </div>
         ) : (
           <>
-            <div className="mb-4 bg-[#E8F3EB] border border-[#D1E5D5] rounded-xl p-3 flex items-start gap-2 shadow-sm">
-              <Info className="w-5 h-5 text-[#356E3B] shrink-0 mt-0.5" />
-              <p className="text-[#2D5A3F] text-[12px] font-medium leading-tight">
-                Ini adalah halaman agenda. Anda dapat melihat agenda perusahaan dan mengelola agenda pribadi Anda.
-              </p>
-            </div>
-
             {/* Kalender Card dengan Rentang Waktu (Date Range) */}
             <div className="mb-6 px-1">
               <div className="flex justify-between items-center mb-4">
@@ -706,125 +771,127 @@ function AgendaPageContent() {
                 displayedAgendas.map(({ agenda, dateStr }) => {
                   const catColor = getAgendaCategoryColor(agenda.type);
                   return (
-                    <div 
-                      key={agenda.id} 
-                      onClick={() => setSelectedAgendaDetail(agenda)}
-                      className={`bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 ${catColor.hoverBorder} transition-colors group relative overflow-hidden cursor-pointer`}
+                    <div
+                      key={agenda.id}
+                      className={`relative ${activeMenuId === agenda.id ? 'z-30' : ''}`}
                     >
-                      <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
-                      
-                      <div className="flex justify-between items-start pl-2">
-                        <div className="flex flex-col gap-1 flex-1 pr-2">
-                          <div className="flex items-center gap-2">
-                            <Badge 
-                              variant={catColor.variant}
-                              size="xs"
-                              uppercase
-                            >
-                              {agenda.type}
-                            </Badge>
-                            <Badge
-                              variant={agenda.scope === "COMPANY" ? "company" : "personal"}
-                              size="xs"
-                              uppercase
-                            >
-                              {agenda.scope === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
-                            </Badge>
-                          </div>
-                          <h3 className="text-[#111827] text-[16px] font-bold leading-tight pr-2 mt-1">{agenda.title}</h3>
-                        </div>
+                      <div
+                        onClick={() => setSelectedAgendaDetail(agenda)}
+                        className={`bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 ${catColor.hoverBorder} transition-colors group relative overflow-hidden cursor-pointer`}
+                      >
+                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${catColor.stripeBg}`} />
 
-                      {/* More Action Menu (Titik Tiga) */}
-                      {(agenda.scope === "PERSONAL" || canCreate("agendas")) && (
-                        <div className="relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuId(activeMenuId === agenda.id ? null : agenda.id);
-                            }}
-                            className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center transition-colors active:scale-95"
-                            aria-label="Menu Aksi"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-
-                          {activeMenuId === agenda.id && (
-                            <div 
-                              onClick={(e) => e.stopPropagation()}
-                              className="absolute right-0 top-9 w-36 bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.12)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150"
-                            >
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveMenuId(null);
-                                  handleOpenEditModal(agenda);
-                                }}
-                                className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors"
+                        <div className="flex justify-between items-start pl-2 pr-10">
+                          <div className="flex flex-col gap-1 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge 
+                                variant={catColor.variant}
+                                size="xs"
+                                uppercase
                               >
-                                <Edit2 className="w-3.5 h-3.5 text-gray-500" />
-                                <span>Edit</span>
-                              </button>
-                              <div className="h-[1px] bg-gray-100 mx-2" />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveMenuId(null);
-                                  handleDeleteAgenda(agenda.id);
-                                }}
-                                className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
+                                {agenda.type}
+                              </Badge>
+                              <Badge
+                                variant={agenda.scope === "COMPANY" ? "company" : "personal"}
+                                size="xs"
+                                uppercase
                               >
-                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                                <span>Hapus</span>
-                              </button>
+                                {agenda.scope === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
+                              </Badge>
                             </div>
-                          )}
+                            <h3 className="text-[#111827] text-[16px] font-bold leading-tight mt-1">{agenda.title}</h3>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex flex-col gap-2 pl-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
-                        <span className="text-[#4B5563] text-[12px] font-medium">{agenda.time}</span>
+
+                        <div className="flex flex-col gap-2 pl-2">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
+                            <span className="text-[#4B5563] text-[12px] font-medium">{agenda.time}</span>
+                          </div>
+                          {agenda.link_or_location ? (
+                            isAgendaUrl(agenda.link_or_location) ? (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <ExternalLink className="w-[14px] h-[14px] text-[#2563EB] shrink-0" strokeWidth={2.5} />
+                                <a
+                                  href={formatAgendaUrl(agenda.link_or_location)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-[#2563EB] hover:text-[#1D4ED8] hover:underline text-[12px] font-medium truncate max-w-[260px]"
+                                  title={agenda.link_or_location}
+                                >
+                                  {agenda.link_or_location}
+                                </a>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <LocationPinIcon className="w-[14px] h-[14px] text-[#6B7280] shrink-0" />
+                                <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.link_or_location}>
+                                  {agenda.link_or_location}
+                                </span>
+                              </div>
+                            )
+                          ) : null}
+                        </div>
                       </div>
-                      {agenda.link_or_location ? (
-                        isAgendaUrl(agenda.link_or_location) ? (
-                          <div className="flex items-center gap-2 min-w-0">
-                            <ExternalLink className="w-[14px] h-[14px] text-[#2563EB] shrink-0" strokeWidth={2.5} />
-                            <a
-                              href={formatAgendaUrl(agenda.link_or_location)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-[#2563EB] hover:text-[#1D4ED8] hover:underline text-[12px] font-medium truncate max-w-[260px]"
-                              title={agenda.link_or_location}
+
+                      {/* More Action Menu (Titik Tiga) — outside overflow-hidden card */}
+                      <div className="absolute top-3 right-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuId(activeMenuId === agenda.id ? null : agenda.id);
+                          }}
+                          className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center transition-colors active:scale-95"
+                          aria-label="Menu Aksi"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {activeMenuId === agenda.id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-0 top-9 w-36 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.18)] border border-gray-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleShareAgenda(agenda);
+                              }}
+                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors"
                             >
-                              {agenda.link_or_location}
-                            </a>
+                              <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                              <span>Bagikan</span>
+                            </button>
+                            <div className="h-[1px] bg-gray-100 mx-2" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleOpenEditModal(agenda);
+                              }}
+                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                              <span>Edit</span>
+                            </button>
+                            <div className="h-[1px] bg-gray-100 mx-2" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleDeleteAgenda(agenda.id);
+                              }}
+                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                              <span>Hapus</span>
+                            </button>
                           </div>
-                        ) : (
-                          <div className="flex items-center gap-2 min-w-0">
-                            <MapPin className="w-[14px] h-[14px] text-[#6B7280] shrink-0" strokeWidth={2.5} />
-                            <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.link_or_location}>
-                              {agenda.link_or_location}
-                            </span>
-                          </div>
-                        )
-                      ) : agenda.notes ? (
-                        <div className="flex items-center gap-2 min-w-0">
-                          <MapPin className="w-[14px] h-[14px] text-[#6B7280] shrink-0" strokeWidth={2.5} />
-                          <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.notes}>
-                            {agenda.notes}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-[14px] h-[14px] text-[#9CA3AF] shrink-0" strokeWidth={2.5} />
-                          <span className="text-[#9CA3AF] text-[12px] font-medium">Tanpa Keterangan</span>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  </div>
                 );
               })
               ) : (
@@ -853,64 +920,60 @@ function AgendaPageContent() {
               >
                 {selectedAgendaDetail.type}
               </Badge>
-              <div className="flex items-center gap-1.5">
-                {(selectedAgendaDetail.scope === "PERSONAL" || canCreate("agendas")) && (
-                  <div className="relative">
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDetailMenuOpen(!isDetailMenuOpen);
+                  }}
+                  className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors"
+                  aria-label="Menu Aksi"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+                {isDetailMenuOpen && (
+                  <div 
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-9 w-36 bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.12)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150"
+                  >
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsDetailMenuOpen(!isDetailMenuOpen);
+                      onClick={() => {
+                        setIsDetailMenuOpen(false);
+                        handleShareAgenda(selectedAgendaDetail);
                       }}
-                      className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors"
-                      aria-label="Menu Aksi"
+                      className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors"
                     >
-                      <MoreVertical className="w-4 h-4" />
+                      <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                      <span>Bagikan</span>
                     </button>
-                    {isDetailMenuOpen && (
-                      <div 
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute right-0 top-9 w-36 bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.12)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150"
-                      >
-                        <button
-                          onClick={() => {
-                            setIsDetailMenuOpen(false);
-                            const item = selectedAgendaDetail;
-                            setSelectedAgendaDetail(null);
-                            handleOpenEditModal(item);
-                          }}
-                          className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5 text-gray-500" />
-                          <span>Edit</span>
-                        </button>
-                        <div className="h-[1px] bg-gray-100 mx-2" />
-                        <button
-                          onClick={() => {
-                            setIsDetailMenuOpen(false);
-                            const id = selectedAgendaDetail.id;
-                            setSelectedAgendaDetail(null);
-                            handleDeleteAgenda(id);
-                          }}
-                          className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                          <span>Hapus</span>
-                        </button>
-                      </div>
-                    )}
+                    <div className="h-[1px] bg-gray-100 mx-2" />
+                    <button
+                      onClick={() => {
+                        setIsDetailMenuOpen(false);
+                        const item = selectedAgendaDetail;
+                        setSelectedAgendaDetail(null);
+                        handleOpenEditModal(item);
+                      }}
+                      className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                      <span>Edit</span>
+                    </button>
+                    <div className="h-[1px] bg-gray-100 mx-2" />
+                    <button
+                      onClick={() => {
+                        setIsDetailMenuOpen(false);
+                        const id = selectedAgendaDetail.id;
+                        setSelectedAgendaDetail(null);
+                        handleDeleteAgenda(id);
+                      }}
+                      className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                      <span>Hapus</span>
+                    </button>
                   </div>
                 )}
-                <button
-                  onClick={() => handleShareAgenda(selectedAgendaDetail)}
-                  className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-500 transition-colors active:scale-95"
-                  aria-label="Bagikan Agenda"
-                  title="Bagikan Agenda"
-                >
-                  <Share2 className="w-4 h-4 text-gray-600" />
-                </button>
-                <button onClick={() => setSelectedAgendaDetail(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
               </div>
             </div>
             
@@ -939,7 +1002,7 @@ function AgendaPageContent() {
                     </>
                   ) : (
                     <>
-                      <MapPin className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
+                      <LocationPinIcon className="w-5 h-5 text-[#356E3B] shrink-0" />
                       <span className="text-[#374151] text-[14px] font-medium truncate flex-1">
                         {selectedAgendaDetail.link_or_location}
                       </span>
@@ -950,7 +1013,12 @@ function AgendaPageContent() {
 
               {selectedAgendaDetail.notes && (
                 <div className="flex flex-col gap-1.5 bg-[#F9FAFB] p-4 rounded-[14px]">
-                  <h3 className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">Catatan Tambahan</h3>
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#356E3B] shrink-0" strokeWidth={2} />
+                    <h3 className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">
+                      Catatan Tambahan
+                    </h3>
+                  </div>
                   <p className="text-[#374151] text-[14px] leading-relaxed whitespace-pre-wrap">
                     {selectedAgendaDetail.notes}
                   </p>
@@ -965,13 +1033,16 @@ function AgendaPageContent() {
               )}
             </div>
 
-            <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
+            <div className="mt-5 pt-3 border-t border-gray-100">
               <button
-                onClick={() => handleShareAgenda(selectedAgendaDetail)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#E8F3EB] text-[#356E3B] text-[12px] font-bold hover:bg-[#D1E5D5] active:scale-95 transition-all shadow-xs"
+                type="button"
+                onClick={() => {
+                  setSelectedAgendaDetail(null);
+                  setIsDetailMenuOpen(false);
+                }}
+                className="w-full py-2.5 px-4 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-[13px] font-bold active:scale-95 transition-all text-center"
               >
-                <Share2 className="w-3.5 h-3.5 text-[#356E3B]" />
-                <span>Bagikan Agenda</span>
+                Tutup
               </button>
             </div>
           </div>
@@ -993,7 +1064,7 @@ function AgendaPageContent() {
               </button>
             </div>
             
-            <div className="p-5 overflow-y-auto flex flex-col gap-5">
+            <div className="p-5 overflow-y-auto no-scrollbar flex flex-col gap-5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
               {canCreate("agendas") && !formId && (
                 <div className="flex flex-col gap-2">
                   <label className="text-[13px] font-bold text-[#374151]">
@@ -1063,7 +1134,7 @@ function AgendaPageContent() {
                     <span className="text-[14px] font-medium text-gray-900">Seharian</span>
                     <button
                       type="button"
-                      onClick={() => setIsAllDay(!isAllDay)}
+                      onClick={handleToggleAllDay}
                       className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-200 ease-in-out cursor-pointer ${
                         isAllDay ? "bg-[#356E3B]" : "bg-[#D1D5DB]"
                       }`}
@@ -1098,10 +1169,17 @@ function AgendaPageContent() {
                       value={startTime}
                       isAllDay={isAllDay}
                       onChange={(newDate) => {
+                        if (isAllDay) {
+                          newDate.setHours(0, 0, 0, 0);
+                        }
                         setStartTime(newDate);
                         if (newDate > endTime) {
                           const nextEnd = new Date(newDate);
-                          nextEnd.setHours(nextEnd.getHours() + 1);
+                          if (isAllDay) {
+                            nextEnd.setHours(23, 59, 59, 999);
+                          } else {
+                            nextEnd.setHours(nextEnd.getHours() + 1);
+                          }
                           setEndTime(nextEnd);
                         }
                       }}
@@ -1130,9 +1208,16 @@ function AgendaPageContent() {
                       value={endTime}
                       isAllDay={isAllDay}
                       onChange={(newDate) => {
+                        if (isAllDay) {
+                          newDate.setHours(23, 59, 59, 999);
+                        }
                         setEndTime(newDate);
                         if (newDate < startTime) {
-                          setStartTime(newDate);
+                          const nextStart = new Date(newDate);
+                          if (isAllDay) {
+                            nextStart.setHours(0, 0, 0, 0);
+                          }
+                          setStartTime(nextStart);
                         }
                       }}
                     />
@@ -1159,16 +1244,15 @@ function AgendaPageContent() {
                     Catatan Tambahan
                   </label>
                   <span className="text-[11px] font-bold text-[#6B7280]">
-                    {formCatatan.length} / 200 karakter
+                    {countWords(formCatatan)} / 200 kata
                   </span>
                 </div>
                 <textarea 
-                  rows={3}
-                  maxLength={200}
+                  rows={4}
                   value={formCatatan}
-                  onChange={(e) => setFormCatatan(e.target.value)}
+                  onChange={(e) => handleCatatanChange(e.target.value)}
                   placeholder="Misal: Bawa dokumen presentasi..." 
-                  className="w-full border border-[#E5E7EB] rounded-[14px] px-4 py-3.5 text-[14px] text-[#4B5563] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all resize-none"
+                  className="w-full border border-[#E5E7EB] rounded-[14px] px-4 py-3 text-[14px] text-[#4B5563] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all resize-none min-h-[96px]"
                 />
               </div>
 

@@ -46,6 +46,8 @@ function formatAgendaItem(row: any) {
                     startDate.getMonth() === endDate.getMonth() &&
                     startDate.getDate() === endDate.getDate();
 
+  const isAllDay = Boolean(row.is_all_day);
+
   const startTimeStr = isValidStart
     ? `${String(startDate.getHours()).padStart(2, '0')}.${String(startDate.getMinutes()).padStart(2, '0')}`
     : "";
@@ -54,7 +56,13 @@ function formatAgendaItem(row: any) {
     : "";
 
   let timeRange = "";
-  if (isValidStart && isValidEnd) {
+  if (isAllDay) {
+    if (isSameDay) {
+      timeRange = "Seharian";
+    } else {
+      timeRange = `${startDate.getDate()} ${SHORT_MONTHS[startDate.getMonth()]} - ${endDate.getDate()} ${SHORT_MONTHS[endDate.getMonth()]} (Seharian)`;
+    }
+  } else if (isValidStart && isValidEnd) {
     if (isSameDay) {
       timeRange = `${startTimeStr} - ${endTimeStr} WIB`;
     } else {
@@ -70,6 +78,7 @@ function formatAgendaItem(row: any) {
     end_time: row.end_time,
     time_range: timeRange,
     is_same_day: isSameDay,
+    is_all_day: isAllDay,
     scope: row.type === "COMPANY" ? "company" : "personal",
     type: row.type,
     category: row.category_id ? {
@@ -98,7 +107,12 @@ router.get("/categories", authenticate, async (req: Request, res: Response): Pro
     const categoriesRes = await db.execute(sql`
       SELECT id, name, description
       FROM agendas_categories
-      ORDER BY name ASC
+      ORDER BY 
+        CASE 
+          WHEN LOWER(name) LIKE '%lainnya%' OR LOWER(name) LIKE '%lain-lain%' OR LOWER(name) = 'other' THEN 1 
+          ELSE 0 
+        END ASC, 
+        name ASC
     `);
 
     return res.status(200).json({
@@ -156,6 +170,7 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
         a.profile_id,
         a.type,
         a.link_or_location,
+        a.is_all_day,
         c.id as category_id, 
         c.name as category_name
       FROM agendas a
@@ -199,6 +214,7 @@ router.get("/:id", authenticate, async (req: Request, res: Response): Promise<an
         a.profile_id,
         a.type,
         a.link_or_location,
+        a.is_all_day,
         c.id as category_id, 
         c.name as category_name
       FROM agendas a
@@ -245,12 +261,13 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
     }
 
     const linkOrLoc = data.link_or_location || data.link || null;
+    const isAllDay = Boolean(data.is_all_day);
     const insertRes = await db.execute(sql`
       INSERT INTO agendas (
-        company_id, profile_id, type, title, notes, start_time, end_time, agenda_category_id, link_or_location, created_by
+        company_id, profile_id, type, title, notes, start_time, end_time, agenda_category_id, link_or_location, is_all_day, created_by
       ) VALUES (
         ${profileData.companyId}, ${profileData.profileId}, ${agendaType}, ${data.title}, ${data.notes || null}, 
-        ${data.start_time}, ${data.end_time}, ${data.agenda_category_id || null}, ${linkOrLoc}, ${profileData.profileId}
+        ${data.start_time}, ${data.end_time}, ${data.agenda_category_id || null}, ${linkOrLoc}, ${isAllDay}, ${profileData.profileId}
       )
       RETURNING *
     `);
@@ -306,6 +323,7 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
     }
 
     const linkOrLoc = data.link_or_location || data.link || null;
+    const isAllDayUpdate = data.is_all_day !== undefined ? Boolean(data.is_all_day) : null;
     const updateRes = await db.execute(sql`
       UPDATE agendas 
       SET 
@@ -315,6 +333,7 @@ router.patch("/:id", authenticate, async (req: Request, res: Response): Promise<
         end_time = ${data.end_time},
         agenda_category_id = ${data.agenda_category_id || null},
         link_or_location = ${linkOrLoc},
+        is_all_day = COALESCE(${isAllDayUpdate}, is_all_day),
         updated_at = NOW(),
         updated_by = ${profileData.profileId}
       WHERE id = ${agendaId}

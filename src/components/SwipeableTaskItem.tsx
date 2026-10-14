@@ -202,10 +202,17 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }:
           onTouchEnd={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseUp={(e) => e.stopPropagation()}
+          type="button"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onToggle(task.id);
           }}
+          className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
           className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
             task.completed 
               ? "bg-[#2D5A3F] border-[#2D5A3F]" 
