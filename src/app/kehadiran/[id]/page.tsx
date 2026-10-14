@@ -7,6 +7,8 @@ import dynamic from "next/dynamic";
 import { TopBar } from "@/components/TopBar";
 import { formatDateWithDay } from "@/lib/dateUtils";
 
+import { useCompany } from "@/context/CompanyContext";
+
 // Dynamically import MapLocation to prevent SSR issues
 const MapLocation = dynamic(() => import("@/components/MapLocation"), { 
   ssr: false,
@@ -20,6 +22,7 @@ const MapLocation = dynamic(() => import("@/components/MapLocation"), {
 export default function DetailKehadiranPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
+  const { activeCompanyId } = useCompany();
   
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,10 +38,16 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
         return;
       }
       
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`
+      };
+      const companyId = activeCompanyId || (typeof window !== "undefined" ? localStorage.getItem("activeCompanyId") : null);
+      if (companyId) {
+        headers["x-company-id"] = companyId;
+      }
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/${id}`, {
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
+        headers
       });
       
       const result = await res.json();

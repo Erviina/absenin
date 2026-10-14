@@ -152,7 +152,7 @@ export default function TugasDetailPage() {
         }
       />
 
-      <div className="px-6 pt-6 pb-32 flex flex-col gap-6">
+      <div className="px-6 pt-6 pb-36 flex flex-col gap-6">
         
         {/* Title Card */}
         <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
@@ -295,19 +295,18 @@ export default function TugasDetailPage() {
       </div>
 
       {/* Bottom Sticky Action: Selesaikan Tugas */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 pb-6 bg-white/95 backdrop-blur-md border-t border-[#E8F3EB] z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-        <div className="max-w-md mx-auto">
-          <PrimaryButton
-            type="button"
-            onClick={handleToggleComplete}
-            isLoading={isToggling}
-            variant={task.completed ? "outline" : "primary"}
-            icon={task.completed ? <RotateCcw className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-            className="w-full h-12 text-[14px] font-bold shadow-md cursor-pointer"
-          >
-            {task.completed ? "Tandai Belum Selesai" : "Selesaikan Tugas"}
-          </PrimaryButton>
-        </div>
+      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md bg-white/95 backdrop-blur-md border-t border-x border-[#E8F3EB] z-30 px-6 pt-3.5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
+        <PrimaryButton
+          type="button"
+          onClick={handleToggleComplete}
+          isLoading={isToggling}
+          variant={task.completed ? "outline" : "primary"}
+          size="md"
+          icon={task.completed ? <RotateCcw className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+          className="w-full font-bold shadow-md cursor-pointer"
+        >
+          {task.completed ? "Tandai Belum Selesai" : "Selesaikan Tugas"}
+        </PrimaryButton>
       </div>
     </div>
   );

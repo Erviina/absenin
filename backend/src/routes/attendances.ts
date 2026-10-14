@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { attendances, profiles, companies } from "../db/schema";
-import { eq, and, sql, isNull, desc } from "drizzle-orm";
+import { eq, and, or, sql, isNull, desc } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import multer from "multer";
 import { calculateHaversineDistance } from "../utils/haversine";
@@ -658,17 +658,23 @@ router.get("/:id", authenticate, async (req: AuthRequest, res: Response): Promis
       return res.status(400).json({ success: false, message: "Invalid attendance ID format" });
     }
 
-    const tenant = await resolveTenant(req, userId);
+    // User can view their own attendance (profile_id = userId),
+    // OR if user is in management (owner/admin/manager) in the company that owns the attendance record
     const conditions = [
       eq(attendances.id, id),
-      isNull(attendances.deleted_at)
+      isNull(attendances.deleted_at),
+      or(
+        eq(attendances.profile_id, userId),
+        sql`EXISTS (
+          SELECT 1 FROM company_members cm 
+          WHERE cm.profile_id = ${userId} 
+            AND cm.company_id = ${attendances.company_id} 
+            AND cm.role IN ('owner', 'admin', 'manager') 
+            AND cm.status = 'active' 
+            AND cm.deleted_at IS NULL
+        )`
+      )
     ];
-
-    if (tenant?.isManagement) {
-      conditions.push(eq(attendances.company_id, tenant.companyId));
-    } else {
-      conditions.push(eq(attendances.profile_id, userId));
-    }
 
     const detail = await db
       .select({
