@@ -21,6 +21,7 @@ import {
 import { sanitizeText, truncateText } from "@/lib/sanitize";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { BottomNav } from "@/components/bottom-nav";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
@@ -56,11 +57,30 @@ export default function DashboardPage() {
     memberships, 
     switchCompany,
     isLoading: isCompanyLoading,
+    currentUser,
+    setCurrentUser,
   } = useCompany();
 
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
 
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<any>(() => {
+    if (currentUser) return currentUser;
+    if (typeof window !== "undefined") {
+      try {
+        const u = localStorage.getItem("user");
+        return u ? JSON.parse(u) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (currentUser) {
+      setUser(currentUser);
+    }
+  }, [currentUser]);
   const [news, setNews] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [agendas, setAgendas] = useState<any[]>([]);
@@ -122,6 +142,7 @@ export default function DashboardPage() {
           const authData = await authRes.json();
           if (authData.success) {
             setUser(authData.data.user);
+            setCurrentUser(authData.data.user);
             const skipCompanyPrompt = getPersonalModePreference(authData.data.user?.id);
             // activeCompanyId di sini sudah diverifikasi backend (isCompanyLoading sudah false),
             // jadi aman digunakan sebagai penentu apakah pengguna punya perusahaan aktif.
@@ -394,8 +415,9 @@ export default function DashboardPage() {
       <div className="flex justify-between items-center px-6 pt-9 sm:pt-10 pb-3.5 bg-[#fbfdfc]">
         {/* Avatar & Greeting */}
         <div className="flex items-center gap-3 min-w-0">
-          <div 
-            onClick={() => router.push("/profil")}
+          <Link 
+            href="/profil"
+            prefetch={true}
             className="cursor-pointer shrink-0 relative group"
             title="Lihat Profil"
           >
@@ -412,14 +434,14 @@ export default function DashboardPage() {
               </div>
             )}
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a859] border-2 border-white rounded-full"></div>
-          </div>
+          </Link>
 
           <div className="flex flex-col min-w-0">
             <span className="text-[#5C786C] text-[12px] font-medium leading-none mb-1">
               Selamat datang,
             </span>
             <h1 className="text-[#1E4738] text-[17px] font-bold leading-tight truncate">
-              {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
+              {user?.fullName || (isLoading ? "Memuat..." : "Pengguna")}
             </h1>
           </div>
         </div>

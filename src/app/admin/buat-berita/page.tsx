@@ -183,7 +183,7 @@ function BuatBeritaForm() {
   if (isLoading) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#f4f9f6] relative">
-        <TopBar title="Edit Berita" />
+        <TopBar title="Edit Berita" onBack={() => router.push("/admin/berita")} />
         <div className="flex-1 flex items-center justify-center">
           <span className="text-[#7d998c] text-[14px]">Memuat data...</span>
         </div>
@@ -195,6 +195,7 @@ function BuatBeritaForm() {
     <div className="flex flex-col min-h-[100dvh] bg-[#f4f9f6] relative">
       <TopBar 
         title={editingId ? "Edit Berita" : "Buat Berita"} 
+        onBack={() => router.push("/admin/berita")}
         rightAction={
           <button
             type="button"

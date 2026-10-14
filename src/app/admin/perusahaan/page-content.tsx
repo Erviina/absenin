@@ -398,7 +398,10 @@ export default function KelolaPerusahaanPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative">
       
       {/* Header */}
-      <TopBar title="Kelola Perusahaan" />
+      <TopBar 
+        title="Kelola Perusahaan" 
+        onBack={() => router.push("/admin/dashboard")} 
+      />
 
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">

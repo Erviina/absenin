@@ -615,7 +615,16 @@ function AgendaPageContent() {
       {/* Header */}
       <TopBar 
         title="Agenda"
-        onBack={() => router.push("/dashboard")}
+        onBack={() => {
+          if (isFormModalOpen) {
+            setIsFormModalOpen(false);
+          } else if (selectedAgendaDetail) {
+            setSelectedAgendaDetail(null);
+            setIsDetailMenuOpen(false);
+          } else {
+            router.push("/dashboard");
+          }
+        }}
         rightAction={
           <button 
             onClick={handleOpenAddModal}

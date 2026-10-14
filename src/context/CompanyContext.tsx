@@ -45,6 +45,8 @@ interface CompanyContextType {
   refreshMemberships: () => Promise<void>;
   canCreate: (feature: "agendas" | "news") => boolean;
   clearCacheAndRefresh: () => void;
+  currentUser: any | null;
+  setCurrentUser: (user: any) => void;
 }
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
@@ -56,12 +58,32 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [memberships, setMemberships] = useState<CompanyMembership[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+
+  const updateCurrentUser = useCallback((user: any) => {
+    setCurrentUser(user);
+    if (typeof window !== "undefined") {
+      if (user) {
+        try {
+          localStorage.setItem("user", JSON.stringify(user));
+        } catch {}
+      } else {
+        localStorage.removeItem("user");
+      }
+    }
+  }, []);
 
   // Hydrate from localStorage cache immediately after mounting on client (avoids SSR mismatch).
   // Cache hanya digunakan untuk tampilan sementara (optimistik) — isLoading tetap true
   // sampai fetchMemberships dari backend selesai, agar tidak ada keputusan routing berdasarkan data basi.
   useEffect(() => {
     try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        try {
+          setCurrentUser(JSON.parse(userStr));
+        } catch {}
+      }
       const cached = localStorage.getItem(MEMBERSHIPS_CACHE_KEY);
       const storedActiveId = localStorage.getItem(STORAGE_KEY);
       if (cached) {
@@ -346,6 +368,8 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       refreshMemberships: fetchMemberships,
       canCreate,
       clearCacheAndRefresh,
+      currentUser,
+      setCurrentUser: updateCurrentUser,
     }),
     [
       memberships,
@@ -358,6 +382,8 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       fetchMemberships,
       canCreate,
       clearCacheAndRefresh,
+      currentUser,
+      updateCurrentUser,
     ]
   );
 

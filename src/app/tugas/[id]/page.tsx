@@ -69,7 +69,7 @@ export default function TugasDetailPage() {
   if (loading) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
-        <TopBar title="Detail Tugas" onBack={() => router.back()} />
+        <TopBar title="Detail Tugas" onBack={() => router.push("/tugas")} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-gray-500 text-sm">Memuat tugas...</p>
         </div>
@@ -80,7 +80,7 @@ export default function TugasDetailPage() {
   if (!task) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
-        <TopBar title="Detail Tugas" onBack={() => router.back()} />
+        <TopBar title="Detail Tugas" onBack={() => router.push("/tugas")} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-gray-500 text-sm">Tugas tidak ditemukan.</p>
         </div>
@@ -92,7 +92,7 @@ export default function TugasDetailPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
       <TopBar 
         title="Detail Tugas" 
-        onBack={() => router.back()} 
+        onBack={() => router.push("/tugas")} 
         rightAction={
           task ? (
             <button

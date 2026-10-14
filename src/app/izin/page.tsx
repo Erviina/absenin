@@ -232,7 +232,7 @@ export default function IzinPage() {
     } else if (selectedIzinId) {
       setSelectedIzinId(null);
     } else {
-      router.back();
+      router.push("/dashboard");
     }
   };
 

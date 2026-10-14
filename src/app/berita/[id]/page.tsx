@@ -118,7 +118,7 @@ export default function BeritaDetailPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       <TopBar 
         title="Baca Berita" 
-        onBack={() => router.back()} 
+        onBack={() => router.push("/berita")} 
         rightAction={
           news ? (
             <button

@@ -520,11 +520,7 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
   try {
     const userId = req.user.id;
     const { employeeId } = req.params;
-    const { month, year } = req.query;
-
-    if (!month || !year) {
-      return res.status(400).json({ success: false, message: "Month and year are required." });
-    }
+    const { month, year, startDate, endDate, date } = req.query;
 
     // 1. Resolve tenant
     const tenant = await resolveTenant(req, userId);
@@ -538,7 +534,7 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
 
     // 2. Get Employee info & Verify membership in this company
     const employeeRes = await db.execute(sql`
-      SELECT p.id, p.full_name, p.email, p.avatar_url, cm.role
+      SELECT p.id, p.full_name, p.email, p.avatar_url, cm.role, cm.status, cm.joined_at
       FROM company_members cm
       JOIN profiles p ON p.id = cm.profile_id
       WHERE cm.company_id = ${companyId}
@@ -554,9 +550,26 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
 
     const employee = employeeRes.rows[0];
 
-    // 4. Calculate Summary for the month/year
-    const monthNum = parseInt(month as string);
-    const yearNum = parseInt(year as string);
+    // 3. Dynamic Date Filter
+    const now = new Date();
+    const monthNum = month ? parseInt(month as string) : (now.getMonth() + 1);
+    const yearNum = year ? parseInt(year as string) : now.getFullYear();
+
+    let dateCondition = sql`
+      AND EXTRACT(MONTH FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${monthNum}
+      AND EXTRACT(YEAR FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${yearNum}
+    `;
+
+    if (date) {
+      dateCondition = sql`AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::date = ${date}::date`;
+    } else if (startDate && endDate) {
+      dateCondition = sql`
+        AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::date >= ${startDate}::date
+        AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::date <= ${endDate}::date
+      `;
+    } else if (startDate) {
+      dateCondition = sql`AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::date >= ${startDate}::date`;
+    }
 
     const attendancesRes = await db.execute(sql`
       SELECT 
@@ -576,8 +589,7 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
       WHERE a.company_id = ${companyId}
         AND a.profile_id = ${employeeId}
         AND a.deleted_at IS NULL
-        AND EXTRACT(MONTH FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${monthNum}
-        AND EXTRACT(YEAR FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${yearNum}
+        ${dateCondition}
       ORDER BY a.check_in_time DESC
     `);
 
@@ -586,7 +598,8 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
     
     const attendancesList = attendancesRes.rows.map(row => {
       hadir++;
-      if (parseInt(row.is_terlambat as string) === 1) {
+      const isLate = parseInt(row.is_terlambat as string) === 1;
+      if (isLate) {
         terlambat++;
       }
       return {
@@ -602,6 +615,7 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
         check_out_longitude: row.check_out_longitude,
         check_out_address: row.check_out_address,
         check_out_photo_url: row.check_out_photo_url,
+        is_terlambat: isLate,
       };
     });
 
@@ -619,7 +633,7 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
         )
     `);
 
-    const izin = parseInt(leavesRes.rows[0].izin_count as string) || 0;
+    const izin = parseInt(leavesRes.rows[0]?.izin_count as string) || 0;
 
     return res.status(200).json({
       success: true,
@@ -629,7 +643,9 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
           full_name: employee.full_name || "Tanpa Nama",
           email: employee.email || "",
           avatar_url: employee.avatar_url || null,
-          role: employee.role || "Employee"
+          role: employee.role || "Employee",
+          status: employee.status || "active",
+          joined_at: employee.joined_at || null,
         },
         summary: {
           hadir,

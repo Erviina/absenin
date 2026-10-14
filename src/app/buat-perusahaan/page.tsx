@@ -282,7 +282,16 @@ export default function BuatPerusahaanPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] relative">
       
       {/* Header */}
-      <TopBar title="Buat Perusahaan" />
+      <TopBar 
+        title="Buat Perusahaan" 
+        onBack={() => {
+          if (typeof window !== "undefined" && window.history.length > 1) {
+            router.back();
+          } else {
+            router.push("/cek-perusahaan");
+          }
+        }} 
+      />
 
       {/* Main Content */}
       <div className="flex-1 px-5 py-5 pb-32">

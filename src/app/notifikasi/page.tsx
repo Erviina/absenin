@@ -153,7 +153,16 @@ export default function NotifikasiPage() {
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-8">
-      <TopBar title="Aktivitas" onBack={() => router.back()} />
+      <TopBar 
+        title="Aktivitas" 
+        onBack={() => {
+          if (typeof window !== "undefined" && window.history.length > 1) {
+            router.back();
+          } else {
+            router.push("/dashboard");
+          }
+        }} 
+      />
 
       <div className="px-6 pt-4 flex flex-col gap-4">
         {/* Search & Filter */}

@@ -7,6 +7,7 @@ import { CompanySwitcher } from "./CompanySwitcher";
 interface TopBarProps {
   title: string;
   onBack?: () => void;
+  fallbackHref?: string;
   rightAction?: React.ReactNode;
   showCompanySwitcher?: boolean;
   bgColor?: string;
@@ -15,6 +16,7 @@ interface TopBarProps {
 export function TopBar({ 
   title, 
   onBack, 
+  fallbackHref,
   rightAction, 
   showCompanySwitcher = false,
   bgColor = "bg-[#356E3B]" 
@@ -24,6 +26,12 @@ export function TopBar({
   const handleBack = () => {
     if (onBack) {
       onBack();
+    } else if (fallbackHref) {
+      if (typeof window !== "undefined" && window.history.length > 1) {
+        router.back();
+      } else {
+        router.push(fallbackHref);
+      }
     } else {
       router.back();
     }

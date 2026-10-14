@@ -3,17 +3,46 @@
 import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
 import { useState, use, useEffect } from "react";
-import { User, FileDown, CalendarDays, CheckCircle2, XCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { 
+  User, 
+  FileDown, 
+  CalendarDays, 
+  CheckCircle2, 
+  XCircle, 
+  ChevronLeft, 
+  ChevronRight, 
+  Loader2,
+  MapPin,
+  Clock,
+  Camera,
+  ExternalLink,
+  ImageOff,
+  Maximize2,
+  X,
+  Info
+} from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
-import { formatDate, formatDateWithDay } from "@/lib/dateUtils";
+import { formatDate, formatDateWithDay, formatTime } from "@/lib/dateUtils";
+
+interface PreviewPhotoData {
+  url: string;
+  title: string;
+  date?: string;
+  time?: string;
+  location?: string;
+  coords?: string;
+}
 
 export default function LaporanDetailUser({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
   
-  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
   
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
@@ -27,6 +56,9 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
   const [summary, setSummary] = useState<any>(null);
   const [attendances, setAttendances] = useState<any[]>([]);
   const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // Photo Preview Modal
+  const [previewPhoto, setPreviewPhoto] = useState<PreviewPhotoData | null>(null);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -110,18 +142,18 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
     const sanitizedName = (employee.full_name || "Karyawan").replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const fileName = `rekap-${sanitizedName}-${monthName.toLowerCase()}-${yearString}`;
 
-    // Header CSV
+    // Header Tabel
     const tableColumn = ["Tanggal", "Check In", "Check Out", "Mode Kerja", "Alamat Check In", "Alamat Check Out", "Status"];
     
-    // Baris CSV
+    // Baris Data
     const tableRows = attendances.map(item => {
       const tanggal = item.check_in_time ? formatDate(item.check_in_time) : "-";
-      const checkIn = item.check_in_time ? new Date(item.check_in_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : "-";
-      const checkOut = item.check_out_time ? new Date(item.check_out_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : "-";
+      const checkIn = item.check_in_time ? `${formatTime(item.check_in_time)} WIB` : "-";
+      const checkOut = item.check_out_time ? `${formatTime(item.check_out_time)} WIB` : "-";
       const mode = item.work_mode || "-";
       const addrIn = item.check_in_address || "-";
       const addrOut = item.check_out_address || "-";
-      const status = item.work_mode ? "Hadir" : "Cuti/Izin"; // since attendances table only has presence
+      const status = item.is_terlambat ? "Terlambat" : "Tepat Waktu";
       return [tanggal, checkIn, checkOut, mode, addrIn, addrOut, status];
     });
 
@@ -142,7 +174,7 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
           head: [tableColumn],
           body: tableRows,
           theme: 'grid',
-          headStyles: { fillColor: [45, 90, 63] },
+          headStyles: { fillColor: [53, 110, 59] },
           styles: { fontSize: 9 }
         });
         
@@ -172,8 +204,14 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-24">
       <TopBar 
-        title="Detail Rekap" 
-        onBack={() => router.push("/admin/laporan-kehadiran")} 
+        title="Detail Kehadiran" 
+        onBack={() => {
+          if (previewPhoto) {
+            setPreviewPhoto(null);
+          } else {
+            router.push("/admin/laporan-kehadiran");
+          }
+        }} 
         rightAction={
           <div className="relative">
             <button 
@@ -186,8 +224,18 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
             </button>
             {showExportMenu && (
               <div className="absolute right-0 top-full mt-2 w-36 bg-white rounded-[16px] shadow-lg border border-gray-100 p-2 flex flex-col gap-1 z-50">
-                <button onClick={() => { setShowExportMenu(false); handleExport('pdf'); }} className="text-left px-3 py-2 text-[13px] font-medium rounded-[8px] hover:bg-gray-50 text-[#111827]">Export PDF</button>
-                <button onClick={() => { setShowExportMenu(false); handleExport('xlsx'); }} className="text-left px-3 py-2 text-[13px] font-medium rounded-[8px] hover:bg-gray-50 text-[#111827]">Export XLSX</button>
+                <button 
+                  onClick={() => { setShowExportMenu(false); handleExport('pdf'); }} 
+                  className="text-left px-3 py-2 text-[13px] font-medium rounded-[8px] hover:bg-gray-50 text-[#111827]"
+                >
+                  Export PDF
+                </button>
+                <button 
+                  onClick={() => { setShowExportMenu(false); handleExport('xlsx'); }} 
+                  className="text-left px-3 py-2 text-[13px] font-medium rounded-[8px] hover:bg-gray-50 text-[#111827]"
+                >
+                  Export XLSX
+                </button>
               </div>
             )}
           </div>
@@ -197,7 +245,7 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
       <div className="px-6 pt-6 flex flex-col gap-5 z-10 relative">
         {isLoading ? (
           <div className="py-20 flex flex-col items-center justify-center text-[#9CA3AF]">
-            <Loader2 className="w-10 h-10 animate-spin text-[#2D5A3F] mb-4" />
+            <Loader2 className="w-10 h-10 animate-spin text-[#356E3B] mb-4" />
             <span className="text-[14px] font-medium">Memuat detail karyawan...</span>
           </div>
         ) : error ? (
@@ -216,20 +264,30 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
               <div className="flex flex-col flex-1 overflow-hidden">
                 <span className="text-[#111827] text-[16px] font-bold truncate mb-1">{employee.full_name}</span>
                 <span className="text-gray-500 text-[12px] truncate mb-2">{employee.email || "Tidak ada email"}</span>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-[6px] w-fit bg-[#E8F3EB] text-[#2D5A3F]">{employee.role}</span>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit bg-[#E8F3EB] text-[#356E3B] border border-[#D1E5D5]">
+                  {employee.role === 'Admin' ? 'Admin' : (employee.role === 'Manager' ? 'Manajemen' : 'Karyawan')}
+                </span>
               </div>
             </div>
 
             {/* Filter Bulan */}
-            <div className="bg-white border border-[#E5E7EB] rounded-[16px] p-1 flex items-center justify-between shadow-sm">
-              <button onClick={handlePrevMonth} className="w-10 h-10 flex items-center justify-center text-gray-400 hover:bg-gray-50 rounded-full active:scale-95 transition-all">
+            <div className="bg-white border border-[#E5E7EB] rounded-full px-2 py-1 flex items-center justify-between shadow-sm">
+              <button 
+                onClick={handlePrevMonth} 
+                className="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-full active:scale-95 transition-all"
+                aria-label="Bulan Sebelumnya"
+              >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <div className="flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 text-[#2D5A3F]" />
+                <CalendarDays className="w-4 h-4 text-[#356E3B]" />
                 <span className="text-[#111827] font-bold text-[14px]">{selectedMonth}</span>
               </div>
-              <button onClick={handleNextMonth} className="w-10 h-10 flex items-center justify-center text-gray-400 hover:bg-gray-50 rounded-full active:scale-95 transition-all">
+              <button 
+                onClick={handleNextMonth} 
+                className="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-full active:scale-95 transition-all"
+                aria-label="Bulan Berikutnya"
+              >
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
@@ -237,94 +295,402 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
             {/* Summary Row */}
             {summary && (
               <div className="flex gap-2 mb-1">
-                <div className="flex-1 bg-white border border-[#E5E7EB] rounded-[16px] p-3 text-center flex flex-col items-center justify-center shadow-sm">
-                  <span className="text-[18px] font-bold text-[#2D5A3F]">{summary.hadir}</span>
+                <div className="flex-1 bg-white border border-[#E5E7EB] rounded-[18px] p-3 text-center flex flex-col items-center justify-center shadow-xs">
+                  <span className="text-[18px] font-bold text-[#356E3B]">{summary.hadir}</span>
                   <span className="text-[10px] font-medium text-gray-500">Hadir</span>
                 </div>
-                <div className="flex-1 bg-white border border-[#E5E7EB] rounded-[16px] p-3 text-center flex flex-col items-center justify-center shadow-sm">
+                <div className="flex-1 bg-white border border-[#E5E7EB] rounded-[18px] p-3 text-center flex flex-col items-center justify-center shadow-xs">
                   <span className="text-[18px] font-bold text-[#EF4444]">{summary.izin}</span>
                   <span className="text-[10px] font-medium text-gray-500">Izin</span>
                 </div>
-                <div className="flex-1 bg-white border border-[#E5E7EB] rounded-[16px] p-3 text-center flex flex-col items-center justify-center shadow-sm">
+                <div className="flex-1 bg-white border border-[#E5E7EB] rounded-[18px] p-3 text-center flex flex-col items-center justify-center shadow-xs">
                   <span className="text-[18px] font-bold text-[#F59E0B]">{summary.terlambat}</span>
                   <span className="text-[10px] font-medium text-gray-500">Terlambat</span>
                 </div>
               </div>
             )}
 
-            {/* History Cards */}
+            {/* Catatan Kehadiran List */}
             <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[#111827] text-[14px] font-bold">
+                  Catatan Kehadiran ({attendances.length})
+                </span>
+              </div>
+
               {attendances.length === 0 ? (
-                <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
+                <div className="bg-white rounded-[24px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
                   <CalendarDays className="w-12 h-12 text-[#D1D5DB] mb-3" />
                   <p className="text-[#4B5563] font-medium text-[15px]">Tidak ada riwayat</p>
                   <p className="text-[#9CA3AF] text-[13px] mt-1">Belum ada data kehadiran pada bulan ini.</p>
                 </div>
               ) : (
-                attendances.map((item) => (
-                  <div 
-                    key={item.id} 
-                    className="bg-white rounded-[20px] p-5 border border-[#E5E7EB] shadow-sm flex flex-col"
-                  >
-                    <div className="flex justify-between items-center mb-4">
-                      <span className="text-[#374151] font-medium text-[15px]">
-                        {formatDateWithDay(item.check_in_time)}
-                      </span>
-                      <span className="text-[12px] font-bold px-3 py-1 rounded-full bg-[#E8F3EB] text-[#2D5A3F]">
-                        {item.work_mode}
-                      </span>
-                    </div>
-                    
-                    <div className="h-[1px] w-full bg-[#F3F4F6] mb-4" />
-                    
-                    <div className="flex justify-between">
-                      <div className="flex items-start gap-3 flex-1">
-                        <div className="w-10 h-10 rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
-                          <CheckCircle2 className="w-6 h-6 text-[#2D5A3F]" strokeWidth={2} />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[#9CA3AF] text-[12px] font-medium mb-0.5">Jam Masuk</span>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-[#111827] font-bold text-[16px]">
-                              {new Date(item.check_in_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                attendances.map((item) => {
+                  const hasCheckInCoords = 
+                    item.check_in_latitude !== null && 
+                    item.check_in_latitude !== undefined && 
+                    item.check_in_longitude !== null && 
+                    item.check_in_longitude !== undefined &&
+                    item.check_in_latitude !== "" &&
+                    item.check_in_longitude !== "";
+
+                  const hasCheckOutCoords = 
+                    item.check_out_latitude !== null && 
+                    item.check_out_latitude !== undefined && 
+                    item.check_out_longitude !== null && 
+                    item.check_out_longitude !== undefined &&
+                    item.check_out_latitude !== "" &&
+                    item.check_out_longitude !== "";
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="bg-white rounded-[24px] p-5 border border-[#eef5f0] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col gap-4 transition-colors hover:border-[#dce9df]"
+                    >
+                      {/* Header: Tanggal & Badge Mode Kerja / Status */}
+                      <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-gray-100">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-[#f4f9f6] flex items-center justify-center text-[#356E3B] shrink-0">
+                            <CalendarDays className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-[#111827] text-[14px] font-bold block leading-tight">
+                              {formatDateWithDay(item.check_in_time)}
                             </span>
-                            <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="w-[1px] h-10 bg-[#F3F4F6] mx-2" />
-                      
-                      <div className="flex items-start gap-3 flex-1 pl-2">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.check_out_time ? "bg-[#E8F3EB]" : "bg-[#F3F4F6]"}`}>
-                          {item.check_out_time ? (
-                            <CheckCircle2 className="w-6 h-6 text-[#2D5A3F]" strokeWidth={2} />
-                          ) : (
-                            <XCircle className="w-6 h-6 text-[#D1D5DB]" strokeWidth={2} />
-                          )}
+                        
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Mode Kerja */}
+                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                            item.work_mode === "WFH"
+                              ? "bg-blue-50 text-blue-700 border border-blue-200/60"
+                              : "bg-[#eef5f0] text-[#1E4738] border border-[#dce9df]"
+                          }`}>
+                            {item.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
+                          </span>
+
+                          {/* Status Terlambat */}
+                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                            item.is_terlambat
+                              ? "bg-amber-50 text-amber-700 border border-amber-200/60"
+                              : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                          }`}>
+                            {item.is_terlambat ? "Terlambat" : "Tepat Waktu"}
+                          </span>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-[#9CA3AF] text-[12px] font-medium mb-0.5">Jam Keluar</span>
-                          {item.check_out_time ? (
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-[#111827] font-bold text-[16px]">
-                                {new Date(item.check_out_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+
+                      {/* Konten Terpisah: Masuk vs Keluar */}
+                      <div className="flex flex-col gap-3.5">
+                        
+                        {/* 1. DETAIL MASUK (CHECK-IN) */}
+                        <div className="bg-[#fbfdfc] border border-[#eef5f0] rounded-[18px] p-4 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                              <span className="text-[#1E4738] text-[12px] font-bold uppercase tracking-wider">
+                                Detail Masuk (Check-In)
                               </span>
-                              <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
+                            </div>
+                            <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
+                              <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                              <span className="text-[#111827] font-bold text-[13px]">
+                                {formatTime(item.check_in_time)}
+                              </span>
+                              <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-3.5 items-start justify-between">
+                            {/* Lokasi Masuk */}
+                            <div className="flex-1 flex flex-col gap-1 min-w-0">
+                              <span className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider">
+                                Lokasi Masuk
+                              </span>
+                              <div className="flex items-start gap-1.5 text-gray-700 text-[13px] leading-snug">
+                                <MapPin className="w-4 h-4 text-[#356E3B] shrink-0 mt-0.5" />
+                                <span className="font-medium break-words">
+                                  {item.check_in_address || "Alamat tidak tersedia"}
+                                </span>
+                              </div>
+
+                              {/* Koordinat */}
+                              {hasCheckInCoords ? (
+                                <div className="flex items-center gap-2 pl-5.5 mt-0.5 flex-wrap">
+                                  <span className="text-[11px] text-gray-500 font-mono">
+                                    Lat: {parseFloat(item.check_in_latitude).toFixed(5)} • Long: {parseFloat(item.check_in_longitude).toFixed(5)}
+                                  </span>
+                                  <a 
+                                    href={`https://www.google.com/maps?q=${item.check_in_latitude},${item.check_in_longitude}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] text-[#356E3B] hover:underline font-bold inline-flex items-center gap-0.5"
+                                    title="Buka titik lokasi masuk di Google Maps"
+                                  >
+                                    <span>Buka Peta</span>
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-gray-400 pl-5.5 italic">
+                                  Koordinat tidak tersedia
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Foto Bukti Masuk */}
+                            <div className="shrink-0 flex flex-col gap-1 w-full sm:w-auto">
+                              <span className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider">
+                                Foto Bukti Masuk
+                              </span>
+                              {item.check_in_photo_url ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewPhoto({
+                                    url: item.check_in_photo_url,
+                                    title: `Foto Bukti Masuk`,
+                                    date: formatDateWithDay(item.check_in_time),
+                                    time: `${formatTime(item.check_in_time)} WIB`,
+                                    location: item.check_in_address || undefined,
+                                    coords: hasCheckInCoords ? `${item.check_in_latitude}, ${item.check_in_longitude}` : undefined
+                                  })}
+                                  className="group relative w-full sm:w-24 h-24 rounded-[14px] overflow-hidden border border-gray-200 shadow-xs active:scale-95 transition-transform bg-gray-50 cursor-pointer"
+                                  title="Klik untuk memperbesar foto bukti masuk"
+                                >
+                                  <img 
+                                    src={item.check_in_photo_url} 
+                                    alt="Foto Masuk" 
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                      (e.target as HTMLElement).nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                  <div className="hidden absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-gray-100 text-gray-400 text-[10px]">
+                                    <ImageOff className="w-5 h-5 mb-1" />
+                                    <span>Gagal memuat foto</span>
+                                  </div>
+                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                    <Maximize2 className="w-5 h-5 text-white drop-shadow" />
+                                  </div>
+                                </button>
+                              ) : (
+                                <div className="w-full sm:w-24 h-24 rounded-[14px] border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center text-center p-2 text-gray-400">
+                                  <Camera className="w-5 h-5 text-gray-300 mb-1" />
+                                  <span className="text-[10px] font-medium leading-tight">Foto tidak tersedia</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2. DETAIL KELUAR (CHECK-OUT) */}
+                        <div className={`border rounded-[18px] p-4 flex flex-col gap-3 ${
+                          item.check_out_time ? "bg-[#fffdfb] border-[#fde8d7]" : "bg-gray-50/60 border-dashed border-gray-200"
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                item.check_out_time ? "bg-orange-500" : "bg-gray-300"
+                              }`}></span>
+                              <span className={`text-[12px] font-bold uppercase tracking-wider ${
+                                item.check_out_time ? "text-orange-800" : "text-gray-400"
+                              }`}>
+                                Detail Keluar (Check-Out)
+                              </span>
+                            </div>
+                            {item.check_out_time ? (
+                              <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
+                                <Clock className="w-3.5 h-3.5 text-orange-600" />
+                                <span className="text-[#111827] font-bold text-[13px]">
+                                  {formatTime(item.check_out_time)}
+                                </span>
+                                <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] font-semibold text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-full">
+                                Belum Check-Out
+                              </span>
+                            )}
+                          </div>
+
+                          {item.check_out_time ? (
+                            <div className="flex flex-col sm:flex-row gap-3.5 items-start justify-between">
+                              {/* Lokasi Keluar */}
+                              <div className="flex-1 flex flex-col gap-1 min-w-0">
+                                <span className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider">
+                                  Lokasi Keluar
+                                </span>
+                                <div className="flex items-start gap-1.5 text-gray-700 text-[13px] leading-snug">
+                                  <MapPin className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+                                  <span className="font-medium break-words">
+                                    {item.check_out_address || "Alamat tidak tersedia"}
+                                  </span>
+                                </div>
+
+                                {/* Koordinat */}
+                                {hasCheckOutCoords ? (
+                                  <div className="flex items-center gap-2 pl-5.5 mt-0.5 flex-wrap">
+                                    <span className="text-[11px] text-gray-500 font-mono">
+                                      Lat: {parseFloat(item.check_out_latitude).toFixed(5)} • Long: {parseFloat(item.check_out_longitude).toFixed(5)}
+                                    </span>
+                                    <a 
+                                      href={`https://www.google.com/maps?q=${item.check_out_latitude},${item.check_out_longitude}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] text-orange-600 hover:underline font-bold inline-flex items-center gap-0.5"
+                                      title="Buka titik lokasi keluar di Google Maps"
+                                    >
+                                      <span>Buka Peta</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-gray-400 pl-5.5 italic">
+                                    Koordinat tidak tersedia
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Foto Bukti Keluar */}
+                              <div className="shrink-0 flex flex-col gap-1 w-full sm:w-auto">
+                                <span className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider">
+                                  Foto Bukti Keluar
+                                </span>
+                                {item.check_out_photo_url ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewPhoto({
+                                      url: item.check_out_photo_url,
+                                      title: `Foto Bukti Keluar`,
+                                      date: formatDateWithDay(item.check_out_time),
+                                      time: `${formatTime(item.check_out_time)} WIB`,
+                                      location: item.check_out_address || undefined,
+                                      coords: hasCheckOutCoords ? `${item.check_out_latitude}, ${item.check_out_longitude}` : undefined
+                                    })}
+                                    className="group relative w-full sm:w-24 h-24 rounded-[14px] overflow-hidden border border-gray-200 shadow-xs active:scale-95 transition-transform bg-gray-50 cursor-pointer"
+                                    title="Klik untuk memperbesar foto bukti keluar"
+                                  >
+                                    <img 
+                                      src={item.check_out_photo_url} 
+                                      alt="Foto Keluar" 
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                      onError={(e) => {
+                                        (e.target as HTMLElement).style.display = 'none';
+                                        (e.target as HTMLElement).nextElementSibling?.classList.remove('hidden');
+                                      }}
+                                    />
+                                    <div className="hidden absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-gray-100 text-gray-400 text-[10px]">
+                                      <ImageOff className="w-5 h-5 mb-1" />
+                                      <span>Gagal memuat foto</span>
+                                    </div>
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <Maximize2 className="w-5 h-5 text-white drop-shadow" />
+                                    </div>
+                                  </button>
+                                ) : (
+                                  <div className="w-full sm:w-24 h-24 rounded-[14px] border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center text-center p-2 text-gray-400">
+                                    <Camera className="w-5 h-5 text-gray-300 mb-1" />
+                                    <span className="text-[10px] font-medium leading-tight">Foto tidak tersedia</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           ) : (
-                            <span className="text-[#D1D5DB] font-bold text-[16px]">—</span>
+                            <div className="py-2 text-gray-400 text-[12px] italic flex items-center gap-1.5">
+                              <Info className="w-4 h-4 text-gray-400 shrink-0" />
+                              <span>Karyawan belum melakukan presensi keluar untuk hari ini.</span>
+                            </div>
                           )}
                         </div>
+
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </>
         )}
       </div>
+
+      {/* ======================================================== */}
+      {/* MODAL PREVIEW FOTO KEHADIRAN (ZOOM PHOTO MODAL) */}
+      {/* ======================================================== */}
+      {previewPhoto && (
+        <div 
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div 
+            className="w-full max-w-sm bg-white rounded-[24px] overflow-hidden flex flex-col shadow-2xl relative animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-[#fbfdfc]">
+              <div className="flex flex-col">
+                <span className="text-[#111827] text-[14px] font-bold truncate">
+                  {previewPhoto.title}
+                </span>
+                <span className="text-gray-500 text-[11px]">
+                  {previewPhoto.date ? `${previewPhoto.date}` : ""} {previewPhoto.time ? `• ${previewPhoto.time}` : ""}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewPhoto(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors"
+                aria-label="Tutup Preview"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Image Body */}
+            <div className="p-3 bg-black/5 flex items-center justify-center max-h-[65vh] overflow-hidden">
+              <img 
+                src={previewPhoto.url} 
+                alt="Foto Bukti Kehadiran" 
+                className="w-full max-h-[60vh] object-contain rounded-[14px]"
+              />
+            </div>
+
+            {/* Modal Footer / Location details */}
+            <div className="p-4 bg-white border-t border-gray-100 flex flex-col gap-3">
+              {previewPhoto.location && (
+                <div className="flex items-start gap-1.5 text-[12px] text-gray-600">
+                  <MapPin className="w-3.5 h-3.5 text-[#356E3B] shrink-0 mt-0.5" />
+                  <span className="font-medium break-words leading-relaxed">{previewPhoto.location}</span>
+                </div>
+              )}
+
+              {previewPhoto.coords && (
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-gray-400 font-mono">Koordinat: {previewPhoto.coords}</span>
+                  <a
+                    href={`https://www.google.com/maps?q=${previewPhoto.coords}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#356E3B] font-bold hover:underline inline-flex items-center gap-0.5"
+                  >
+                    <span>Buka Maps</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setPreviewPhoto(null)}
+                className="w-full py-2.5 px-4 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-[13px] font-bold active:scale-95 transition-all text-center mt-1"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

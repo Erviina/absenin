@@ -533,10 +533,18 @@ export default function AdminAgendaPage() {
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-8">
-      {/* Header */}
       <TopBar 
         title={isAddingAgenda ? (editingAgendaId ? "Ubah Agenda Karyawan" : "Tambah Agenda Karyawan") : "Kelola Agenda"}
-        onBack={() => isAddingAgenda ? setIsAddingAgenda(false) : router.push("/admin/dashboard")}
+        onBack={() => {
+          if (isAddingAgenda) {
+            setIsAddingAgenda(false);
+          } else if (selectedAgendaDetail) {
+            setSelectedAgendaDetail(null);
+            setIsDetailMenuOpen(false);
+          } else {
+            router.push("/admin/dashboard");
+          }
+        }}
         rightAction={
           !isAddingAgenda ? (
             <button 

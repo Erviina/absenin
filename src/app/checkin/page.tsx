@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ChevronLeft, RefreshCcw, ArrowRight, 
-  MapPin, Check, CheckCircle2, AlertTriangle, Info
+  MapPin, Check, CheckCircle2, AlertTriangle, Info, SwitchCamera
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
@@ -61,50 +61,133 @@ export default function CheckinPage() {
   // Camera State
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [isMirror, setIsMirror] = useState(false);
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const startCamera = async () => {
-    setCameraError(null);
+  const checkAvailableCameras = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+      if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
+        setHasMultipleCameras(false);
+        return;
       }
-    } catch (err: any) {
-      let msg = "Gagal mengakses kamera.";
-      if (err.name === "NotAllowedError") msg = "Akses kamera ditolak.";
-      else if (err.name === "NotFoundError") msg = "Kamera tidak ditemukan pada perangkat ini.";
-      setCameraError(msg);
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter((d) => d.kind === "videoinput");
+      setHasMultipleCameras(videoInputs.length > 1);
+    } catch (e) {
+      console.warn("Could not enumerate camera devices:", e);
+      setHasMultipleCameras(false);
     }
   };
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const startCamera = async (targetFacingMode: "user" | "environment" = facingMode) => {
+    setCameraError(null);
+    stopCamera();
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Browser Anda tidak mendukung akses kamera.");
+      return;
+    }
+
+    try {
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: targetFacingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch (idealErr) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: targetFacingMode },
+            audio: false,
+          });
+        } catch (directErr) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
+      }
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        try {
+          await videoRef.current.play();
+        } catch {}
+      }
+
+      // Periksa facingMode aktual dari track bila didukung browser
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        const settings = track.getSettings?.();
+        if (settings?.facingMode === "user" || settings?.facingMode === "environment") {
+          setFacingMode(settings.facingMode);
+        }
+      }
+
+      await checkAvailableCameras();
+    } catch (err: any) {
+      console.error("Gagal memulai kamera:", err);
+      let msg = "Gagal mengakses kamera.";
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        msg = "Akses kamera ditolak. Mohon izinkan akses kamera di pengaturan browser.";
+      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+        msg = "Kamera tidak ditemukan pada perangkat ini.";
+      } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+        msg = "Kamera sedang digunakan oleh aplikasi lain.";
+      }
+      setCameraError(msg);
+    }
+  };
+
+  const toggleCamera = async () => {
+    if (isSwitchingCamera) return;
+    setIsSwitchingCamera(true);
+    const nextFacingMode: "user" | "environment" = facingMode === "user" ? "environment" : "user";
+    setFacingMode(nextFacingMode);
+    try {
+      await startCamera(nextFacingMode);
+    } catch (e) {
+      console.error("Gagal beralih kamera:", e);
+    } finally {
+      setIsSwitchingCamera(false);
     }
   };
 
   const takePhoto = () => {
     if (videoRef.current) {
+      const video = videoRef.current;
       const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        if (isMirror) {
+        // Otomatis mirror foto jika menggunakan kamera depan (selfie)
+        if (facingMode === "user") {
           ctx.translate(canvas.width, 0);
           ctx.scale(-1, 1);
         }
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         canvas.toBlob((blob) => {
           if (blob) {
             setPhotoBlob(blob);
@@ -113,19 +196,29 @@ export default function CheckinPage() {
             setReviewTime(new Date());
             setStep(3);
           }
-        }, "image/jpeg", 0.8);
+        }, "image/jpeg", 0.85);
       }
     }
   };
 
   useEffect(() => {
     if (step === 2) {
-      startCamera();
+      startCamera(facingMode);
     } else {
       stopCamera();
     }
     return () => stopCamera();
   }, [step]);
+
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.addEventListener) {
+      const handleDeviceChange = () => checkAvailableCameras();
+      navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
+      return () => {
+        navigator.mediaDevices.removeEventListener("devicechange", handleDeviceChange);
+      };
+    }
+  }, []);
 
   const fetchLocation = () => {
     setIsLocating(true);
@@ -605,7 +698,7 @@ export default function CheckinPage() {
               <p className="text-white font-bold text-lg mb-2">Kamera Gagal</p>
               <p className="text-gray-400 text-sm mb-6">{cameraError}</p>
               <PrimaryButton 
-                onClick={startCamera}
+                onClick={() => startCamera(facingMode)}
                 icon={<RefreshCcw className="w-4 h-4" />}
               >
                 Coba Lagi
@@ -618,7 +711,7 @@ export default function CheckinPage() {
               playsInline 
               muted
               className="absolute inset-0 w-full h-full object-cover"
-              style={{ transform: isMirror ? 'scaleX(-1) scale(1.02)' : 'scale(1.02)' }}
+              style={{ transform: facingMode === "user" ? 'scaleX(-1) scale(1.02)' : 'scale(1.02)' }}
             />
           )}
           {/* Dark Gradient Overlay for readability */}
@@ -633,13 +726,7 @@ export default function CheckinPage() {
             >
               <ChevronLeft className="w-6 h-6 text-white" />
             </button>
-            <button 
-              onClick={() => setIsMirror(!isMirror)}
-              className="px-3.5 sm:px-4 h-9 sm:h-10 rounded-full bg-white/95 text-[#1E4738] font-bold text-[11px] sm:text-[12px] flex items-center gap-1.5 sm:gap-2 shadow-lg active:scale-95 transition-transform shrink-0"
-            >
-              <RefreshCcw className="w-3.5 h-3.5" strokeWidth={3} />
-              Mirror {isMirror ? 'ON' : 'OFF'}
-            </button>
+            <div className="w-10 h-10" />
           </div>
 
           {/* Overlaid Stepper */}
@@ -663,12 +750,16 @@ export default function CheckinPage() {
             </div>
             
             <p className="text-white text-[13px] sm:text-[14px] font-medium mt-2.5 sm:mt-3 drop-shadow-md text-center shrink-0">
-              Tempatkan wajah Anda pada Area Oval
+              {facingMode === "user" ? "Tempatkan wajah Anda pada Area Oval" : "Arahkan kamera ke bukti kehadiran Anda"}
             </p>
           </div>
 
           {/* Bottom Camera Controls - Guaranteed Visible & Safe-area Compliant */}
-          <div className="relative z-10 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom,1.25rem))] pt-2 sm:pt-3 px-8 sm:px-10 flex justify-center items-center w-full">
+          <div className="relative z-10 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom,1.25rem))] pt-2 sm:pt-3 px-6 sm:px-8 flex items-center justify-between w-full max-w-sm mx-auto">
+            {/* Left Spacer to keep shutter button centered */}
+            <div className="w-12 h-12 shrink-0" />
+
+            {/* Shutter Button (Center) */}
             <button 
               onClick={takePhoto} 
               disabled={!!cameraError}
@@ -679,6 +770,22 @@ export default function CheckinPage() {
                 <div className="w-3 h-3 rounded-full bg-[#a1d6b2]" />
               </div>
             </button>
+
+            {/* Right: Switch Camera Button */}
+            {hasMultipleCameras ? (
+              <button 
+                type="button"
+                onClick={toggleCamera} 
+                disabled={!!cameraError || isSwitchingCamera}
+                aria-label="Ganti Kamera"
+                className="w-12 h-12 rounded-full bg-black/50 border border-white/20 flex items-center justify-center backdrop-blur-md hover:bg-black/70 active:scale-90 transition-all text-white shrink-0 shadow-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title={facingMode === "user" ? "Ganti ke Kamera Belakang" : "Ganti ke Kamera Depan"}
+              >
+                <SwitchCamera className={`w-5 h-5 text-white ${isSwitchingCamera ? 'animate-spin' : ''}`} />
+              </button>
+            ) : (
+              <div className="w-12 h-12 shrink-0" />
+            )}
           </div>
         </div>
       )}

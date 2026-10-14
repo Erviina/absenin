@@ -304,7 +304,7 @@ export default function TugasPage() {
           } else if (isViewingUpcoming) {
             setIsViewingUpcoming(false);
           } else {
-            router.back();
+            router.push("/dashboard");
           }
         }}
         rightAction={

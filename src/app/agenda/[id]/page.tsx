@@ -90,7 +90,7 @@ export default function AgendaDetailPage() {
   if (loading) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
-        <TopBar title="Detail Agenda" onBack={() => router.back()} />
+        <TopBar title="Detail Agenda" onBack={() => router.push("/agenda")} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-gray-500 text-sm">Memuat agenda...</p>
         </div>
@@ -101,7 +101,7 @@ export default function AgendaDetailPage() {
   if (error || !agenda) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
-        <TopBar title="Detail Agenda" onBack={() => router.back()} />
+        <TopBar title="Detail Agenda" onBack={() => router.push("/agenda")} />
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center gap-3">
           <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
             <Calendar className="w-7 h-7" />
@@ -126,7 +126,7 @@ export default function AgendaDetailPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
       <TopBar 
         title="Detail Agenda" 
-        onBack={() => router.back()} 
+        onBack={() => router.push("/agenda")} 
         rightAction={
           <button
             onClick={handleShare}

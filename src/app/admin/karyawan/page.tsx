@@ -505,6 +505,7 @@ function AdminKaryawanView() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       <TopBar 
         title="Kelola Karyawan" 
+        onBack={() => router.push("/admin/dashboard")}
         rightAction={
           <button 
             onClick={() => setIsBarcodeModalOpen(true)} 
@@ -622,8 +623,8 @@ function AdminKaryawanView() {
             onClick={() => setActiveTab("semua")}
             className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center ${
               activeTab === "semua"
-                ? "bg-[#1E4738] text-white shadow-sm"
-                : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
+                ? "bg-[#356E3B] text-white shadow-sm"
+                : "bg-white text-[#4B5563] border border-[#E5E7EB] hover:bg-gray-50"
             }`}
           >
             Semua
@@ -632,8 +633,8 @@ function AdminKaryawanView() {
             onClick={() => setActiveTab("karyawan")}
             className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center gap-1 ${
               activeTab === "karyawan"
-                ? "bg-[#1E4738] text-white shadow-sm"
-                : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
+                ? "bg-[#356E3B] text-white shadow-sm"
+                : "bg-white text-[#4B5563] border border-[#E5E7EB] hover:bg-gray-50"
             }`}
           >
             <span className="truncate">Karyawan</span>
@@ -647,8 +648,8 @@ function AdminKaryawanView() {
             onClick={() => setActiveTab("keluar")}
             className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center gap-1 ${
               activeTab === "keluar"
-                ? "bg-[#1E4738] text-white shadow-sm"
-                : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
+                ? "bg-[#356E3B] text-white shadow-sm"
+                : "bg-white text-[#4B5563] border border-[#E5E7EB] hover:bg-gray-50"
             }`}
           >
             <span className="truncate">Keluar</span>
@@ -664,8 +665,8 @@ function AdminKaryawanView() {
             onClick={() => setActiveTab("masuk")}
             className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center gap-1 ${
               activeTab === "masuk"
-                ? "bg-[#1E4738] text-white shadow-sm"
-                : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
+                ? "bg-[#356E3B] text-white shadow-sm"
+                : "bg-white text-[#4B5563] border border-[#E5E7EB] hover:bg-gray-50"
             }`}
           >
             <span className="truncate">Gabung</span>
@@ -925,13 +926,9 @@ function AdminKaryawanView() {
                 return (
                  <div 
                    key={item.id} 
-                   className={`flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] transition-colors bg-white ${isOwner ? 'cursor-default' : 'cursor-pointer hover:border-[#dce9df] hover:bg-gray-50/50'}`}
+                   className="flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] transition-colors bg-white cursor-pointer hover:border-[#dce9df] hover:bg-gray-50/50"
                    onClick={() => {
-                     if (isOwner) return;
-                     setSelectedEmployeeForRole(item);
-                     if (item.roles?.includes('Admin')) setSelectedRole('Admin');
-                     else if (item.roles?.includes('Manager')) setSelectedRole('Manager');
-                     else setSelectedRole('Employee');
+                     router.push(`/admin/karyawan/${item.id}`);
                    }}
                  >
                    <div className="w-[46px] h-[46px] border border-[#eef5f0] bg-[#f4f9f6] rounded-full flex items-center justify-center text-[#356E3B] shrink-0 overflow-hidden relative">
@@ -1138,7 +1135,7 @@ function AdminKaryawanView() {
               <button 
                 onClick={handleSimpanRole}
                 disabled={isSavingRole}
-                className="w-full py-3.5 bg-[#356E3B] text-white rounded-[16px] font-bold text-[14px] active:scale-95 transition-transform shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3.5 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-full font-bold text-[14px] active:scale-[0.98] transition-all shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSavingRole ? "Menyimpan..." : "Simpan Perubahan Role"}
               </button>
@@ -1152,7 +1149,7 @@ function AdminKaryawanView() {
                       setIsDeleteConfirmOpen(true);
                     }}
                     type="button"
-                    className="w-full py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-[16px] font-bold text-[13px] flex items-center justify-center gap-2 active:scale-95 transition-all shadow-sm"
+                    className="w-full py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-full font-bold text-[13px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-sm"
                   >
                     <UserMinus className="w-4 h-4" />
                     <span>Keluarkan dari Perusahaan</span>

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { tasks, profiles, notifications } from "../db/schema";
-import { eq, desc, or, and, isNull } from "drizzle-orm";
+import { eq, desc, or, and, isNull, sql } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import crypto from "crypto";
 import { resolveTenant } from "../utils/tenant";
@@ -114,6 +114,125 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
   } catch (error: any) {
     console.error("Error fetching tasks:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// GET /api/tasks/management/employees/:employeeId - Get tasks related to a specific employee for management monitoring
+router.get("/management/employees/:employeeId", authenticate, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const callerId = (req as any).user?.id;
+    if (!callerId) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    const { employeeId } = req.params;
+    const { status, startDate, endDate } = req.query;
+
+    const tenant = await resolveTenant(req, callerId);
+    if (!tenant) {
+      res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+      return;
+    }
+
+    if (!tenant.isManagement) {
+      res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses." });
+      return;
+    }
+
+    const companyId = tenant.companyId;
+
+    // Verify target employee belongs to this company
+    const memberCheck = await db.execute(sql`
+      SELECT profile_id FROM company_members
+      WHERE company_id = ${companyId}
+        AND profile_id = ${employeeId}
+        AND status = 'active'
+        AND deleted_at IS NULL
+      LIMIT 1
+    `);
+
+    if (memberCheck.rows.length === 0) {
+      res.status(404).json({ success: false, message: "Karyawan tidak ditemukan di perusahaan ini." });
+      return;
+    }
+
+    // Fetch tasks for this company
+    const allCompanyTasks = await db.select().from(tasks)
+      .where(and(eq(tasks.company_id, String(companyId)), isNull(tasks.deleted_at)))
+      .orderBy(desc(tasks.created_at));
+
+    // Filter to tasks strictly related to this employee
+    const relatedTasks = allCompanyTasks.filter(t => {
+      const isCreator = t.profile_id === employeeId || t.created_by === employeeId;
+      const isAssigned = t.assigned_to === employeeId;
+      const isInAssignees = Array.isArray(t.assignees) && t.assignees.some((a: any) => 
+        (typeof a === "string" ? a === employeeId : a?.id === employeeId)
+      );
+
+      return isCreator || isAssigned || isInAssignees;
+    });
+
+    const now = new Date();
+    const formattedTasks = relatedTasks.map(t => {
+      const d = t.deadline ? new Date(t.deadline) : null;
+      const isOverdue = d ? (!t.is_completed && d < now) : false;
+      const isGroup = t.type === "group" || (!t.type && Array.isArray(t.assignees) && t.assignees.length > 0);
+
+      let computedStatus: "completed" | "overdue" | "in_progress" | "pending" = "pending";
+      if (t.is_completed) {
+        computedStatus = "completed";
+      } else if (isOverdue) {
+        computedStatus = "overdue";
+      } else {
+        computedStatus = "in_progress";
+      }
+
+      return {
+        id: t.id,
+        title: t.title,
+        notes: t.notes || "",
+        date: d ? d.toISOString().split("T")[0] : null,
+        time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
+        deadline: t.deadline,
+        completed: t.is_completed,
+        status: computedStatus,
+        is_overdue: isOverdue,
+        type: t.type || (isGroup ? "group" : "personal"),
+        company_id: t.company_id,
+        assignees: t.assignees || [],
+        assigned_to: t.assigned_to || null,
+        created_at: t.created_at,
+        created_by: t.created_by || t.profile_id
+      };
+    });
+
+    // Optional status filtering
+    let result = formattedTasks;
+    if (status && status !== "all") {
+      result = result.filter(t => t.status === status);
+    }
+
+    if (startDate && endDate) {
+      result = result.filter(t => {
+        if (!t.date) return false;
+        return t.date >= (startDate as string) && t.date <= (endDate as string);
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result,
+      meta: {
+        total: result.length,
+        completed: formattedTasks.filter(t => t.completed).length,
+        in_progress: formattedTasks.filter(t => t.status === "in_progress").length,
+        overdue: formattedTasks.filter(t => t.status === "overdue").length,
+      }
+    });
+  } catch (error: any) {
+    console.error("Error fetching employee tasks:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 

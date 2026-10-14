@@ -24,22 +24,59 @@ import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 
 export default function ProfilPage() {
   const router = useRouter();
-  const { activeCompany, activeRole, memberships, refreshMemberships } = useCompany();
+  const { activeCompany, activeRole, memberships, currentUser, setCurrentUser } = useCompany();
   const { showConfirm, showToast } = useDialog();
-  const [user, setUser] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<any>(() => {
+    if (currentUser) return currentUser;
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("user");
+        return saved ? JSON.parse(saved) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (currentUser) return false;
+    if (typeof window !== "undefined") {
+      return !localStorage.getItem("user");
+    }
+    return true;
+  });
   const [error, setError] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
 
-  const fetchUser = async () => {
+  useEffect(() => {
+    if (currentUser) {
+      setUser(currentUser);
+      setIsLoading(false);
+    }
+  }, [currentUser]);
+
+  // Exit Request States
+  const [myExitRequest, setMyExitRequest] = useState<any>(null);
+  const [isLoadingExitReq, setIsLoadingExitReq] = useState(false);
+  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
+  const [exitReason, setExitReason] = useState("");
+  const [isSubmittingExit, setIsSubmittingExit] = useState(false);
+  const [exitError, setExitError] = useState("");
+  const [isCancellingExit, setIsCancellingExit] = useState(false);
+
+  const fetchUser = async (silent = false) => {
     try {
       const token = localStorage.getItem("accessToken");
       if (!token) {
         router.push("/login");
         return;
+      }
+
+      if (!silent && !user) {
+        setIsLoading(true);
       }
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
@@ -54,27 +91,134 @@ export default function ProfilPage() {
       const data = await res.json();
       if (data.success) {
         setUser(data.data.user);
-        try {
-          localStorage.setItem("user", JSON.stringify(data.data.user));
-        } catch {}
+        setCurrentUser(data.data.user);
         setAvatarError(false);
       } else {
-        setError(data.message || "Gagal memuat profil");
+        if (!user) {
+          setError(data.message || "Gagal memuat profil");
+        }
       }
     } catch (err) {
       console.error(err);
-      setError("Terjadi kesalahan jaringan");
+      if (!user) {
+        setError("Terjadi kesalahan jaringan");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    refreshMemberships();
-  }, [refreshMemberships]);
+  const fetchExitRequestMe = async () => {
+    const token = localStorage.getItem("accessToken");
+    if (!token || !activeCompany?.id) {
+      setMyExitRequest(null);
+      return;
+    }
 
+    setIsLoadingExitReq(true);
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests/me?company_id=${activeCompany.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "x-company-id": activeCompany.id,
+          },
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        setMyExitRequest(data.data);
+      } else {
+        setMyExitRequest(null);
+      }
+    } catch (err) {
+      console.error("Fetch exit request error:", err);
+    } finally {
+      setIsLoadingExitReq(false);
+    }
+  };
+
+  const handleSubmitExitRequest = async () => {
+    if (!activeCompany?.id || isSubmittingExit) return;
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+
+    setIsSubmittingExit(true);
+    setExitError("");
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "x-company-id": activeCompany.id,
+        },
+        body: JSON.stringify({
+          company_id: activeCompany.id,
+          reason: exitReason.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsExitModalOpen(false);
+        setExitReason("");
+        await fetchExitRequestMe();
+        showToast("Permohonan keluar berhasil diajukan ke Admin", "success");
+      } else {
+        setExitError(data.message || "Gagal mengajukan permohonan keluar");
+      }
+    } catch (err) {
+      setExitError("Terjadi kesalahan jaringan");
+    } finally {
+      setIsSubmittingExit(false);
+    }
+  };
+
+  const handleCancelExitRequest = async () => {
+    if (!activeCompany?.id || isCancellingExit) return;
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+
+    const confirmed = await showConfirm({
+      title: "Batalkan Permohonan Keluar?",
+      message: `Apakah Anda yakin ingin membatalkan permohonan keluar dari ${activeCompany.name}?`,
+      confirmText: "Ya, Batalkan",
+      cancelText: "Kembali",
+      type: "warning",
+      icon: "alert",
+    });
+    if (!confirmed) return;
+
+    setIsCancellingExit(true);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests/cancel`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "x-company-id": activeCompany.id,
+        },
+        body: JSON.stringify({ company_id: activeCompany.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMyExitRequest(null);
+        showToast("Permohonan keluar berhasil dibatalkan", "success");
+      } else {
+        showToast(data.message || "Gagal membatalkan permohonan keluar", "error");
+      }
+    } catch (err) {
+      showToast("Terjadi kesalahan jaringan", "error");
+    } finally {
+      setIsCancellingExit(false);
+    }
+  };
+
+  // Sinkronisasi data user di latar belakang tanpa memblokir tampilan jika data lokal sudah ada
   useEffect(() => {
-    fetchUser();
+    fetchUser(true);
+    fetchExitRequestMe();
   }, [activeCompany?.id]);
 
   const getRoleDisplay = () => {
@@ -159,15 +303,18 @@ export default function ProfilPage() {
 
   return (
     <div className="min-h-screen bg-[#fbfdfc] pb-8">
-      <TopBar title="Profil" onBack={() => router.push("/dashboard")} />
+      <TopBar
+        title="Profil"
+        onBack={() => router.push("/dashboard")}
+      />
 
       <div className="px-6 pt-6 flex flex-col gap-6">
-        {isLoading ? (
+        {isLoading && !user ? (
           <div className="flex-1 flex flex-col items-center justify-center h-[50vh]">
             <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
             <p className="text-[#4B5563] font-medium text-[14px]">Memuat profil...</p>
           </div>
-        ) : error ? (
+        ) : error && !user ? (
           <div className="flex-1 flex flex-col items-center justify-center h-[50vh] p-6 text-center">
             <p className="text-red-600 font-bold text-[16px] mb-2">{error}</p>
           </div>

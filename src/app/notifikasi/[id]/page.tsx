@@ -71,7 +71,7 @@ export default function NotifikasiDetailPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#fbfdfc]">
-        <TopBar title="Detail Aktivitas" onBack={() => router.back()} />
+        <TopBar title="Detail Aktivitas" onBack={() => router.push("/notifikasi")} />
         <div className="flex justify-center mt-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#356E3B]"></div>
         </div>
@@ -82,10 +82,10 @@ export default function NotifikasiDetailPage() {
   if (error || !notif) {
     return (
       <div className="min-h-screen bg-[#fbfdfc]">
-        <TopBar title="Detail Aktivitas" onBack={() => router.back()} />
+        <TopBar title="Detail Aktivitas" onBack={() => router.push("/notifikasi")} />
         <div className="flex flex-col items-center justify-center mt-20 text-[#6B7280]">
           <p>{error || "Aktivitas tidak ditemukan."}</p>
-          <button onClick={() => router.back()} className="mt-4 text-[#356E3B] font-bold">
+          <button onClick={() => router.push("/notifikasi")} className="mt-4 text-[#356E3B] font-bold">
             Kembali
           </button>
         </div>
@@ -98,7 +98,7 @@ export default function NotifikasiDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#fbfdfc]">
-      <TopBar title="Detail Aktivitas" onBack={() => router.back()} />
+      <TopBar title="Detail Aktivitas" onBack={() => router.push("/notifikasi")} />
       
       <div className="p-6">
         <div className="bg-white rounded-[24px] shadow-sm border border-[#E5E7EB] p-6 flex flex-col items-center text-center">

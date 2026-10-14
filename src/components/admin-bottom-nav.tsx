@@ -1,7 +1,7 @@
 "use client";
 
 import { Home, FileText, ClipboardEdit } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { useState, useEffect } from "react";
 
@@ -11,7 +11,6 @@ interface AdminBottomNavProps {
 }
 
 export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: AdminBottomNavProps) {
-  const router = useRouter();
   const [internalIzinCount, setInternalIzinCount] = useState<number>(pendingIzinCount ?? 0);
 
   useEffect(() => {
@@ -46,12 +45,6 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
 
     fetchBadge();
   }, [pendingIzinCount]);
-
-  const handleNav = (tab: string, path: string) => {
-    if (activeTab !== tab) {
-      router.push(path);
-    }
-  };
 
   const navItems = [
     {
@@ -103,9 +96,10 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
       {navItems.map((item) => {
         const isActive = activeTab === item.id;
         return (
-          <button
+          <Link
             key={item.id}
-            onClick={() => handleNav(item.id, item.path)}
+            href={item.path}
+            prefetch={true}
             className={`flex flex-col items-center justify-center gap-1 min-w-[56px] relative h-full transition-colors ${
               isActive ? "text-[#1E4738]" : "text-[#7d998c] hover:text-[#5C786C]"
             }`}
@@ -124,7 +118,7 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
             {isActive && (
               <div className="absolute bottom-0 w-10 h-[4px] bg-[#1E4738] rounded-t-full" />
             )}
-          </button>
+          </Link>
         );
       })}
     </div>

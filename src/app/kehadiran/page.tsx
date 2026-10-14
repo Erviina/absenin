@@ -13,6 +13,9 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate, formatDateWithDay, formatDateRange } from "@/lib/dateUtils";
 
+let cachedAttendances: any[] = [];
+let cachedAttendancesCompanyId: string | null = null;
+
 export default function KehadiranPage() {
   const router = useRouter();
   const { activeCompanyId } = useCompany();
@@ -29,8 +32,12 @@ export default function KehadiranPage() {
   const [appliedEndDate, setAppliedEndDate] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [attendances, setAttendances] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [attendances, setAttendances] = useState<any[]>(() => {
+    return cachedAttendancesCompanyId === activeCompanyId ? cachedAttendances : [];
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    return cachedAttendancesCompanyId === activeCompanyId ? cachedAttendances.length === 0 : true;
+  });
   const [error, setError] = useState<string | null>(null);
 
   const handleApplyFilter = () => {
@@ -66,8 +73,10 @@ export default function KehadiranPage() {
     }
   };
 
-  const fetchAttendances = async () => {
-    setIsLoading(true);
+  const fetchAttendances = async (silent = false) => {
+    if (!silent && attendances.length === 0) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const token = localStorage.getItem("accessToken");
@@ -99,16 +108,21 @@ export default function KehadiranPage() {
         throw new Error(data.message || data.error || "Gagal mengambil data kehadiran");
       }
       
-      setAttendances(data.data || []);
+      const list = data.data || [];
+      cachedAttendances = list;
+      cachedAttendancesCompanyId = activeCompanyId;
+      setAttendances(list);
     } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan sistem");
+      if (attendances.length === 0) {
+        setError(err.message || "Terjadi kesalahan sistem");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAttendances();
+    fetchAttendances(attendances.length > 0);
   }, [appliedStartDate, appliedEndDate, activeCompanyId]);
 
   const searchedAttendances = attendances.filter(item => {
@@ -183,7 +197,15 @@ export default function KehadiranPage() {
       {/* Header */}
       <TopBar 
         title="Kehadiran" 
-        onBack={() => router.push("/dashboard")} 
+        onBack={() => {
+          if (isFilterOpen) {
+            setIsFilterOpen(false);
+          } else if (isDownloadOpen) {
+            setIsDownloadOpen(false);
+          } else {
+            router.push("/dashboard");
+          }
+        }} 
         rightAction={
           <div className="relative">
             <button 
@@ -248,18 +270,18 @@ export default function KehadiranPage() {
         {/* History Cards */}
         <div className="flex flex-col gap-4">
           
-          {isLoading ? (
+          {isLoading && attendances.length === 0 ? (
             <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
               <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
               <p className="text-[#4B5563] font-medium text-[14px]">Memuat riwayat kehadiran...</p>
             </div>
-          ) : error ? (
+          ) : error && attendances.length === 0 ? (
             <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
               <XCircle className="w-12 h-12 text-red-400 mb-3" />
               <p className="text-red-600 font-medium text-[15px]">Gagal Memuat Data</p>
               <p className="text-[#9CA3AF] text-[13px] mt-1 mb-4">{error}</p>
               <button 
-                onClick={fetchAttendances}
+                onClick={() => fetchAttendances()}
                 className="px-6 h-10 rounded-full bg-[#356E3B] text-white font-bold text-[13px] flex items-center gap-2 hover:bg-[#1E4738] transition-colors"
               >
                 <RefreshCcw className="w-4 h-4" /> Coba Lagi

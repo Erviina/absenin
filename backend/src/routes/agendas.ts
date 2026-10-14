@@ -196,6 +196,118 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
   }
 });
 
+// GET /api/agendas/management/employees/:employeeId - Get company agendas for employee monitoring
+router.get("/management/employees/:employeeId", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const caller = (req as any).user;
+    const { employeeId } = req.params;
+
+    const tenant = await resolveTenant(req, caller.id);
+    if (!tenant) return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+
+    if (!tenant.isManagement) {
+      return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses." });
+    }
+
+    const companyId = tenant.companyId;
+
+    // Verify employee is in company
+    const memberCheck = await db.execute(sql`
+      SELECT profile_id FROM company_members
+      WHERE company_id = ${companyId}
+        AND profile_id = ${employeeId}
+        AND status = 'active'
+        AND deleted_at IS NULL
+      LIMIT 1
+    `);
+
+    if (memberCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Karyawan tidak ditemukan di perusahaan ini." });
+    }
+
+    const { start_date, end_date, month, year } = req.query;
+
+    let dateConditions = sql``;
+    if (start_date && end_date) {
+      // Use COALESCE so agendas with NULL end_time still match via start_time
+      dateConditions = sql`AND (a.start_time AT TIME ZONE 'Asia/Jakarta')::date <= ${end_date}::date AND (COALESCE(a.end_time, a.start_time) AT TIME ZONE 'Asia/Jakarta')::date >= ${start_date}::date`;
+    } else if (month && year) {
+      const monthNum = parseInt(month as string, 10);
+      const yearNum = parseInt(year as string, 10);
+      if (!isNaN(monthNum) && !isNaN(yearNum)) {
+        // Build range in UTC to avoid server timezone offset issues
+        const startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1)).toISOString();
+        const endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999)).toISOString();
+        // COALESCE(end_time, start_time) ensures rows with NULL end_time still match
+        dateConditions = sql`AND a.start_time <= ${endOfMonth}::timestamptz AND COALESCE(a.end_time, a.start_time) >= ${startOfMonth}::timestamptz`;
+      }
+    }
+    // If no date filter provided: return all COMPANY agendas (no dateConditions applied)
+
+    // Monitoring scope:
+    // - COMPANY agendas: company-wide events visible to all management
+    // - PERSONAL agendas of this specific employee (profile_id = employeeId):
+    //   Management monitoring an employee's own schedule is a legitimate use case.
+    //   This does NOT expose other employees' personal agendas.
+    const agendasRes = await db.execute(sql`
+      SELECT 
+        a.id, 
+        a.title, 
+        a.notes, 
+        a.start_time, 
+        a.end_time, 
+        a.created_at, 
+        a.profile_id,
+        a.type,
+        a.link_or_location,
+        a.is_all_day,
+        c.id as category_id, 
+        c.name as category_name
+      FROM agendas a
+      LEFT JOIN agendas_categories c ON a.agenda_category_id = c.id
+      WHERE a.company_id = ${companyId} 
+        AND (
+          a.type = 'COMPANY'
+          OR (a.type = 'PERSONAL' AND a.profile_id = ${employeeId})
+        )
+        AND a.deleted_at IS NULL
+        ${dateConditions}
+      ORDER BY a.start_time ASC
+    `);
+
+    const formattedAgendas = agendasRes.rows.map(row => {
+      const item = formatAgendaItem(row);
+      const now = new Date();
+      const start = item.start_time ? new Date(item.start_time) : null;
+      const end = item.end_time ? new Date(item.end_time) : null;
+
+      let status: "upcoming" | "ongoing" | "past" = "upcoming";
+      if (start && end) {
+        if (now >= start && now <= end) status = "ongoing";
+        else if (now > end) status = "past";
+        else status = "upcoming";
+      } else if (start) {
+        if (now > start) status = "past";
+        else status = "upcoming";
+      }
+
+      return {
+        ...item,
+        status,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil agenda karyawan",
+      data: formattedAgendas
+    });
+  } catch (error: any) {
+    console.error("Get management employee agendas error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 router.get("/:id", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;

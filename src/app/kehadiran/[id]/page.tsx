@@ -151,7 +151,10 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-white relative">
       {/* Header */}
-      <TopBar title="Detail Kehadiran" />
+      <TopBar 
+        title="Detail Kehadiran" 
+        onBack={() => router.push("/kehadiran")} 
+      />
 
       {isLoading ? (
         <div className="flex-1 flex flex-col items-center justify-center h-[50vh]">
