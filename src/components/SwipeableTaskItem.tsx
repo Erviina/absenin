@@ -34,6 +34,10 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }:
   const startDragTime = useRef<number>(0);
 
   const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest("button")) {
+      return;
+    }
     setIsDragging(true);
     startDragTime.current = Date.now();
     if ('touches' in e) {
@@ -67,6 +71,12 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }:
   const handleTouchEnd = (e: React.TouchEvent | React.MouseEvent) => {
     setIsDragging(false);
     
+    const target = e.target as HTMLElement | null;
+    if (target?.closest("button")) {
+      touchStartX.current = null;
+      return;
+    }
+
     // Check if it's a tap/click
     if (touchStartX.current !== null && onClick) {
       let currentX = 0;
@@ -185,15 +195,22 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }:
         
         {/* Checkbox */}
         <button 
+          type="button"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
           onClick={(e) => {
-            e.stopPropagation(); // Prevent interfering with swipe logic
+            e.stopPropagation(); // Prevent opening task detail
             onToggle(task.id);
           }}
-          className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors ${
+          className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
             task.completed 
               ? "bg-[#2D5A3F] border-[#2D5A3F]" 
               : "bg-white border-[#E8F3EB]"
           }`}
+          aria-label={task.completed ? "Tandai belum selesai" : "Tandai selesai"}
         >
           {task.completed && <Check className="w-5 h-5 text-white" strokeWidth={3} />}
         </button>

@@ -554,6 +554,9 @@ export default function DashboardPage() {
                     >
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
                         <button
+                          type="button"
+                          onTouchStart={(e) => e.stopPropagation()}
+                          onTouchEnd={(e) => e.stopPropagation()}
                           onClick={(e) => handleToggleTask(task.id, e)}
                           className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
                             task.completed

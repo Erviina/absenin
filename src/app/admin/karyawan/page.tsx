@@ -617,10 +617,10 @@ function AdminKaryawanView() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+        <div className="grid grid-cols-4 gap-1.5 py-1 w-full">
           <button
             onClick={() => setActiveTab("semua")}
-            className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all shrink-0 ${
+            className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center ${
               activeTab === "semua"
                 ? "bg-[#1E4738] text-white shadow-sm"
                 : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
@@ -630,14 +630,14 @@ function AdminKaryawanView() {
           </button>
           <button
             onClick={() => setActiveTab("karyawan")}
-            className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+            className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center gap-1 ${
               activeTab === "karyawan"
                 ? "bg-[#1E4738] text-white shadow-sm"
                 : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
             }`}
           >
-            <span>Karyawan</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+            <span className="truncate">Karyawan</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] shrink-0 ${
               activeTab === "karyawan" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
             }`}>
               {filteredEmployees.length}
@@ -645,15 +645,15 @@ function AdminKaryawanView() {
           </button>
           <button
             onClick={() => setActiveTab("keluar")}
-            className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+            className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center gap-1 ${
               activeTab === "keluar"
                 ? "bg-[#1E4738] text-white shadow-sm"
                 : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
             }`}
           >
-            <span>Permintaan Keluar</span>
+            <span className="truncate">Keluar</span>
             {exitRequests.length > 0 && (
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold shrink-0 ${
                 activeTab === "keluar" ? "bg-red-500 text-white" : "bg-red-100 text-red-600"
               }`}>
                 {exitRequests.length}
@@ -662,15 +662,15 @@ function AdminKaryawanView() {
           </button>
           <button
             onClick={() => setActiveTab("masuk")}
-            className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+            className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center gap-1 ${
               activeTab === "masuk"
                 ? "bg-[#1E4738] text-white shadow-sm"
                 : "bg-white text-gray-600 border border-gray-100 hover:bg-gray-50"
             }`}
           >
-            <span>Permintaan Gabung</span>
+            <span className="truncate">Gabung</span>
             {joinRequests.length > 0 && (
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold shrink-0 ${
                 activeTab === "masuk" ? "bg-amber-500 text-white" : "bg-amber-100 text-amber-700"
               }`}>
                 {joinRequests.length}

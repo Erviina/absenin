@@ -120,24 +120,13 @@ export default function TugasDetailPage() {
             </Badge>
           </div>
           
-          <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-50">
-            <div className="flex items-center gap-2">
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${task.completed ? 'bg-[#E8F3EB]' : 'bg-gray-100'}`}>
-                <CheckCircle2 className={`w-4 h-4 ${task.completed ? 'text-[#356E3B]' : 'text-gray-400'}`} />
-              </div>
-              <span className={`text-[13px] font-medium ${task.completed ? 'text-[#356E3B]' : 'text-gray-500'}`}>
-                {task.completed ? 'Sudah Selesai' : 'Belum Selesai'}
-              </span>
+          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50">
+            <div className={`flex items-center justify-center w-8 h-8 rounded-full ${task.completed ? 'bg-[#E8F3EB]' : 'bg-gray-100'}`}>
+              <CheckCircle2 className={`w-4 h-4 ${task.completed ? 'text-[#356E3B]' : 'text-gray-400'}`} />
             </div>
-
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F3EB] text-[#356E3B] text-[12px] font-bold hover:bg-[#D1E5D5] active:scale-95 transition-all shadow-xs"
-              aria-label="Bagikan Tugas"
-            >
-              <Share2 className="w-3.5 h-3.5 text-[#356E3B]" />
-              <span>Bagikan</span>
-            </button>
+            <span className={`text-[13px] font-medium ${task.completed ? 'text-[#356E3B]' : 'text-gray-500'}`}>
+              {task.completed ? 'Sudah Selesai' : 'Belum Selesai'}
+            </span>
           </div>
         </div>
 

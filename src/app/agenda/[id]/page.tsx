@@ -142,24 +142,13 @@ export default function AgendaDetailPage() {
       <div className="px-6 pt-6 pb-20 flex flex-col gap-6 max-w-xl mx-auto w-full">
         {/* Title Card */}
         <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
-          <div className="flex justify-between items-start gap-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant={getAgendaCategoryColor(categoryName).variant} size="sm" icon={<Tag className="w-3 h-3" />}>
-                {categoryName}
-              </Badge>
-              <Badge variant={isCompany ? "company" : "personal"} size="xs" uppercase>
-                {isCompany ? "PERUSAHAAN" : "PRIBADI"}
-              </Badge>
-            </div>
-
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F3EB] text-[#356E3B] text-[12px] font-bold hover:bg-[#D1E5D5] active:scale-95 transition-all shrink-0"
-              aria-label="Bagikan Agenda"
-            >
-              <Share2 className="w-3.5 h-3.5 text-[#356E3B]" />
-              <span>Bagikan</span>
-            </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant={getAgendaCategoryColor(categoryName).variant} size="sm" icon={<Tag className="w-3 h-3" />}>
+              {categoryName}
+            </Badge>
+            <Badge variant={isCompany ? "company" : "personal"} size="xs" uppercase>
+              {isCompany ? "PERUSAHAAN" : "PRIBADI"}
+            </Badge>
           </div>
 
           <h1 className="text-[20px] font-bold text-[#111827] leading-snug">
