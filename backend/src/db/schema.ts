@@ -7,6 +7,7 @@ export const companies = pgTable("companies", {
   latitude: numeric("latitude"),
   longitude: numeric("longitude"),
   avatar_company_url: text("avatar_company_url"),
+  phone: varchar("phone"),
 });
 
 export const profiles = pgTable("profiles", {

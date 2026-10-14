@@ -425,9 +425,9 @@ export default function CheckinPage() {
           <div className="w-20 h-20 bg-[#E8F3EB] rounded-full flex items-center justify-center mb-6">
             <CheckCircle2 className="w-10 h-10 text-[#2D5A3F]" strokeWidth={2} />
           </div>
-          <h2 className="text-[20px] font-bold text-[#111827] mb-2">Absensi Hari Ini Selesai</h2>
+          <h2 className="text-[20px] font-bold text-[#111827] mb-2">Terima Kasih Atas Kontribusinya Hari Ini!</h2>
           <p className="text-[#6B7280] text-[14px] leading-relaxed mb-8 max-w-[320px]">
-            Anda telah berhasil melakukan presensi masuk dan keluar untuk hari ini.
+            Anda telah berhasil melakukan presensi masuk dan keluar untuk hari ini. Selamat beristirahat!
             <br /><br />
             Presensi masuk berikutnya dibuka pada hari{" "}
             <strong className="text-[#1E4738] font-bold">

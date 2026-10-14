@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, Image as ImageIcon, Search } from "lucide-react";
+import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
@@ -161,37 +161,59 @@ export default function KelolaBeritaPage() {
           ) : (
             filteredNews.map(item => (
               <div key={item.id} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#dce9df]">
-                {item.cover_image_url ? (
-                  <img src={item.cover_image_url} alt={item.title} className="w-[80px] h-[80px] rounded-[16px] shrink-0 object-cover" />
-                ) : (
-                  <div className="w-[80px] h-[80px] bg-[#f4f9f6] rounded-[16px] shrink-0 flex items-center justify-center border border-[#eef5f0]">
-                    <ImageIcon className="w-6 h-6 text-[#7d998c]" />
-                  </div>
-                )}
+                <div 
+                  onClick={() => router.push(`/berita/${item.id}`)}
+                  className="cursor-pointer shrink-0 group/img"
+                  title="Klik untuk langsung melihat berita"
+                >
+                  {item.cover_image_url ? (
+                    <img 
+                      src={item.cover_image_url} 
+                      alt={item.title} 
+                      className="w-[80px] h-[80px] rounded-[16px] object-cover group-hover/img:opacity-90 transition-opacity" 
+                      style={{ objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div className="w-[80px] h-[80px] bg-[#f4f9f6] rounded-[16px] flex items-center justify-center border border-[#eef5f0]">
+                      <ImageIcon className="w-6 h-6 text-[#7d998c]" />
+                    </div>
+                  )}
+                </div>
                 
-                <div className="flex flex-col flex-1 justify-center">
+                <div className="flex flex-col flex-1 justify-center min-w-0">
                   {item.category?.name && (
                     <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
                       {item.category.name}
                     </span>
                   )}
-                  <h3 className="text-[#1E4738] text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere]">
+                  <h3 
+                    onClick={() => router.push(`/berita/${item.id}`)}
+                    className="text-[#1E4738] hover:text-[#356E3B] hover:underline cursor-pointer text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors"
+                    title="Klik untuk langsung melihat berita"
+                  >
                     {sanitizeText(item.title)}
                   </h3>
                   <p className="text-[#7d998c] text-[11px] font-medium line-clamp-1 mb-2">
                     {formatDate(item.created_at)}
                   </p>
                   
-                  <div className="flex gap-2 mt-auto">
+                  <div className="flex gap-2 mt-auto flex-wrap">
+                    <button 
+                      onClick={() => router.push(`/berita/${item.id}`)}
+                      className="text-[#1E4738] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
+                      title="Lihat Berita"
+                    >
+                      <Eye className="w-3 h-3 text-[#1E4738]" /> Lihat
+                    </button>
                     <button 
                       onClick={() => handleOpenEdit(item)}
-                      className="text-[#356E3B] text-[11px] font-bold bg-[#eef5f0] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-transform"
+                      className="text-[#356E3B] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
                     >
                       <Edit2 className="w-3 h-3" /> Edit
                     </button>
                     <button 
                       onClick={() => handleDelete(item.id)}
-                      className="text-[#e11d48] text-[11px] font-bold bg-[#ffe4e6] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-transform"
+                      className="text-[#e11d48] text-[11px] font-bold bg-[#ffe4e6] hover:bg-[#fecdd3] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
                     >
                       <Trash2 className="w-3 h-3" /> Hapus
                     </button>

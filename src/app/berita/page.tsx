@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, Calendar, X, Tag, Newspaper, ChevronRight, SlidersHorizontal, RotateCcw } from "lucide-react";
+import { Search, Calendar, X, Tag, Newspaper, ChevronRight, SlidersHorizontal, RotateCcw, ListFilter } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
@@ -148,62 +148,72 @@ export default function BeritaPage() {
       <main className="flex-1 px-5 pt-4 flex flex-col gap-4 max-w-xl mx-auto w-full">
         {/* Search & Date Filter Controls */}
         <div className="flex flex-col gap-3">
-          {/* Search Input Bar */}
-          <div className="relative">
-            <input 
-              type="text" 
-              placeholder="Cari judul berita atau isi..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-gray-200 rounded-full pl-11 pr-10 py-3 text-[13px] text-[#1E4738] placeholder-gray-400 outline-none focus:border-[#356E3B] transition-colors shadow-xs"
-            />
-            <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2} />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                aria-label="Hapus pencarian"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          {/* Unified Search & Filter Row */}
+          <div className="flex gap-3 items-center">
+            <div className="flex-1 relative">
+              <input 
+                type="text" 
+                placeholder="Cari judul berita atau isi..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-12 bg-white border border-gray-200 rounded-2xl pl-11 pr-10 text-[13px] text-[#1E4738] placeholder-gray-400 outline-none focus:border-[#356E3B] transition-colors shadow-xs"
+              />
+              <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2} />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                  aria-label="Hapus pencarian"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
 
-          {/* Quick Filter Row: Date Filter Button & Active Indicator */}
-          <div className="flex items-center gap-2">
-            <button
+            {/* Filter Tanggal di pojok kanan (konsisten dengan halaman lain) */}
+            <button 
               onClick={() => setIsDatePickerOpen(true)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium border transition-colors ${
+              className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 transition-colors shadow-xs active:scale-95 ${
                 selectedDate 
-                  ? "bg-[#eef5f0] text-[#1E4738] border-[#356E3B] font-semibold" 
-                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                  ? "bg-[#356E3B] border-[#356E3B] text-white" 
+                  : "bg-white border-gray-200 text-[#4B5563] hover:border-[#356E3B] hover:text-[#356E3B]"
               }`}
+              title={selectedDate ? `Filter: ${formatDate(selectedDate)}` : "Filter Tanggal"}
+              aria-label="Filter Tanggal"
             >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{selectedDate ? formatDate(selectedDate) : "Filter Tanggal"}</span>
+              <ListFilter className="w-5 h-5" strokeWidth={2} />
             </button>
-
-            {selectedDate && (
-              <button
-                onClick={() => setSelectedDate("")}
-                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
-                title="Hapus filter tanggal"
-                aria-label="Hapus filter tanggal"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-
-            {hasActiveFilters && (
-              <button
-                onClick={handleResetFilters}
-                className="ml-auto text-[11px] font-bold text-[#EF4444] hover:underline flex items-center gap-1 py-1 px-2"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset Filter
-              </button>
-            )}
           </div>
+
+          {/* Active Filter Indicators (jika filter tanggal atau pencarian aktif) */}
+          {(selectedDate || hasActiveFilters) && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedDate && (
+                <div className="inline-flex items-center gap-1.5 bg-[#eef5f0] border border-[#356E3B]/30 text-[#1E4738] text-[12px] font-semibold px-3 py-1 rounded-full shadow-2xs">
+                  <Calendar className="w-3.5 h-3.5 text-[#356E3B]" />
+                  <span>{formatDate(selectedDate)}</span>
+                  <button 
+                    onClick={() => setSelectedDate("")}
+                    className="ml-1 text-gray-400 hover:text-red-500 p-0.5 rounded-full transition-colors"
+                    title="Hapus filter tanggal"
+                    aria-label="Hapus filter tanggal"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {hasActiveFilters && (
+                <button
+                  onClick={handleResetFilters}
+                  className="ml-auto text-[11px] font-bold text-[#EF4444] hover:underline flex items-center gap-1 py-1 px-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Reset Filter
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Pill Tabs for Category Filtering */}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
@@ -230,7 +240,20 @@ export default function BeritaPage() {
               className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" 
               onClick={() => setIsDatePickerOpen(false)} 
             />
-            <div className="relative w-full max-w-[340px] z-10 animate-in zoom-in-95 duration-200">
+            <div className="relative w-full max-w-[340px] z-10 animate-in zoom-in-95 duration-200 bg-white rounded-[28px] p-5 shadow-2xl border border-gray-100 flex flex-col gap-3">
+              <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                <div>
+                  <h3 className="text-[15px] font-bold text-[#1E4738]">Filter Tanggal</h3>
+                  <p className="text-[12px] text-gray-500">Pilih tanggal penerbitan berita</p>
+                </div>
+                <button 
+                  onClick={() => setIsDatePickerOpen(false)}
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
               <CustomCalendar 
                 selectedDate={selectedDate} 
                 onSelect={(date) => {
@@ -238,6 +261,26 @@ export default function BeritaPage() {
                   setIsDatePickerOpen(false);
                 }} 
               />
+
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                {selectedDate ? (
+                  <button
+                    onClick={() => {
+                      setSelectedDate("");
+                      setIsDatePickerOpen(false);
+                    }}
+                    className="text-[12px] font-semibold text-red-500 hover:underline px-2 py-1"
+                  >
+                    Hapus Filter
+                  </button>
+                ) : <div />}
+                <button
+                  onClick={() => setIsDatePickerOpen(false)}
+                  className="px-4 py-1.5 rounded-full bg-gray-100 text-[12px] font-semibold text-gray-600 hover:bg-gray-200 transition-colors ml-auto"
+                >
+                  Tutup
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -292,6 +335,7 @@ export default function BeritaPage() {
                     src={item.cover_image_url}
                     alt={sanitizeText(item.title)}
                     className="w-[84px] h-[84px] rounded-[16px] shrink-0 object-cover"
+                    style={{ objectFit: 'cover' }}
                   />
                 ) : (
                   <div className="w-[84px] h-[84px] bg-[#f4f9f6] rounded-[16px] shrink-0 flex items-center justify-center text-[#7d998c] border border-[#eef5f0]">

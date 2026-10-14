@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, Target, Calendar, UserPlus, QrCode, AlignLeft, Send, Copy, Camera, Users, Trash2 } from "lucide-react";
+import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, Target, Calendar, UserPlus, QrCode, AlignLeft, Send, Copy, Camera, Users, Trash2, Phone } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { useState, useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -54,9 +54,9 @@ export default function KelolaPerusahaanPage() {
   const { showToast } = useDialog();
   const { refreshMemberships } = useCompany();
 
-  const [initialData, setInitialData] = useState({ name: "", address: "", latitude: -6.9175, longitude: 107.6191 });
+  const [initialData, setInitialData] = useState({ name: "", phone: "", address: "", latitude: -6.9175, longitude: 107.6191 });
   const [companyData, setCompanyData] = useState({ 
-    name: "", address: "", latitude: -6.9175, longitude: 107.6191, memberCount: 0, join_code: "",
+    name: "", phone: "", address: "", latitude: -6.9175, longitude: 107.6191, memberCount: 0, join_code: "",
     work_days: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
     work_start_time: "08:00",
     work_end_time: "17:00"
@@ -154,6 +154,7 @@ export default function KelolaPerusahaanPage() {
 
           setCompanyData({
             name: data.data.name || "",
+            phone: data.data.phone || "",
             address: data.data.address || "",
             latitude: data.data.latitude || -6.9175,
             longitude: data.data.longitude || 107.6191,
@@ -165,6 +166,7 @@ export default function KelolaPerusahaanPage() {
           });
           setInitialData({
             name: data.data.name || "",
+            phone: data.data.phone || "",
             address: data.data.address || "",
             latitude: data.data.latitude || -6.9175,
             longitude: data.data.longitude || 107.6191,
@@ -198,7 +200,7 @@ export default function KelolaPerusahaanPage() {
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
         method: "PATCH",
         headers,
-        body: JSON.stringify({ name: companyData.name, address: companyData.address })
+        body: JSON.stringify({ name: companyData.name, address: companyData.address, phone: companyData.phone })
       });
       const data = await res.json();
       if (res.status === 403) {
@@ -207,7 +209,7 @@ export default function KelolaPerusahaanPage() {
         showToast(data.message || "Gagal menyimpan perubahan.", "error");
       } else {
         showToast("Data perusahaan berhasil diperbarui.", "success");
-        setInitialData(prev => ({ ...prev, name: companyData.name, address: companyData.address }));
+        setInitialData(prev => ({ ...prev, name: companyData.name, address: companyData.address, phone: companyData.phone }));
         await refreshMemberships().catch(console.error);
       }
     } catch (error) {
@@ -443,6 +445,32 @@ export default function KelolaPerusahaanPage() {
             <div className="flex items-center gap-1.5 text-[#356E3B] mt-1">
               <Users className="w-4 h-4" />
               <span className="text-[12px] font-bold">{companyData.memberCount} Anggota</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Kontak Perusahaan Card */}
+        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
+              <Phone className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
+            </div>
+            <div>
+              <h2 className="text-[#111827] text-[15px] font-bold">Kontak Perusahaan</h2>
+              <p className="text-gray-400 text-[11px]">Nomor telepon atau WhatsApp resmi</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <div className="relative">
+              <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input 
+                type="tel"
+                value={companyData.phone || ""}
+                onChange={(e) => setCompanyData({ ...companyData, phone: e.target.value })}
+                className="text-[#111827] text-[14px] font-medium bg-[#fbfdfc] border border-gray-200 focus:border-[#356E3B] rounded-[14px] pl-10 pr-3.5 py-3 outline-none w-full transition-colors"
+                placeholder="Contoh: 08123456789 atau (021) 555-1234"
+              />
             </div>
           </div>
         </div>

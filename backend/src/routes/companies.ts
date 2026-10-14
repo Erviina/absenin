@@ -22,6 +22,7 @@ const createCompanySchema = z.object({
 
 const updateCompanySchema = z.object({
   name: z.string().min(1, "Nama perusahaan tidak boleh kosong").optional(),
+  phone: z.string().optional(),
   address: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
@@ -30,6 +31,7 @@ const updateCompanySchema = z.object({
   work_end_time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/, "Format waktu harus HH:mm atau HH:mm:ss").optional(),
 }).refine(data => 
   data.name !== undefined || 
+  data.phone !== undefined ||
   data.address !== undefined || 
   data.latitude !== undefined || 
   data.longitude !== undefined ||
@@ -554,7 +556,7 @@ router.patch("/me", authenticate, async (req: Request, res: Response): Promise<a
       });
     }
 
-    const { name, address, latitude, longitude, work_days } = parseResult.data;
+    const { name, phone, address, latitude, longitude, work_days } = parseResult.data;
     let { work_start_time, work_end_time } = parseResult.data;
 
     if (work_start_time) {
@@ -583,6 +585,7 @@ router.patch("/me", authenticate, async (req: Request, res: Response): Promise<a
 
     const updates = [];
     if (name !== undefined) updates.push(sql`name = ${name}`);
+    if (phone !== undefined) updates.push(sql`phone = ${phone}`);
     if (address !== undefined) updates.push(sql`address = ${address}`);
     if (latitude !== undefined) updates.push(sql`latitude = ${latitude}`);
     if (longitude !== undefined) updates.push(sql`longitude = ${longitude}`);

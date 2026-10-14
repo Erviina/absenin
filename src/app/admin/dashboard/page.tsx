@@ -232,18 +232,19 @@ export default function AdminDashboardPage() {
     return count;
   };
 
-  const monthlyData = attendanceStats?.monthly;
-  const totalWorkingDays = monthlyData?.working_days || calcWorkingDays(currentYear, selectedDate.getMonth());
-  const onTimeCount = monthlyData ? monthlyData.on_time : Math.max(0, (attendanceStats?.hadir || 0) - (attendanceStats?.terlambat || 0));
-  const lateCount = monthlyData ? monthlyData.terlambat : (attendanceStats?.terlambat || 0);
-  const leaveCount = monthlyData ? monthlyData.izin : (attendanceStats?.izin || 0);
+  const totalEmployees = attendanceStats?.total || company?.memberCount || 1;
+  const onTimeCount = attendanceStats?.hadir || 0;
+  const lateCount = attendanceStats?.terlambat || 0;
+  const leaveCount = attendanceStats?.izin || 0;
+  const belumCount = attendanceStats?.belum ?? Math.max(0, totalEmployees - onTimeCount - lateCount - leaveCount);
 
-  const memberCount = company?.memberCount || 1;
-  const totalSlots = Math.max(totalWorkingDays * memberCount, onTimeCount + lateCount + leaveCount, 1);
-
+  // 100% setara dengan total karyawan (contoh: 4)
+  const totalSlots = Math.max(totalEmployees, 1);
   const onTimePercent = Math.min(100, Math.round((onTimeCount / totalSlots) * 100));
   const latePercent = Math.min(100 - onTimePercent, Math.round((lateCount / totalSlots) * 100));
   const leavePercent = Math.min(100 - onTimePercent - latePercent, Math.round((leaveCount / totalSlots) * 100));
+  const totalAttended = onTimeCount + lateCount;
+  const totalAttendancePercent = Math.min(100, Math.round((totalAttended / totalSlots) * 100));
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
@@ -297,29 +298,19 @@ export default function AdminDashboardPage() {
           <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
         </div>
 
-        {/* Monthly Attendance Recap Card */}
+        {/* Kehadiran Karyawan Hari Ini (100% = total karyawan) */}
         <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col gap-4">
-          {/* Header Row: Month & Year */}
-          <div className="flex items-center gap-1.5">
-            <button 
-              onClick={handlePrevMonth}
-              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-[#1E4738] hover:bg-[#eef5f0] rounded-full active:scale-95 transition-all"
-              title="Bulan sebelumnya"
-              aria-label="Bulan sebelumnya"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <h2 className="text-[16px] font-bold text-[#1E4738] tracking-tight">
-              {monthlyData?.month_name || currentMonthName} {monthlyData?.year || currentYear}
-            </h2>
-            <button 
-              onClick={handleNextMonth}
-              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-[#1E4738] hover:bg-[#eef5f0] rounded-full active:scale-95 transition-all"
-              title="Bulan berikutnya"
-              aria-label="Bulan berikutnya"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+          {/* Header Row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarCheck className="w-4 h-4 text-[#356E3B]" />
+              <h2 className="text-[15px] font-bold text-[#1E4738] tracking-tight">
+                Kehadiran Karyawan Hari Ini
+              </h2>
+            </div>
+            <span className="text-[12px] font-bold text-[#356E3B] bg-[#EEF5F0] px-2.5 py-0.5 rounded-full">
+              {totalAttendancePercent}% ({totalAttended}/{totalEmployees} Karyawan)
+            </span>
           </div>
 
           {/* Multi-Color Progress Bar */}
@@ -331,7 +322,7 @@ export default function AdminDashboardPage() {
                 <div 
                   className="h-full bg-[#22C55E] transition-all duration-300"
                   style={{ width: `${onTimePercent}%` }}
-                  title={`Hadir: ${onTimeCount}`}
+                  title={`Hadir Tepat Waktu: ${onTimeCount}`}
                 />
                 <div 
                   className="h-full bg-[#EF4444] transition-all duration-300"
@@ -352,21 +343,28 @@ export default function AdminDashboardPage() {
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#22C55E] shrink-0" />
               <span className="text-[#64748b]">
-                Hadir : <strong className="text-[#1E4738] font-bold">{onTimeCount}</strong>
+                Hadir: <strong className="text-[#1E4738] font-bold">{onTimeCount}</strong>
               </span>
             </div>
 
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shrink-0" />
               <span className="text-[#64748b]">
-                Terlambat : <strong className="text-[#1E4738] font-bold">{lateCount}</strong>
+                Terlambat: <strong className="text-[#1E4738] font-bold">{lateCount}</strong>
               </span>
             </div>
 
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#EAB308] shrink-0" />
               <span className="text-[#64748b]">
-                Izin : <strong className="text-[#1E4738] font-bold">{leaveCount}</strong>
+                Izin: <strong className="text-[#1E4738] font-bold">{leaveCount}</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-gray-300 shrink-0" />
+              <span className="text-[#64748b]">
+                Belum: <strong className="text-gray-600 font-bold">{belumCount}</strong>
               </span>
             </div>
           </div>

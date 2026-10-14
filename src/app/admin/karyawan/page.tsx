@@ -921,7 +921,6 @@ function AdminKaryawanView() {
                 }
 
                 const isSelf = item.id === currentUserId;
-                const canRemove = canRemoveEmployee(item);
 
                 return (
                  <div 
@@ -966,39 +965,12 @@ function AdminKaryawanView() {
                      </div>
                    </div>
 
-                   {/* Direct Action Buttons */}
-                   <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                     {canRemove && (
-                       <button
-                         type="button"
-                         onClick={() => {
-                           setSelectedEmployeeForRole(item);
-                           setDeleteMemberError("");
-                           setIsDeleteConfirmOpen(true);
-                         }}
-                         className="px-2.5 py-1.5 rounded-[10px] bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/70 text-[11px] font-semibold flex items-center gap-1 active:scale-95 transition-all shadow-sm"
-                         title="Keluarkan dari perusahaan"
-                       >
-                         <UserMinus className="w-3.5 h-3.5" />
-                         <span>Keluarkan</span>
-                       </button>
-                     )}
-                     {!isOwner && (
-                       <button
-                         type="button"
-                         onClick={() => {
-                           setSelectedEmployeeForRole(item);
-                           if (item.roles?.includes('Admin')) setSelectedRole('Admin');
-                           else if (item.roles?.includes('Manager')) setSelectedRole('Manager');
-                           else setSelectedRole('Employee');
-                         }}
-                         className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-[#356E3B] hover:bg-gray-100 transition-colors"
-                         title="Pengaturan akses"
-                       >
-                         <ChevronRight className="w-4 h-4" />
-                       </button>
-                     )}
-                   </div>
+                   {/* Action Indicator */}
+                   {!isOwner && (
+                     <div className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 group-hover:text-[#356E3B] shrink-0">
+                       <ChevronRight className="w-4 h-4" />
+                     </div>
+                   )}
                  </div>
                 );
               })

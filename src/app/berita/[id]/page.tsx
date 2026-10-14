@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
@@ -9,7 +9,7 @@ import { formatDateWithDay } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
 import { shareContent } from "@/lib/shareUtils";
 import { Badge } from "@/components/Badge";
-import { Calendar, User, Newspaper, ArrowLeft, Tag, Share2 } from "lucide-react";
+import { Calendar, User, Newspaper, Tag, Share2 } from "lucide-react";
 
 interface NewsDetail {
   id: string;
@@ -48,6 +48,14 @@ export default function BeritaDetailPage() {
       onToast: showToast,
     });
   };
+
+  const formattedParagraphs = useMemo(() => {
+    if (!news?.content) return [];
+    return sanitizeText(news.content)
+      .split(/\n\s*\n/)
+      .map(p => p.trim())
+      .filter(Boolean);
+  }, [news?.content]);
 
   useEffect(() => {
     const fetchNewsDetail = async () => {
@@ -149,18 +157,7 @@ export default function BeritaDetailPage() {
           </div>
         ) : (
           <article className="bg-white rounded-[24px] p-5 sm:p-6 border border-[#eef5f0] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col gap-5 overflow-hidden">
-            {/* Cover Image */}
-            {news.cover_image_url && (
-              <div className="w-full rounded-[18px] overflow-hidden bg-gray-100 max-h-[300px] shadow-xs">
-                <img
-                  src={news.cover_image_url}
-                  alt={sanitizeText(news.title)}
-                  className="w-full h-full max-h-[300px] object-cover"
-                />
-              </div>
-            )}
-
-            {/* Header: Kategori & Tanggal & Author */}
+            {/* Header: Kategori & Tanggal */}
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <Badge variant="success" size="sm" icon={<Tag className="w-3 h-3" />}>
@@ -178,54 +175,53 @@ export default function BeritaDetailPage() {
                 {sanitizeText(news.title)}
               </h1>
 
-              {/* Author / Publisher Information */}
-              <div className="flex items-center gap-2.5 pt-1 text-[13px] text-[#5C786C] border-t border-[#f0f6f2] mt-1">
-                <div className="w-7 h-7 rounded-full bg-[#eef5f0] text-[#1E4738] flex items-center justify-center font-bold text-[11px] shrink-0 overflow-hidden">
+              {/* Author Information */}
+              <div className="flex items-center gap-2.5 pt-0.5">
+                <div className="w-8 h-8 rounded-full bg-[#eef5f0] text-[#1E4738] flex items-center justify-center font-bold text-[12px] shrink-0 overflow-hidden border border-[#dce9df]">
                   {news.author?.avatar_url ? (
                     <img
                       src={news.author.avatar_url}
                       alt={news.author.name}
                       className="w-full h-full object-cover"
+                      style={{ objectFit: "cover" }}
                     />
                   ) : (
-                    <User className="w-4 h-4" />
+                    <User className="w-4 h-4 text-[#356E3B]" />
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[#9CA3AF] text-[12px]">Diterbitkan oleh:</span>
-                  <span className="font-semibold text-[#1E4738]">
-                    {news.author?.name || "Admin Perusahaan"}
-                  </span>
-                </div>
+                <span className="font-semibold text-[#1E4738] text-[13px]">
+                  {news.author?.name || "Admin Perusahaan"}
+                </span>
               </div>
             </div>
 
+            {/* Cover Image - Menyesuaikan ukuran asli gambar yang diunggah */}
+            {news.cover_image_url && (
+              <div className="w-full rounded-[20px] overflow-hidden bg-gray-50/70 border border-[#eef5f0] shadow-2xs flex items-center justify-center">
+                <img
+                  src={news.cover_image_url}
+                  alt={sanitizeText(news.title)}
+                  className="w-full h-auto max-h-[650px] object-contain rounded-[20px]"
+                />
+              </div>
+            )}
+
             {/* Separator */}
-            <div className="h-[1px] w-full bg-[#f0f6f2]" />
+            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-[#e4eee7] to-transparent my-1" />
 
-            {/* News Content Body */}
-            <div className="text-[#374151] text-[15px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere]">
-              {sanitizeText(news.content)}
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="pt-4 border-t border-[#f0f6f2] flex justify-between items-center gap-3">
-              <button
-                onClick={() => router.push("/berita")}
-                className="flex items-center gap-2 text-[#356E3B] text-[13px] font-semibold hover:underline active:scale-95 transition-transform"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Lihat Berita Lainnya
-              </button>
-
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#eef5f0] text-[#1E4738] text-[12px] font-bold hover:bg-[#e2ede5] active:scale-95 transition-all shadow-xs"
-                aria-label="Bagikan Berita"
-              >
-                <Share2 className="w-3.5 h-3.5 text-[#1E4738]" />
-                <span>Bagikan</span>
-              </button>
+            {/* News Content Body - Rapi dan nyaman dibaca */}
+            <div className="space-y-4 text-[#2C3E35] text-[15px] sm:text-[16px] leading-[1.8] sm:leading-[1.85] tracking-[0.01em]">
+              {formattedParagraphs.length > 0 ? (
+                formattedParagraphs.map((paragraph, index) => (
+                  <p key={index} className="whitespace-pre-line break-words [overflow-wrap:anywhere]">
+                    {paragraph}
+                  </p>
+                ))
+              ) : (
+                <p className="whitespace-pre-line break-words [overflow-wrap:anywhere]">
+                  {sanitizeText(news.content)}
+                </p>
+              )}
             </div>
           </article>
         )}

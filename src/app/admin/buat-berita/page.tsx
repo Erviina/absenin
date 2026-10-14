@@ -1,11 +1,13 @@
 "use client";
 
-import { ChevronLeft, PlusCircle, Image as ImageIcon, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, PlusCircle, Image as ImageIcon, CheckCircle2, Eye, X, Calendar, User } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { TopBar } from "@/components/TopBar";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { createClient } from "@supabase/supabase-js";
+import { formatDate } from "@/lib/dateUtils";
+import { sanitizeText } from "@/lib/sanitize";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -34,6 +36,7 @@ function BuatBeritaForm() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(!!editingId);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -188,7 +191,20 @@ function BuatBeritaForm() {
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#f4f9f6] relative">
-      <TopBar title={editingId ? "Edit Berita" : "Buat Berita"} />
+      <TopBar 
+        title={editingId ? "Edit Berita" : "Buat Berita"} 
+        rightAction={
+          <button
+            type="button"
+            onClick={() => setIsPreviewOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[12px] font-semibold transition-all active:scale-95"
+            title="Pratinjau Berita Langsung"
+          >
+            <Eye className="w-4 h-4" />
+            <span>Pratinjau</span>
+          </button>
+        }
+      />
 
       <div className="flex-1 px-5 py-5 flex flex-col z-10 pb-32">
         <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col gap-5">
@@ -244,7 +260,12 @@ function BuatBeritaForm() {
             >
               {previewUrl ? (
                 <>
-                  <img src={previewUrl} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+                  <img 
+                    src={previewUrl} 
+                    alt="Preview" 
+                    className="absolute inset-0 w-full h-full object-cover" 
+                    style={{ objectFit: 'cover' }}
+                  />
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                     <span className="text-white text-[12px] font-bold">Ubah Gambar</span>
                   </div>
@@ -264,18 +285,132 @@ function BuatBeritaForm() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md p-5 bg-gradient-to-t from-[#f4f9f6] via-[#f4f9f6] to-transparent pb-8 z-20">
+      {/* Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md p-5 bg-gradient-to-t from-[#f4f9f6] via-[#f4f9f6] to-transparent pb-8 z-20 flex gap-3">
+        <button 
+          type="button"
+          onClick={() => setIsPreviewOpen(true)}
+          className="flex-1 py-3.5 rounded-full border border-[#356E3B] bg-white text-[#356E3B] font-bold text-[13px] flex items-center justify-center gap-1.5 hover:bg-[#eef5f0] active:scale-[0.98] transition-all shadow-xs"
+        >
+          <Eye className="w-4 h-4" />
+          Pratinjau
+        </button>
         <PrimaryButton 
           onClick={handleSubmit}
           disabled={isSubmitting || !title || !content}
           isLoading={isSubmitting}
           loadingText="Menyimpan..."
           icon={<CheckCircle2 className="w-5 h-5" />}
-          className="w-full"
+          className="flex-[1.5]"
         >
           {editingId ? "Simpan Perubahan" : "Unggah Sekarang"}
         </PrimaryButton>
       </div>
+
+      {/* Live Preview Modal */}
+      {isPreviewOpen && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div 
+            className="fixed inset-0"
+            onClick={() => setIsPreviewOpen(false)}
+          />
+          <div className="bg-[#fbfdfc] w-full max-w-md rounded-t-[32px] sm:rounded-[28px] max-h-[88vh] flex flex-col shadow-2xl relative z-10 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 border border-[#eef5f0] overflow-hidden">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#eef5f0] bg-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-[#eef5f0] flex items-center justify-center text-[#356E3B]">
+                  <Eye className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-bold text-[#1E4738]">Pratinjau Berita</h3>
+                  <p className="text-[11px] text-[#7d998c]">Tampilan langsung bagi pembaca</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsPreviewOpen(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+                aria-label="Tutup Pratinjau"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content Body Preview */}
+            <div className="p-4 overflow-y-auto flex-1">
+              <article className="bg-white rounded-[24px] p-5 border border-[#eef5f0] shadow-xs flex flex-col gap-4">
+                {/* Header: Kategori & Tanggal */}
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="bg-[#eef5f0] text-[#1E4738] text-[11px] font-bold px-2.5 py-0.5 rounded-full w-fit">
+                      {categories.find(c => c.id === categoryId)?.name || "Pengumuman"}
+                    </span>
+                    <div className="flex items-center gap-1.5 text-[#7d998c] text-[11px] font-medium">
+                      <Calendar className="w-3.5 h-3.5 shrink-0" />
+                      <span>{formatDate(new Date().toISOString())}</span>
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <h1 className="text-[#1E4738] text-[18px] sm:text-[20px] font-bold leading-snug break-words">
+                    {title.trim() ? sanitizeText(title) : "Judul Berita Akan Tampil di Sini"}
+                  </h1>
+
+                  {/* Author (Avatar dengan nama, tanpa 'diterbitkan oleh') */}
+                  <div className="flex items-center gap-2 pt-0.5 text-[12px] text-[#5C786C]">
+                    <div className="w-7 h-7 rounded-full bg-[#eef5f0] text-[#1E4738] flex items-center justify-center font-bold text-[11px] shrink-0 overflow-hidden border border-[#dce9df]">
+                      <User className="w-3.5 h-3.5 text-[#356E3B]" />
+                    </div>
+                    <span className="font-semibold text-[#1E4738]">
+                      Admin Perusahaan
+                    </span>
+                  </div>
+                </div>
+
+                {/* Cover Image - Menyesuaikan ukuran asli gambar */}
+                {previewUrl && (
+                  <div className="w-full rounded-[16px] overflow-hidden bg-gray-50/70 shadow-2xs border border-[#eef5f0] flex items-center justify-center">
+                    <img
+                      src={previewUrl}
+                      alt="Pratinjau Sampul"
+                      className="w-full h-auto max-h-[450px] object-contain rounded-[16px]"
+                    />
+                  </div>
+                )}
+
+                {/* Separator */}
+                <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-[#e4eee7] to-transparent my-0.5" />
+
+                {/* News Content - Rapi per paragraf */}
+                <div className="space-y-3.5 text-[#2C3E35] text-[14px] sm:text-[15px] leading-[1.8] tracking-[0.01em]">
+                  {content.trim() ? (
+                    sanitizeText(content)
+                      .split(/\n\s*\n/)
+                      .map(p => p.trim())
+                      .filter(Boolean)
+                      .map((paragraph, idx) => (
+                        <p key={idx} className="whitespace-pre-line break-words">
+                          {paragraph}
+                        </p>
+                      ))
+                  ) : (
+                    <p className="text-gray-400 italic">Isi pengumuman atau berita akan ditampilkan di sini...</p>
+                  )}
+                </div>
+              </article>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 border-t border-[#eef5f0] bg-white flex justify-end">
+              <button
+                onClick={() => setIsPreviewOpen(false)}
+                className="w-full py-2.5 rounded-full bg-[#356E3B] text-white text-[13px] font-semibold hover:bg-[#2A582F] transition-colors"
+              >
+                Kembali Mengedit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
