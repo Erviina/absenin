@@ -19,7 +19,6 @@ type Category = {
 
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
-import { sanitizeText } from "@/lib/sanitize";
 
 function BuatBeritaForm() {
   const router = useRouter();
