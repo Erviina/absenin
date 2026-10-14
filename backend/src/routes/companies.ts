@@ -509,6 +509,16 @@ router.delete("/employees/:employeeId", authenticate, async (req: Request, res: 
 
     // Send notification to the removed member
     try {
+      const removerRes = await db.execute(sql`
+        SELECT full_name, email FROM profiles WHERE id = ${user.id}
+      `);
+      const removerName = removerRes.rows[0]?.full_name || removerRes.rows[0]?.email || "Manajemen";
+
+      const empRes = await db.execute(sql`
+        SELECT full_name, email FROM profiles WHERE id = ${employeeId}
+      `);
+      const empName = empRes.rows[0]?.full_name || empRes.rows[0]?.email || "Anggota";
+
       await db.execute(sql`
         INSERT INTO notifications (
           id, company_id, recipient_id, type, title, message, is_read, created_at
@@ -519,7 +529,7 @@ router.delete("/employees/:employeeId", authenticate, async (req: Request, res: 
           ${employeeId},
           'member_removed',
           'Pemberitahuan Keanggotaan',
-          'Anda telah dikeluarkan dari organisasi/perusahaan ini oleh manajemen.',
+          ${`Keanggotaan atas nama ${empName} telah dinonaktifkan oleh ${removerName}.`},
           false,
           now()
         )

@@ -346,16 +346,72 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
         ON CONFLICT DO NOTHING
       `);
 
-      // Create notification
+      // Create notifications with member and approver info
       try {
+        const memberProfileRes = await tx.execute(sql`
+          SELECT full_name, email FROM profiles WHERE id = ${joinRequest.profile_id}
+        `);
+        const memberName = memberProfileRes.rows[0]?.full_name || memberProfileRes.rows[0]?.email || "Anggota";
+
+        const approverProfileRes = await tx.execute(sql`
+          SELECT full_name, email FROM profiles WHERE id = ${user.id}
+        `);
+        const approverName = approverProfileRes.rows[0]?.full_name || approverProfileRes.rows[0]?.email || "Admin";
+
+        const companyRes = await tx.execute(sql`
+          SELECT name FROM companies WHERE id = ${companyId}
+        `);
+        const companyName = companyRes.rows[0]?.name || "organisasi / perusahaan";
+
+        // 1. Notifikasi untuk anggota yang bergabung
         await tx.insert(notifications).values({
           company_id: companyId,
           recipient_id: joinRequest.profile_id as string,
           type: "JOIN_REQUEST_APPROVED",
           title: "Permintaan Bergabung Disetujui",
-          message: "Permintaan bergabung Anda telah disetujui. Selamat datang di organisasi / perusahaan!",
+          message: `Permintaan bergabung atas nama ${memberName} telah disetujui oleh ${approverName}. Selamat datang di ${companyName}!`,
           reference_id: joinRequest.id as string,
         });
+
+        // 2. Notifikasi untuk pengelola/admin perusahaan
+        const managersRes = await tx.execute(sql`
+          SELECT DISTINCT profile_id FROM company_members
+          WHERE company_id = ${companyId}
+            AND role IN ('owner', 'admin', 'manager')
+            AND status = 'active'
+            AND deleted_at IS NULL
+        `);
+
+        const adminsRes = await tx.execute(sql`
+          SELECT DISTINCT pr.profile_id
+          FROM profile_roles pr
+          JOIN profiles p ON p.id = pr.profile_id
+          WHERE p.company_id = ${companyId} AND pr.role = 'Admin'
+        `);
+
+        const recipientIds = new Set<string>();
+        managersRes.rows.forEach((r: any) => {
+          if (r.profile_id && r.profile_id !== joinRequest.profile_id) {
+            recipientIds.add(r.profile_id as string);
+          }
+        });
+        adminsRes.rows.forEach((r: any) => {
+          if (r.profile_id && r.profile_id !== joinRequest.profile_id) {
+            recipientIds.add(r.profile_id as string);
+          }
+        });
+
+        const adminNotifMessage = `${memberName} telah resmi bergabung ke ${companyName} setelah disetujui oleh ${approverName}.`;
+        for (const targetId of recipientIds) {
+          await tx.insert(notifications).values({
+            company_id: companyId,
+            recipient_id: targetId,
+            type: "JOIN_REQUEST_APPROVED",
+            title: "Anggota Baru Bergabung",
+            message: adminNotifMessage,
+            reference_id: joinRequest.id as string,
+          });
+        }
       } catch (notifErr) {
         console.error("Gagal mengirim notifikasi persetujuan bergabung:", notifErr);
       }
@@ -471,12 +527,23 @@ router.post("/:requestId/reject", authenticate, async (req: Request, res: Respon
 
       try {
         const companyName = (joinRequest.company_name as string) || "perusahaan";
+
+        const memberProfileRes = await tx.execute(sql`
+          SELECT full_name, email FROM profiles WHERE id = ${joinRequest.profile_id}
+        `);
+        const memberName = memberProfileRes.rows[0]?.full_name || memberProfileRes.rows[0]?.email || "Pengguna";
+
+        const reviewerProfileRes = await tx.execute(sql`
+          SELECT full_name, email FROM profiles WHERE id = ${user.id}
+        `);
+        const reviewerName = reviewerProfileRes.rows[0]?.full_name || reviewerProfileRes.rows[0]?.email || "Manajemen";
+
         await tx.insert(notifications).values({
           company_id: companyId,
           recipient_id: joinRequest.profile_id as string,
           type: "JOIN_REQUEST_REJECTED",
           title: "Permintaan Bergabung Ditolak",
-          message: `Maaf, permintaan bergabung Anda ke ${companyName} telah ditolak oleh manajemen.`,
+          message: `Maaf, permintaan bergabung atas nama ${memberName} ke ${companyName} telah ditolak oleh ${reviewerName}.`,
           reference_id: joinRequest.id as string,
         });
       } catch (notifErr) {

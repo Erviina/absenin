@@ -26,7 +26,7 @@ type IzinRequest = {
 
 export default function IzinPage() {
   const router = useRouter();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeCompany } = useCompany();
   const { showToast } = useDialog();
   const [user, setUser] = useState<any>(null);
 
@@ -284,6 +284,8 @@ export default function IzinPage() {
       const todayJakarta = getJakartaDate();
       const hasBlockingLeaveToday = leaveData.data.some((item: any) => {
         if (!item.created_at || item.deleted_at) return false;
+        // Hanya membatasi pengajuan jika ada di perusahaan yang sedang aktif dipilih
+        if (activeCompanyId && item.company_id !== activeCompanyId) return false;
         const itemDateJakarta = getJakartaDate(item.created_at);
         const isToday = itemDateJakarta === todayJakarta;
         const isBlockingStatus = item.status === "Menunggu" || item.status === "Disetujui";
@@ -614,6 +616,24 @@ export default function IzinPage() {
                       <div className="flex flex-col gap-0.5 pt-0.5">
                         <span className="text-[#356E3B] text-[15px] font-bold leading-tight">Izin Disetujui</span>
                         <span className="text-[#6B7280] text-[12px]">Persetujuan final.</span>
+                        {selectedIzin.approver_name && (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            {selectedIzin.approver_avatar ? (
+                              <img
+                                src={selectedIzin.approver_avatar}
+                                alt={selectedIzin.approver_name}
+                                className="w-5 h-5 rounded-full object-cover shrink-0"
+                              />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-[#356E3B] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                                {selectedIzin.approver_name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-[12px] font-semibold text-[#111827]">
+                              {selectedIzin.approver_name}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     
@@ -654,8 +674,26 @@ export default function IzinPage() {
                       <div className="flex flex-col gap-0.5 pt-0.5">
                         <span className="text-[#EF4444] text-[15px] font-bold leading-tight">Izin Ditolak</span>
                         <span className="text-[#6B7280] text-[12px]">Persetujuan final (Ditolak).</span>
+                        {selectedIzin.approver_name && (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            {selectedIzin.approver_avatar ? (
+                              <img
+                                src={selectedIzin.approver_avatar}
+                                alt={selectedIzin.approver_name}
+                                className="w-5 h-5 rounded-full object-cover shrink-0"
+                              />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-[#EF4444] text-white flex items-center justify-center text-[10px] font-bold shrink-0">
+                                {selectedIzin.approver_name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-[12px] font-semibold text-[#111827]">
+                              {selectedIzin.approver_name}
+                            </span>
+                          </div>
+                        )}
                         {selectedIzin.rejection_reason && (
-                          <div className="text-[12px] text-[#7F1D1D] bg-[#FEF2F2] border border-[#FEE2E2] rounded-lg p-2.5 mt-1.5 leading-snug">
+                          <div className="text-[12px] text-[#7F1D1D] bg-[#FEF2F2] border border-[#FEE2E2] rounded-lg p-2.5 mt-2 leading-snug">
                             <span className="font-semibold text-[#991B1B]">Alasan: </span>
                             {selectedIzin.rejection_reason}
                           </div>
@@ -738,9 +776,16 @@ export default function IzinPage() {
             <div className="flex flex-col gap-4 mt-2">
               
               <div className="flex justify-between items-center mb-1">
-                <h2 className="text-[#111827] text-[16px] font-bold">
-                  Daftar Pengajuan
-                </h2>
+                <div>
+                  <h2 className="text-[#111827] text-[16px] font-bold">
+                    Daftar Pengajuan
+                  </h2>
+                  {activeCompany && (
+                    <span className="text-[12px] text-[#6B7280]">
+                      {activeCompany.name}
+                    </span>
+                  )}
+                </div>
                 <Badge variant="company" size="sm">
                   {filteredList.length} Pengajuan
                 </Badge>
@@ -748,42 +793,43 @@ export default function IzinPage() {
 
               <div className="flex flex-col gap-4">
                 
-                {filteredList.map((req) => {
-                  const catName = categories.find(c => c.id === req.leave_category_id)?.name || "Lainnya";
-                  
-                  const dateStr = formatDateRange(req.start_date, req.end_date);
-                  
-                  return (
-                  <div 
-                    key={req.id} 
-                    onClick={() => setSelectedIzinId(req.id)}
-                    className="bg-white rounded-[20px] shadow-sm border border-[#F3F4F6] p-5 flex flex-col gap-3 cursor-pointer hover:border-[#356E3B] transition-colors"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex flex-col gap-1">
-                        <h3 className="text-[#111827] text-[16px] font-bold">{catName}</h3>
-                        <span className="text-[#6B7280] text-[13px]">{req.description}</span>
-                      </div>
-                      <Badge 
-                        variant={req.status === "Menunggu" ? "warning" : req.status === "Disetujui" ? "success" : "danger"} 
-                        size="sm" 
-                      >
-                        {req.status}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Calendar className="w-4 h-4 text-[#6EA874]" strokeWidth={2.5} />
-                      <span className="text-[#6B7280] text-[13px] font-medium">{dateStr}</span>
-                    </div>
-
-                    {req.status === "Ditolak" && req.rejection_reason && (
-                      <div className="text-[12px] text-[#7F1D1D] bg-[#FEF2F2] border border-[#FEE2E2] rounded-lg px-2.5 py-1.5 mt-0.5 leading-snug">
-                        <span className="font-semibold text-[#991B1B]">Alasan Penolakan: </span>
-                        {req.rejection_reason}
-                      </div>
-                    )}
+                {filteredList.length === 0 ? (
+                  <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
+                    <Calendar className="w-10 h-10 text-gray-300 mb-2.5" />
+                    <p className="text-[#111827] font-semibold text-[14px]">Belum Ada Pengajuan Izin</p>
+                    <p className="text-[#9CA3AF] text-[12px] mt-1">Riwayat permohonan izin atau cuti Anda akan ditampilkan di sini.</p>
                   </div>
-                )})}
+                ) : (
+                  filteredList.map((req) => {
+                    const catName = categories.find(c => c.id === req.leave_category_id)?.name || req.category_name || "Lainnya";
+                    
+                    const dateStr = formatDateRange(req.start_date, req.end_date);
+                    
+                    return (
+                    <div 
+                      key={req.id} 
+                      onClick={() => setSelectedIzinId(req.id)}
+                      className="bg-white rounded-[20px] shadow-sm border border-[#F3F4F6] p-5 flex flex-col gap-3 cursor-pointer hover:border-[#356E3B] transition-colors"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col gap-1">
+                          <h3 className="text-[#111827] text-[16px] font-bold">{catName}</h3>
+                          <span className="text-[#6B7280] text-[13px]">{req.description}</span>
+                        </div>
+                        <Badge 
+                          variant={req.status === "Menunggu" ? "warning" : req.status === "Disetujui" ? "success" : "danger"} 
+                          size="sm" 
+                        >
+                          {req.status}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Calendar className="w-4 h-4 text-[#6EA874]" strokeWidth={2.5} />
+                        <span className="text-[#6B7280] text-[13px] font-medium">{dateStr}</span>
+                      </div>
+                    </div>
+                  );
+                }))}
 
               </div>
             </div>
@@ -801,10 +847,10 @@ export default function IzinPage() {
               <AlertCircle className="w-7 h-7" strokeWidth={2.2} />
             </div>
             <h3 className="text-[18px] font-bold text-[#111827] mb-2">
-              Kamu Sudah Mengajukan Izin Hari Ini
+              Sudah Mengajukan Izin di {activeCompany?.name || "Perusahaan Ini"}
             </h3>
             <p className="text-[13px] text-[#4B5563] leading-relaxed mb-6">
-              Pengajuan izin kamu hari ini masih menunggu persetujuan atau sudah disetujui. Kamu bisa mengajukan kembali jika pengajuan sebelumnya ditolak.
+              Pengajuan izin kamu di {activeCompany?.name ? <strong className="text-[#111827]">{activeCompany.name}</strong> : "perusahaan ini"} masih menunggu persetujuan atau sudah disetujui hari ini. Kamu tetap bisa mengajukan izin di perusahaan lain yang belum memiliki pengajuan aktif hari ini.
             </p>
             <PrimaryButton
               type="button"

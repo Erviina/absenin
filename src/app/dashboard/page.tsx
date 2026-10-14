@@ -430,7 +430,7 @@ export default function DashboardPage() {
         >
           <Bell className="w-5 h-5 text-[#1E4738]" strokeWidth={1.8} />
           {unreadCount > 0 && (
-            <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#00a859] border-2 border-white rounded-full"></div>
+            <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#EF4444] border-2 border-white rounded-full"></div>
           )}
         </button>
       </div>
@@ -580,11 +580,15 @@ export default function DashboardPage() {
                   itemsToRender.push(
                     <div
                       key={`task-${task.id}`}
-                      onClick={() => router.push(`/tugas/${task.id}`)}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement)?.closest('button')) return;
+                        router.push(`/tugas/${task.id}`);
+                      }}
                       className="bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
                     >
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
                         <button
+                          type="button"
                           onClick={(e) => handleToggleTask(task.id, e)}
                           className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
                             task.completed

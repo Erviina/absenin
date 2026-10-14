@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
-import { Clock, CheckCircle2, AlignLeft, Calendar, Users, Share2 } from "lucide-react";
+import { Clock, CheckCircle2, AlignLeft, Calendar, Users, Share2, Check, RotateCcw } from "lucide-react";
 import { formatDate } from "@/lib/dateUtils";
 import { useDialog } from "@/context/DialogContext";
 import { shareContent } from "@/lib/shareUtils";
 import { Badge } from "@/components/Badge";
+import { PrimaryButton } from "@/components/PrimaryButton";
 
 export default function TugasDetailPage() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function TugasDetailPage() {
   
   const [task, setTask] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isToggling, setIsToggling] = useState(false);
 
   const handleShare = () => {
     if (!task) return;
@@ -26,6 +28,49 @@ export default function TugasDetailPage() {
       path: `/tugas/${id}`,
       onToast: showToast,
     });
+  };
+
+  const handleToggleComplete = async () => {
+    if (!task || isToggling) return;
+    const nextCompleted = !task.completed;
+    
+    // Optimistic update
+    setTask((prev: any) => ({ ...prev, completed: nextCompleted }));
+    setIsToggling(true);
+
+    try {
+      const token = localStorage.getItem("accessToken");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tasks/${id}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ completed: nextCompleted }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Gagal memperbarui status tugas");
+      }
+
+      showToast(
+        nextCompleted ? "Tugas berhasil diselesaikan!" : "Status tugas diubah menjadi belum selesai",
+        "success"
+      );
+    } catch (err: any) {
+      console.error(err);
+      // Rollback
+      setTask((prev: any) => ({ ...prev, completed: !nextCompleted }));
+      showToast(err.message || "Gagal memperbarui status tugas", "error");
+    } finally {
+      setIsToggling(false);
+    }
   };
 
   useEffect(() => {
@@ -107,7 +152,7 @@ export default function TugasDetailPage() {
         }
       />
 
-      <div className="px-6 pt-6 pb-20 flex flex-col gap-6">
+      <div className="px-6 pt-6 pb-32 flex flex-col gap-6">
         
         {/* Title Card */}
         <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
@@ -120,19 +165,30 @@ export default function TugasDetailPage() {
             </Badge>
           </div>
           
-          <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-50">
-            <div className="flex items-center gap-2">
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${task.completed ? 'bg-[#E8F3EB]' : 'bg-gray-100'}`}>
-                <CheckCircle2 className={`w-4 h-4 ${task.completed ? 'text-[#356E3B]' : 'text-gray-400'}`} />
+          <div className="flex items-center justify-between gap-2 mt-2 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={handleToggleComplete}
+              disabled={isToggling}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer ${
+                task.completed 
+                  ? 'bg-[#E8F3EB] text-[#356E3B] hover:bg-[#D1E5D5]' 
+                  : 'bg-gray-100 text-[#4B5563] hover:bg-gray-200'
+              }`}
+              title={task.completed ? "Klik untuk tandai belum selesai" : "Klik untuk selesaikan tugas"}
+            >
+              <div className={`flex items-center justify-center w-5 h-5 rounded-full ${task.completed ? 'bg-[#356E3B] text-white' : 'border-2 border-gray-400 bg-white'}`}>
+                {task.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
               </div>
-              <span className={`text-[13px] font-medium ${task.completed ? 'text-[#356E3B]' : 'text-gray-500'}`}>
+              <span className="text-[12.5px] font-bold">
                 {task.completed ? 'Sudah Selesai' : 'Belum Selesai'}
               </span>
-            </div>
+            </button>
 
             <button
+              type="button"
               onClick={handleShare}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F3EB] text-[#356E3B] text-[12px] font-bold hover:bg-[#D1E5D5] active:scale-95 transition-all shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F3EB] text-[#356E3B] text-[12px] font-bold hover:bg-[#D1E5D5] active:scale-95 transition-all shadow-xs cursor-pointer"
               aria-label="Bagikan Tugas"
             >
               <Share2 className="w-3.5 h-3.5 text-[#356E3B]" />
@@ -236,6 +292,22 @@ export default function TugasDetailPage() {
           </div>
         )}
 
+      </div>
+
+      {/* Bottom Sticky Action: Selesaikan Tugas */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 pb-6 bg-white/95 backdrop-blur-md border-t border-[#E8F3EB] z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+        <div className="max-w-md mx-auto">
+          <PrimaryButton
+            type="button"
+            onClick={handleToggleComplete}
+            isLoading={isToggling}
+            variant={task.completed ? "outline" : "primary"}
+            icon={task.completed ? <RotateCcw className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+            className="w-full h-12 text-[14px] font-bold shadow-md cursor-pointer"
+          >
+            {task.completed ? "Tandai Belum Selesai" : "Selesaikan Tugas"}
+          </PrimaryButton>
+        </div>
       </div>
     </div>
   );

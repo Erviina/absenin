@@ -417,6 +417,16 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
 
     // 4. Send notification to the user
     try {
+      const approverProfileRes = await db.execute(sql`
+        SELECT full_name, email FROM profiles WHERE id = ${user.id}
+      `);
+      const approverName = approverProfileRes.rows[0]?.full_name || approverProfileRes.rows[0]?.email || "Manajemen";
+
+      const memberProfileRes = await db.execute(sql`
+        SELECT full_name, email FROM profiles WHERE id = ${targetProfileId}
+      `);
+      const memberName = memberProfileRes.rows[0]?.full_name || memberProfileRes.rows[0]?.email || "Karyawan";
+
       await db.execute(sql`
         INSERT INTO notifications (
           id, company_id, recipient_id, type, title, message, reference_id, is_read, created_at
@@ -427,7 +437,7 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
           ${targetProfileId},
           'exit_approved',
           'Permohonan Keluar Disetujui',
-          'Permohonan keluar Anda telah dikonfirmasi dan disetujui oleh manajemen.',
+          ${`Permohonan keluar atas nama ${memberName} telah disetujui oleh ${approverName}.`},
           ${requestId},
           false,
           now()

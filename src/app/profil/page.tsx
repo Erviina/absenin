@@ -231,7 +231,6 @@ export default function ProfilPage() {
     localStorage.removeItem("user");
     localStorage.removeItem("activeCompanyId");
     localStorage.removeItem("companyMemberships");
-    showToast("Berhasil keluar dari akun", "info");
     router.push("/login");
   };
 

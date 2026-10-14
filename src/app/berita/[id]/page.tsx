@@ -204,8 +204,14 @@ export default function BeritaDetailPage() {
             <div className="h-[1px] w-full bg-[#f0f6f2]" />
 
             {/* News Content Body */}
-            <div className="text-[#374151] text-[15px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere]">
-              {sanitizeText(news.content)}
+            <div className="text-[#374151] text-[15px] sm:text-[16px] leading-[1.8] flex flex-col gap-4 break-words [overflow-wrap:anywhere]">
+              {sanitizeText(news.content)
+                .split(/\n{2,}/)
+                .map((paragraph, idx) => (
+                  <p key={idx} className="whitespace-pre-wrap leading-relaxed">
+                    {paragraph}
+                  </p>
+                ))}
             </div>
 
             {/* Bottom Actions */}

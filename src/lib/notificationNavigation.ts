@@ -70,6 +70,10 @@ export function getNotificationDestination(
       return { route: "/dashboard", targetCompanyId };
 
     case "JOIN_REQUEST_APPROVED":
+      // Untuk pengelola/admin, arahkan ke manajemen karyawan perusahaan
+      if (isManagement) {
+        return { route: "/admin/karyawan", targetCompanyId };
+      }
       // Pelamar diterima, tampilkan layar sukses bergabung terlebih dahulu sebelum ke beranda
       return { route: "/gabung-perusahaan?success=true", targetCompanyId };
 

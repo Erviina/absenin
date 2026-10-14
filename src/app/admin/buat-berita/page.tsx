@@ -17,6 +17,7 @@ type Category = {
 
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
+import { sanitizeText } from "@/lib/sanitize";
 
 function BuatBeritaForm() {
   const router = useRouter();
@@ -75,7 +76,7 @@ function BuatBeritaForm() {
             const item = data.data.find((n: any) => n.id === editingId);
             if (item) {
               setTitle(item.title);
-              setContent(item.content);
+              setContent(sanitizeText(item.content));
               setCategoryId(item.category?.id || "");
               setPreviewUrl(item.cover_image_url);
             }
@@ -141,9 +142,11 @@ function BuatBeritaForm() {
       const url = process.env.NEXT_PUBLIC_API_URL + (editingId ? `/news/${editingId}` : "/news");
       const method = editingId ? "PUT" : "POST";
       
+      const normalizedContent = sanitizeText(content);
+
       const payload: any = {
-        title,
-        content,
+        title: title.trim(),
+        content: normalizedContent,
         news_category_id: categoryId || null,
         cover_image_url: finalImageUrl || null,
         company_id: activeCompanyId,
@@ -225,12 +228,16 @@ function BuatBeritaForm() {
               <label className="text-[#1E4738] text-[13px] font-bold">
                 Isi Pengumuman <span className="text-red-500">*</span>
               </label>
+              <span className="text-[11px] text-[#7d998c] font-medium">
+                Gunakan Enter untuk baris/paragraf baru
+              </span>
             </div>
             <textarea 
-              placeholder="Informasi terkait pengumuman......"
+              placeholder="Tulis informasi atau pengumuman di sini... Tekan Enter untuk baris atau paragraf baru."
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-[14px] text-[#1E4738] placeholder-gray-400 outline-none focus:border-[#356E3B] transition-colors resize-none h-[150px]"
+              rows={8}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-[14px] text-[#1E4738] placeholder-gray-400 outline-none focus:border-[#356E3B] transition-colors resize-y min-h-[160px] leading-relaxed"
             ></textarea>
           </div>
 

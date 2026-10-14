@@ -186,9 +186,6 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 <span className="text-[#111827] text-[14px] sm:text-[15px] font-bold leading-tight truncate">
                   {data.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
                 </span>
-                <span className="text-[#5C786C] text-[11.5px] font-medium leading-none mt-1">
-                  Presensi Mandiri
-                </span>
               </div>
             </div>
             

@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 import { formatDate, formatDateRange } from "@/lib/dateUtils";
+import { parseMembershipNotification } from "@/lib/membershipNotificationUtils";
 
 export default function NotifikasiPage() {
   const router = useRouter();
@@ -216,6 +217,7 @@ export default function NotifikasiPage() {
           ) : filteredNotifications.length > 0 ? (
             filteredNotifications.map((notif) => {
               const { icon, bgIcon } = getIconAndCategory(notif.type);
+              const membershipInfo = parseMembershipNotification(notif.message, notif.type);
               return (
               <div
                 key={notif.id}
@@ -229,10 +231,15 @@ export default function NotifikasiPage() {
                 </div>
                 <div className="flex-1 flex flex-col justify-center gap-1">
                   <div className="flex justify-between items-start gap-2">
-                    <h3 className={`text-[14px] leading-tight ${notif.is_read ? 'text-[#4B5563] font-semibold' : 'text-[#111827] font-bold'}`}>
-                      {notif.title}
-                    </h3>
-                    <span className="text-[#9CA3AF] text-[11px] whitespace-nowrap">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      {!notif.is_read && (
+                        <span className="w-2 h-2 rounded-full bg-[#EF4444] shrink-0" />
+                      )}
+                      <h3 className={`text-[14px] leading-tight ${notif.is_read ? 'text-[#4B5563] font-semibold' : 'text-[#111827] font-bold'}`}>
+                        {notif.title}
+                      </h3>
+                    </div>
+                    <span className="text-[#9CA3AF] text-[11px] whitespace-nowrap shrink-0">
                       {getTimeAgo(notif.created_at)}
                     </span>
                   </div>
@@ -242,6 +249,14 @@ export default function NotifikasiPage() {
                     </p>
                     <ChevronRight className="w-5 h-5 text-[#D1D5DB] shrink-0" />
                   </div>
+                  {membershipInfo?.approverName && (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-[11px] font-semibold bg-[#eef5f0] text-[#356E3B] px-2 py-0.5 rounded-full border border-[#356E3B]/15 inline-flex items-center gap-1">
+                        <Check className="w-3 h-3 text-[#356E3B]" strokeWidth={2.5} />
+                        Disetujui oleh: {membershipInfo.approverName}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )})

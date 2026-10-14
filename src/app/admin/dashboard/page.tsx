@@ -13,13 +13,16 @@ import {
   Megaphone, 
   ClipboardList, 
   User, 
-  ChevronRight 
+  ChevronRight,
+  Check,
+  Bell
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
+import { parseMembershipNotification } from "@/lib/membershipNotificationUtils";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -245,11 +248,29 @@ export default function AdminDashboardPage() {
   const latePercent = Math.min(100 - onTimePercent, Math.round((lateCount / totalSlots) * 100));
   const leavePercent = Math.min(100 - onTimePercent - latePercent, Math.round((leaveCount / totalSlots) * 100));
 
+  const unreadNotifCount = activities.filter(a => !a.is_read).length;
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       
       {/* Header */}
-      <TopBar title="Manajemen" onBack={() => router.push("/dashboard")} />
+      <TopBar 
+        title="Manajemen" 
+        onBack={() => router.push("/dashboard")} 
+        rightAction={
+          <button
+            onClick={() => router.push("/notifikasi")}
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all flex items-center justify-center relative text-white cursor-pointer"
+            title="Notifikasi"
+            aria-label="Notifikasi"
+          >
+            <Bell className="w-5 h-5 text-white" />
+            {unreadNotifCount > 0 && (
+              <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#EF4444] border-2 border-[#356E3B] rounded-full"></div>
+            )}
+          </button>
+        }
+      />
 
       {/* Main Content */}
       <div className="flex-1 px-5 py-5 flex flex-col gap-4 z-10 relative">
@@ -464,6 +485,7 @@ export default function AdminDashboardPage() {
                   icon = <Megaphone className="w-[22px] h-[22px] text-[#9333EA]" strokeWidth={1.5} />;
                   bgIcon = "bg-[#f3e8ff]";
                 }
+                const membershipInfo = parseMembershipNotification(act.message, act.type);
 
                 return (
                   <div 
@@ -476,10 +498,23 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="flex flex-col flex-1 gap-1">
                       <div className="flex justify-between items-start gap-2">
-                        <h3 className="text-[#1E4738] text-[14px] font-bold leading-tight">{title}</h3>
-                        <span className="text-[10px] text-gray-400 whitespace-nowrap mt-0.5">{formatRelativeTime(act.created_at)}</span>
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                          {!act.is_read && (
+                            <span className="w-2 h-2 rounded-full bg-[#EF4444] shrink-0" />
+                          )}
+                          <h3 className="text-[#1E4738] text-[14px] font-bold leading-tight truncate">{title}</h3>
+                        </div>
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap mt-0.5 shrink-0">{formatRelativeTime(act.created_at)}</span>
                       </div>
                       <p className="text-[#7d998c] text-[12px] leading-[1.35] pr-2 line-clamp-2">{desc}</p>
+                      {membershipInfo?.approverName && (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] font-semibold bg-[#eef5f0] text-[#356E3B] px-2 py-0.5 rounded-full border border-[#356E3B]/15 inline-flex items-center gap-1">
+                            <Check className="w-2.5 h-2.5 text-[#356E3B]" strokeWidth={2.5} />
+                            Disetujui oleh: {membershipInfo.approverName}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
                   </div>
