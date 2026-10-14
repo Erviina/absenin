@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  ChevronLeft, RefreshCcw, ArrowRight, Plus, Minus, Target, 
-  Zap, HelpCircle, MapPin, Check, CheckCircle2, AlertTriangle, Info
+  ChevronLeft, RefreshCcw, ArrowRight, 
+  MapPin, Check, CheckCircle2, AlertTriangle, Info
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
@@ -319,7 +319,7 @@ export default function CheckinPage() {
 
       // Success
       if (photoUrl) URL.revokeObjectURL(photoUrl);
-      showToast(attendanceStatus === "CHECKED_IN" ? "Check-out berhasil!" : "Check-in berhasil!", "success");
+      showToast(attendanceStatus === "CHECKED_IN" ? "Presensi keluar berhasil!" : "Presensi masuk berhasil!", "success");
       router.push("/dashboard");
     } catch (err: any) {
       setSubmitError(err.message || "Terjadi kesalahan sistem");
@@ -373,15 +373,6 @@ export default function CheckinPage() {
     </div>
   );
 
-  if (isStatusLoading) {
-    return (
-      <div className="flex flex-col min-h-[100dvh] w-full bg-[#fbfdfc] relative items-center justify-center">
-        <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
-        <p className="text-[#4B5563] font-medium text-[14px]">Memeriksa status kehadiran...</p>
-      </div>
-    );
-  }
-
   const scheduleEval = evaluateSchedule(
     companySchedule,
     serverOffsetMs,
@@ -397,6 +388,35 @@ export default function CheckinPage() {
     }
   );
 
+  const isCheckOutMode = attendanceStatus === "CHECKED_IN";
+  const isCheckInBlocked = !isCheckOutMode && !scheduleEval.isCheckInOpen;
+  const titleText = isCheckOutMode ? "Keluar" : "Masuk";
+
+  const bottomDrawerRef = useRef<HTMLDivElement>(null);
+  const [bottomDrawerHeight, setBottomDrawerHeight] = useState<number>(240);
+
+  useEffect(() => {
+    if (!bottomDrawerRef.current) return;
+    const updateHeight = () => {
+      if (bottomDrawerRef.current) {
+        setBottomDrawerHeight(bottomDrawerRef.current.offsetHeight);
+      }
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(bottomDrawerRef.current);
+    return () => observer.disconnect();
+  }, [location, isCheckInBlocked]);
+
+  if (isStatusLoading) {
+    return (
+      <div className="flex flex-col min-h-[100dvh] w-full bg-[#fbfdfc] relative items-center justify-center">
+        <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
+        <p className="text-[#4B5563] font-medium text-[14px]">Memeriksa status kehadiran...</p>
+      </div>
+    );
+  }
+
   if (attendanceStatus === "CHECKED_OUT") {
     return (
       <div className="flex flex-col min-h-[100dvh] w-full bg-[#fbfdfc] relative">
@@ -407,9 +427,9 @@ export default function CheckinPage() {
           </div>
           <h2 className="text-[20px] font-bold text-[#111827] mb-2">Absensi Hari Ini Selesai</h2>
           <p className="text-[#6B7280] text-[14px] leading-relaxed mb-8 max-w-[320px]">
-            Anda telah berhasil melakukan Check-in dan Check-out untuk hari ini.
+            Anda telah berhasil melakukan presensi masuk dan keluar untuk hari ini.
             <br /><br />
-            Check-in berikutnya dibuka pada hari{" "}
+            Presensi masuk berikutnya dibuka pada hari{" "}
             <strong className="text-[#1E4738] font-bold">
               {nextSchedule.isTomorrow ? `Besok (${nextSchedule.dayName})` : nextSchedule.dayName}
             </strong>
@@ -430,11 +450,6 @@ export default function CheckinPage() {
       </div>
     );
   }
-
-  const isCheckOutMode = attendanceStatus === "CHECKED_IN";
-  const isCheckInBlocked = !isCheckOutMode && !scheduleEval.isCheckInOpen;
-  const titleText = isCheckOutMode ? "Check-out" : "Check-in";
-  const isLowAccuracy = location !== null && location.accuracy > 100;
 
   const handleTriggerSubmit = () => {
     if (!location || !location.lat || !location.lng) {
@@ -461,7 +476,7 @@ export default function CheckinPage() {
       {/* Header (Hidden in Step 2 because it's full screen camera) */}
       {step !== 2 && (
         <TopBar 
-          title={isCheckOutMode ? "Rekam Check-out" : "Rekam Kehadiran"} 
+          title={isCheckOutMode ? "Rekam Keluar" : "Rekam Kehadiran"} 
           onBack={handleBack} 
         />
       )}
@@ -475,7 +490,14 @@ export default function CheckinPage() {
           {/* Leaflet Map */}
           <div className="absolute inset-0 z-0">
             {location ? (
-              <LeafletMap center={[location.lat, location.lng]} />
+              <LeafletMap 
+                center={[location.lat, location.lng]} 
+                showControls={true}
+                showRecenter={true}
+                onRecenter={fetchLocation}
+                isLocating={isLocating}
+                bottomOffset={bottomDrawerHeight}
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-[#e6eedc]">
                 <span className="text-[#5C786C] font-medium text-sm">
@@ -485,23 +507,11 @@ export default function CheckinPage() {
             )}
           </div>
 
-          {/* Map Controls */}
-          <div className="absolute top-6 right-4 flex flex-col gap-3 z-10">
-            <div className="bg-white rounded-[16px] shadow-[0_4px_12px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden border border-gray-100">
-              <button className="w-[42px] h-[42px] flex items-center justify-center hover:bg-gray-50 border-b border-gray-100">
-                <Plus className="w-5 h-5 text-gray-700" />
-              </button>
-              <button className="w-[42px] h-[42px] flex items-center justify-center hover:bg-gray-50">
-                <Minus className="w-5 h-5 text-gray-700" />
-              </button>
-            </div>
-            <button className="w-[42px] h-[42px] bg-white rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.05)] flex items-center justify-center hover:bg-gray-50 border border-gray-100">
-              <Target className="w-5 h-5 text-gray-700" />
-            </button>
-          </div>
-
           {/* Bottom Sheet */}
-          <div className="absolute bottom-0 left-0 w-full bg-white rounded-t-[32px] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] p-6 pt-3 pb-8 z-20">
+          <div 
+            ref={bottomDrawerRef}
+            className="absolute bottom-0 left-0 w-full bg-white rounded-t-[32px] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] p-6 pt-3 pb-8 z-20"
+          >
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6" />
             
             {isLocating ? (
@@ -554,27 +564,6 @@ export default function CheckinPage() {
                   </div>
                 </div>
 
-                {/* Warning Banner jika Akurasi GPS > 100m */}
-                {isLowAccuracy && (
-                  <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-[16px] p-3 mb-4 text-amber-900 text-[12px]">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <div className="flex flex-col flex-1">
-                      <span className="font-bold mb-0.5">Peringatan: Akurasi GPS Kurang Presisi</span>
-                      <span className="text-amber-800 leading-relaxed text-[11px] mb-2">
-                        Toleransi sinyal lokasi saat ini ±{location.accuracy}m (melebihi batas aman 100m). Titik alamat presensi berpotensi bergeser dari posisi sebenarnya.
-                      </span>
-                      <button
-                        type="button"
-                        onClick={fetchLocation}
-                        className="self-start text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors"
-                      >
-                        <RefreshCcw className="w-3 h-3" />
-                        Perbarui Lokasi GPS
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {/* Warning Banner jika Check-in belum dibuka / bukan hari kerja */}
                 {isCheckInBlocked && (
                   <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-[14px] p-3 mb-4 text-amber-800 text-[12px] font-medium">
@@ -612,7 +601,7 @@ export default function CheckinPage() {
           {/* Camera Feed */}
           {cameraError ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#111] z-20 px-8 text-center">
-              <Zap className="w-12 h-12 text-red-500 mb-4 opacity-80" />
+              <AlertTriangle className="w-12 h-12 text-red-500 mb-4 opacity-80" />
               <p className="text-white font-bold text-lg mb-2">Kamera Gagal</p>
               <p className="text-gray-400 text-sm mb-6">{cameraError}</p>
               <PrimaryButton 
@@ -676,34 +665,19 @@ export default function CheckinPage() {
             <p className="text-white text-[13px] sm:text-[14px] font-medium mt-2.5 sm:mt-3 drop-shadow-md text-center shrink-0">
               Tempatkan wajah Anda pada Area Oval
             </p>
-            
-            <div className="mt-1.5 sm:mt-2 bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1 sm:py-1.5 rounded-full flex items-center gap-1.5 shrink-0 max-w-[95%]">
-              <div className="w-3 h-3 rounded-full border border-gray-400 flex items-center justify-center shrink-0">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#a1d6b2]" />
-              </div>
-              <span className="text-[10px] text-gray-200 truncate">Mode Mirror: Hasil foto sesuai cermin</span>
-            </div>
           </div>
 
           {/* Bottom Camera Controls - Guaranteed Visible & Safe-area Compliant */}
-          <div className="relative z-10 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom,1.25rem))] pt-2 sm:pt-3 px-8 sm:px-10 flex justify-between items-center w-full">
-            <button className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black/40 border border-white/20 flex items-center justify-center backdrop-blur-md shrink-0 active:scale-95 transition-transform">
-              <Zap className="w-5 h-5 text-white" />
-            </button>
-            
+          <div className="relative z-10 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom,1.25rem))] pt-2 sm:pt-3 px-8 sm:px-10 flex justify-center items-center w-full">
             <button 
               onClick={takePhoto} 
               disabled={!!cameraError}
               aria-label="Ambil Foto"
-              className="w-[68px] h-[68px] sm:w-[72px] sm:h-[72px] rounded-full border-[4px] border-[#a1d6b2] p-1 flex items-center justify-center transition-transform active:scale-90 disabled:opacity-50 disabled:active:scale-100 shrink-0 shadow-lg"
+              className="w-[68px] h-[68px] sm:w-[72px] sm:h-[72px] rounded-full border-[4px] border-[#a1d6b2] p-1 flex items-center justify-center transition-transform active:scale-90 disabled:opacity-50 disabled:active:scale-100 shrink-0 shadow-lg cursor-pointer"
             >
               <div className="w-full h-full bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center justify-center">
                 <div className="w-3 h-3 rounded-full bg-[#a1d6b2]" />
               </div>
-            </button>
-            
-            <button className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black/40 border border-white/20 flex items-center justify-center backdrop-blur-md shrink-0 active:scale-95 transition-transform">
-              <HelpCircle className="w-5 h-5 text-white" />
             </button>
           </div>
         </div>
@@ -818,12 +792,6 @@ export default function CheckinPage() {
                           )
                         )}
                       </div>
-                      {isLowAccuracy && (
-                        <div className="mt-2.5 flex items-start gap-1.5 p-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px]">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                          <span>Akurasi sinyal ±{location?.accuracy}m (melebihi batas 100m). Lokasi berpotensi kurang presisi.</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -851,11 +819,11 @@ export default function CheckinPage() {
             onClick={handleTriggerSubmit}
             disabled={isSubmitting || isCheckInBlocked}
             isLoading={isSubmitting}
-            loadingText={isCheckOutMode ? "Menyimpan Check-out..." : "Menyimpan..."}
+            loadingText={isCheckOutMode ? "Menyimpan Keluar..." : "Menyimpan Masuk..."}
             icon={<CheckCircle2 className="w-5 h-5" />}
             className="w-full"
           >
-            {isCheckOutMode ? "Simpan Check-out" : "Simpan Kehadiran"}
+            {isCheckOutMode ? "Simpan Keluar" : "Simpan Masuk"}
           </PrimaryButton>
         </div>
       )}
@@ -871,7 +839,7 @@ export default function CheckinPage() {
               Konfirmasi Pulang Lebih Awal
             </h3>
             <p className="text-[13px] text-[#4B5563] leading-relaxed mb-6">
-              Jam pulang perusahaan adalah pukul <strong className="text-[#111827] font-bold">{scheduleEval.endTimeFormatted} WIB</strong>. Apakah Anda yakin ingin melakukan check-out sekarang sebelum jam pulang kerja?
+              Jam pulang perusahaan adalah pukul <strong className="text-[#111827] font-bold">{scheduleEval.endTimeFormatted} WIB</strong>. Apakah Anda yakin ingin melakukan presensi keluar sekarang sebelum jam pulang kerja?
             </p>
             <div className="flex w-full gap-3">
               <button
@@ -890,7 +858,7 @@ export default function CheckinPage() {
                 icon={<Check className="w-4 h-4" strokeWidth={3} />}
                 className="flex-1"
               >
-                Ya, Check-out
+                Ya, Keluar
               </PrimaryButton>
             </div>
           </div>
@@ -908,7 +876,7 @@ export default function CheckinPage() {
               Akurasi GPS Rendah (±{location?.accuracy}m)
             </h3>
             <p className="text-[13px] text-[#4B5563] leading-relaxed mb-6">
-              Toleransi akurasi lokasi Anda saat ini ({location?.accuracy} meter) melebihi batas yang disarankan (&le; 100 meter). Hal ini dapat menyebabkan perbedaan titik atau alamat saat {isCheckOutMode ? "check-out" : "check-in"}.
+              Toleransi akurasi lokasi Anda saat ini ({location?.accuracy} meter) melebihi batas yang disarankan (&le; 100 meter). Hal ini dapat menyebabkan perbedaan titik atau alamat saat {isCheckOutMode ? "presensi keluar" : "presensi masuk"}.
               <br /><br />
               Pastikan GPS aktif dan berada di area terbuka untuk mendapatkan akurasi terbaik.
             </p>

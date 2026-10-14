@@ -426,7 +426,7 @@ export default function TugasPage() {
                       {selectedAssignees.map((assignee) => (
                         <div
                           key={assignee.id}
-                          className="bg-[#E8F3EB] border border-[#D1E5D5] text-[#356E3B] rounded-full pl-1.5 pr-2.5 py-1 flex items-center gap-1.5 text-[12px] font-bold shadow-xs"
+                          className="bg-[#E8F3EB] text-[#356E3B] rounded-full pl-1.5 pr-2.5 py-1 flex items-center gap-1.5 text-[12px] font-bold shadow-xs"
                         >
                           <div className="w-5 h-5 rounded-full bg-white text-[#356E3B] text-[10px] font-bold flex items-center justify-center overflow-hidden border border-[#D1E5D5] shrink-0">
                             {assignee.avatar_url ? (

@@ -63,25 +63,25 @@ export function CompanySwitcher({ compact = false, variant = "light" }: CompanyS
         return {
           label: "Business",
           icon: Briefcase,
-          className: "bg-blue-50 text-blue-700 border-blue-200/60",
+          className: "bg-blue-50 text-blue-700",
         };
       case "organization":
         return {
           label: "Organization",
           icon: Building2,
-          className: "bg-emerald-50 text-emerald-700 border-emerald-200/60",
+          className: "bg-emerald-50 text-emerald-700",
         };
       case "community":
         return {
           label: "Community",
           icon: Users,
-          className: "bg-purple-50 text-purple-700 border-purple-200/60",
+          className: "bg-purple-50 text-purple-700",
         };
       default:
         return {
           label: "Organization",
           icon: Building2,
-          className: "bg-gray-50 text-gray-700 border-gray-200/60",
+          className: "bg-gray-50 text-gray-700",
         };
     }
   };
@@ -92,26 +92,26 @@ export function CompanySwitcher({ compact = false, variant = "light" }: CompanyS
         return {
           label: "Owner",
           icon: Crown,
-          className: "bg-amber-50 text-amber-800 border-amber-200/80 font-bold",
+          className: "bg-amber-50 text-amber-800 font-bold",
         };
       case "admin":
         return {
           label: "Admin",
           icon: ShieldCheck,
-          className: "bg-emerald-50 text-emerald-800 border-emerald-200/80 font-semibold",
+          className: "bg-emerald-50 text-emerald-800 font-semibold",
         };
       case "manager":
         return {
           label: "Manager",
           icon: UserCheck,
-          className: "bg-sky-50 text-sky-800 border-sky-200/80 font-semibold",
+          className: "bg-sky-50 text-sky-800 font-semibold",
         };
       case "member":
       default:
         return {
           label: "Member",
           icon: Users,
-          className: "bg-slate-50 text-slate-600 border-slate-200/60 font-medium",
+          className: "bg-slate-50 text-slate-600 font-medium",
         };
     }
   };
@@ -260,12 +260,12 @@ export function CompanySwitcher({ compact = false, variant = "light" }: CompanyS
 
                       <div className="flex items-center gap-1.5 mt-1">
                         {/* Category Badge */}
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-[6px] border ${catInfo.className}`}>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full ${catInfo.className}`}>
                           {catInfo.label}
                         </span>
 
                         {/* Role Badge */}
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-[6px] border flex items-center gap-0.5 ${roleInfo.className}`}>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full flex items-center gap-0.5 ${roleInfo.className}`}>
                           <RoleIcon className="w-2.5 h-2.5" />
                           <span>{roleInfo.label}</span>
                         </span>

@@ -31,7 +31,7 @@ const getCustomIcon = (label: string) => new L.DivIcon({
       </svg>
       <div class="w-3.5 h-1 bg-black/25 rounded-full blur-[1px] -mt-0.5"></div>
       ${label ? `
-        <div class="bg-[#1E4738] text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md mt-1 whitespace-nowrap z-20 pointer-events-none border border-white/20">
+        <div class="bg-[#1E4738] text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md mt-1 whitespace-nowrap z-20 pointer-events-none">
           ${label}
         </div>
       ` : ""}

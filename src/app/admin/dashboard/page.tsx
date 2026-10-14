@@ -389,7 +389,7 @@ export default function AdminDashboardPage() {
               <div className="relative w-[48px] h-[48px] bg-[#f4f9f6] border border-[#eef5f0] rounded-[16px] flex items-center justify-center group-hover:bg-[#e6f0ea] transition-colors">
                 <item.icon className="w-[20px] h-[20px] text-[#356E3B]" strokeWidth={1.5} />
                 {typeof item.badge === "number" && item.badge > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1 bg-[#EF4444] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-[0_2px_5px_rgba(239,68,68,0.35)] border-2 border-white leading-none z-10 animate-in fade-in zoom-in-75 duration-200">
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1 bg-[#EF4444] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-[0_2px_5px_rgba(239,68,68,0.35)] leading-none z-10 animate-in fade-in zoom-in-75 duration-200">
                     {item.badge > 99 ? "99+" : item.badge}
                   </span>
                 )}

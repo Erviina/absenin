@@ -295,14 +295,14 @@ export default function DashboardPage() {
   const getRoleBadgeStyle = (role?: string | null) => {
     switch (role?.toLowerCase()) {
       case "owner":
-        return "bg-[#FFF7ED] text-[#C2410C] border-[#FDBA74] font-bold";
+        return "bg-[#FFF7ED] text-[#C2410C] font-bold";
       case "admin":
-        return "bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0] font-bold";
+        return "bg-[#ECFDF5] text-[#065F46] font-bold";
       case "manager":
-        return "bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD] font-bold";
+        return "bg-[#F0F9FF] text-[#0369A1] font-bold";
       case "member":
       default:
-        return "bg-[#F8FAFC] text-[#475569] border-[#E2E8F0] font-semibold";
+        return "bg-[#F8FAFC] text-[#475569] font-semibold";
     }
   };
 
@@ -358,7 +358,7 @@ export default function DashboardPage() {
       isBtnDisabled = true;
       btnLabel = `Buka ${scheduleEval.openTimeFormatted}`;
       btnColorClass = "bg-gray-400 text-white cursor-not-allowed";
-      btnHelperText = `Check-in dibuka pukul ${scheduleEval.openTimeFormatted} WIB (15 menit sebelum masuk ${scheduleEval.startTimeFormatted} WIB)`;
+      btnHelperText = `Presensi masuk dibuka pukul ${scheduleEval.openTimeFormatted} WIB (15 menit sebelum masuk ${scheduleEval.startTimeFormatted} WIB)`;
     } else {
       isBtnDisabled = false;
       btnLabel = "Masuk";
@@ -458,7 +458,7 @@ export default function DashboardPage() {
                   {activeCompany?.name || "Mode Personal"}
                 </span>
                 {activeCompany && (
-                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full border capitalize shrink-0 font-bold ${getRoleBadgeStyle(activeRole)}`}>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full capitalize shrink-0 font-bold ${getRoleBadgeStyle(activeRole)}`}>
                     {activeRole || "Member"}
                   </span>
                 )}
@@ -516,7 +516,7 @@ export default function DashboardPage() {
             <button 
               type="button"
               onClick={handleCtaClick}
-              title={btnHelperText || (attendanceStatus === "CHECKED_IN" ? "Rekam Check-out" : "Rekam Kehadiran")}
+              title={btnHelperText || (attendanceStatus === "CHECKED_IN" ? "Rekam Keluar" : "Rekam Kehadiran")}
               className={`${btnColorClass} rounded-full px-4 py-2.5 flex items-center gap-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] border-[3px] border-white transition-all`}
             >
               <MapPin className="w-4 h-4 text-white shrink-0" strokeWidth={2.5} />

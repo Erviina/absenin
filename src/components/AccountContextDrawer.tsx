@@ -57,14 +57,14 @@ export function AccountContextDrawer({
   const getRoleBadgeStyle = (role?: string | null) => {
     switch (role?.toLowerCase()) {
       case "owner":
-        return "bg-[#FFF7ED] text-[#C2410C] border-[#FDBA74] font-bold";
+        return "bg-[#FFF7ED] text-[#C2410C] font-bold";
       case "admin":
-        return "bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0] font-bold";
+        return "bg-[#ECFDF5] text-[#065F46] font-bold";
       case "manager":
-        return "bg-[#F0F9FF] text-[#0369A1] border-[#BAE6FD] font-bold";
+        return "bg-[#F0F9FF] text-[#0369A1] font-bold";
       case "member":
       default:
-        return "bg-[#F8FAFC] text-[#475569] border-[#E2E8F0] font-semibold";
+        return "bg-[#F8FAFC] text-[#475569] font-semibold";
     }
   };
 
@@ -271,7 +271,7 @@ export function AccountContextDrawer({
                             {m.company.name}
                           </span>
                           <div className="flex items-center gap-1.5 mt-1">
-                            <span className={`text-[10.5px] px-2.5 py-0.5 rounded-full border capitalize ${getRoleBadgeStyle(m.role)}`}>
+                            <span className={`text-[10.5px] px-2.5 py-0.5 rounded-full capitalize ${getRoleBadgeStyle(m.role)}`}>
                               {m.role}
                             </span>
                             <span className="text-[11px] text-[#9CA3AF]">•</span>

@@ -265,7 +265,7 @@ export function evaluateSchedule(
   if (!isWorkDay) {
     reason = `Hari ini (${jktParts.currentDayName}) bukan hari kerja perusahaan.`;
   } else if (!isTimeOpen) {
-    reason = `Check-in dibuka pukul ${openTimeFormatted} WIB (15 menit sebelum jam masuk ${startTimeFormatted} WIB).`;
+    reason = `Presensi masuk dibuka pukul ${openTimeFormatted} WIB (15 menit sebelum jam masuk ${startTimeFormatted} WIB).`;
   }
 
   // Check-out sebelum jam pulang
