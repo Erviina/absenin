@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { ChevronLeft, ShieldCheck, MapPin, ExternalLink, Info, Plus, Minus, RefreshCcw } from "lucide-react";
+import { ChevronLeft, ShieldCheck, MapPin, ExternalLink, Info, RefreshCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { TopBar } from "@/components/TopBar";
@@ -192,7 +192,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
               </div>
             </div>
             
-            <div className="bg-white border border-[#E8F0EA] rounded-full px-3 py-1.5 flex items-center shrink-0 shadow-2xs">
+            <div className="bg-[#f4f9f6] rounded-full px-3 py-1.5 flex items-center shrink-0">
               <span className="text-[#6B7280] text-[11px] font-semibold">Durasi:</span>
               <span className="text-[#111827] text-[11px] font-bold ml-1.5">{durasiKerja}</span>
             </div>
@@ -257,7 +257,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
 
                 <div className="flex items-center">
                   <span className="text-[10.5px] font-medium text-[#6B7280] bg-[#F1F5F9] px-2.5 py-0.5 rounded-full">
-                    Belum Checkout
+                    Belum Keluar
                   </span>
                 </div>
               </div>
@@ -267,42 +267,21 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
 
         {/* Peta Lokasi Presensi */}
         <div className="border border-[#E5E7EB] rounded-[24px] overflow-hidden flex flex-col">
-          <div className="px-5 py-4 flex justify-between items-center bg-white border-b border-[#E5E7EB]">
+          <div className="px-5 py-4 flex items-center bg-white border-b border-[#E5E7EB]">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[#4B5563]" strokeWidth={2.5} />
               <span className="text-[#111827] text-[14px] font-bold">Peta Lokasi Presensi</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {hasValidCheckInCoords && (
-                <div className="bg-[#E8F3EB] px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#356E3B]" />
-                  <span className="text-[#356E3B] text-[11px] font-bold">Masuk</span>
-                </div>
-              )}
-              {hasValidCheckOutCoords && (
-                <div className="bg-[#FFEDD5] px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
-                  <span className="text-[#EA580C] text-[11px] font-bold">Keluar</span>
-                </div>
-              )}
             </div>
           </div>
           
           <div className="w-full h-[240px] relative z-0">
             {hasValidCoords ? (
-              <>
-                <MapLocation markers={mapMarkers} />
-                
-                {/* Custom Map Controls Overlay (Visual only, to match design) */}
-                <div className="absolute right-3 bottom-3 z-10 flex flex-col gap-2">
-                  <button className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center text-[#4B5563] active:scale-95 transition-transform">
-                    <Plus className="w-5 h-5" strokeWidth={2.5} />
-                  </button>
-                  <button className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center text-[#4B5563] active:scale-95 transition-transform">
-                    <Minus className="w-5 h-5" strokeWidth={2.5} />
-                  </button>
-                </div>
-              </>
+              <MapLocation 
+                markers={mapMarkers} 
+                showControls={true}
+                controlsPosition="bottom-right"
+                showRecenter={true}
+              />
             ) : (
               <div className="w-full h-full bg-[#F9FAFB] flex flex-col items-center justify-center p-6 text-center">
                 <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
@@ -317,14 +296,14 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
           </div>
 
           <div className="p-5 bg-white flex flex-col gap-3">
-            {/* Info Check-in */}
+            {/* Info Masuk */}
             <div className="flex items-start gap-3">
               <div className="w-7 h-7 rounded-lg bg-[#E8F3EB] flex items-center justify-center shrink-0 mt-0.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-[#356E3B]" />
               </div>
               <div className="flex flex-col flex-1">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-[#1E4738] text-[11px] font-bold uppercase tracking-wider">Lokasi Check-in</span>
+                  <span className="text-[#1E4738] text-[11px] font-bold uppercase tracking-wider">Lokasi Masuk</span>
                 </div>
                 <span className="text-[#111827] text-[13px] font-semibold leading-tight mb-1">
                   {data.check_in_address || "Lokasi tidak diketahui"}
@@ -339,7 +318,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
               </div>
             </div>
 
-            {/* Info Check-out */}
+            {/* Info Keluar */}
             {data.check_out_time && (
               <div className="flex items-start gap-3 border-t border-gray-100 pt-3">
                 <div className="w-7 h-7 rounded-lg bg-[#FFEDD5] flex items-center justify-center shrink-0 mt-0.5">
@@ -347,7 +326,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 </div>
                 <div className="flex flex-col flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[#EA580C] text-[11px] font-bold uppercase tracking-wider">Lokasi Check-out</span>
+                    <span className="text-[#EA580C] text-[11px] font-bold uppercase tracking-wider">Lokasi Keluar</span>
                   </div>
                   <span className="text-[#111827] text-[13px] font-semibold leading-tight mb-1">
                     {data.check_out_address || "Lokasi tidak diketahui"}
@@ -374,7 +353,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
             <div className="flex-1 flex flex-col gap-2">
               <span className="text-[12px] font-bold text-[#4B5563]">Masuk</span>
               {data.check_in_photo_url ? (
-                <img src={data.check_in_photo_url} alt="Foto Check-in" className="w-full aspect-[3/4] object-cover rounded-[16px] bg-gray-100" />
+                <img src={data.check_in_photo_url} alt="Foto Masuk" className="w-full aspect-[3/4] object-cover rounded-[16px] bg-gray-100" />
               ) : (
                 <div className="w-full aspect-[3/4] bg-gray-100 rounded-[16px] flex items-center justify-center text-gray-400 text-[12px]">Tidak ada foto</div>
               )}
@@ -384,12 +363,12 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
               <span className="text-[12px] font-bold text-[#4B5563]">Keluar</span>
               {data.check_out_time ? (
                 data.check_out_photo_url ? (
-                  <img src={data.check_out_photo_url} alt="Foto Check-out" className="w-full aspect-[3/4] object-cover rounded-[16px] bg-gray-100" />
+                  <img src={data.check_out_photo_url} alt="Foto Keluar" className="w-full aspect-[3/4] object-cover rounded-[16px] bg-gray-100" />
                 ) : (
                   <div className="w-full aspect-[3/4] bg-gray-100 rounded-[16px] flex items-center justify-center text-gray-400 text-[12px]">Tidak ada foto</div>
                 )
               ) : (
-                <div className="w-full aspect-[3/4] border-2 border-dashed border-gray-200 rounded-[16px] flex items-center justify-center text-gray-400 text-[12px]">Belum Checkout</div>
+                <div className="w-full aspect-[3/4] border-2 border-dashed border-gray-200 rounded-[16px] flex items-center justify-center text-gray-400 text-[12px]">Belum Keluar</div>
               )}
             </div>
           </div>

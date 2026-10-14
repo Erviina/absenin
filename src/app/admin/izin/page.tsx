@@ -359,7 +359,7 @@ export default function KelolaIzinPage() {
                     {item.type.toLowerCase().includes("cuti") ? (
                       <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2.5 py-0.5 rounded-full shrink-0">Cuti</span>
                     ) : item.type.toLowerCase().includes("sakit") ? (
-                      <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 border border-[#ffedd5]">Izin Sakit</span>
+                      <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2.5 py-0.5 rounded-full shrink-0">Izin Sakit</span>
                     ) : (
                       <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2.5 py-0.5 rounded-full shrink-0">{item.type}</span>
                     )}
@@ -427,16 +427,16 @@ export default function KelolaIzinPage() {
                     {item.type.toLowerCase().includes("cuti") ? (
                       <span className="bg-[#e0f2fe] text-[#0ea5e9] text-[10px] font-semibold px-2.5 py-0.5 rounded-full">Cuti</span>
                     ) : item.type.toLowerCase().includes("sakit") ? (
-                      <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2.5 py-0.5 rounded-full border border-[#ffedd5]">Izin Sakit</span>
+                      <span className="bg-[#fff7ed] text-[#ea580c] text-[10px] font-semibold px-2.5 py-0.5 rounded-full">Izin Sakit</span>
                     ) : (
                       <span className="bg-[#f3f4f6] text-[#4b5563] text-[10px] font-semibold px-2.5 py-0.5 rounded-full">{item.type}</span>
                     )}
                     
                     {item.status === "Disetujui" && (
-                      <span className="bg-[#ecfdf5] border border-[#d1fae5] text-[#10b981] text-[11px] font-semibold px-3 py-0.5 rounded-full">Disetujui</span>
+                      <span className="bg-[#ecfdf5] text-[#10b981] text-[11px] font-semibold px-3 py-0.5 rounded-full">Disetujui</span>
                     )}
                     {item.status === "Ditolak" && (
-                      <span className="bg-[#fef2f2] border border-[#fee2e2] text-[#ef4444] text-[11px] font-semibold px-3 py-0.5 rounded-full">Ditolak</span>
+                      <span className="bg-[#fef2f2] text-[#ef4444] text-[11px] font-semibold px-3 py-0.5 rounded-full">Ditolak</span>
                     )}
                   </div>
                 </div>

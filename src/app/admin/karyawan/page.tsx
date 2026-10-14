@@ -727,7 +727,7 @@ function AdminKaryawanView() {
                         <span className="text-[#111827] text-[13px] font-bold truncate">{item.full_name}</span>
                         <span className="text-gray-400 text-[11px] truncate">{item.email}</span>
                       </div>
-                      <span className="text-amber-700 border border-amber-300 bg-[#fff8ef] text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
+                      <span className="text-amber-700 bg-[#fff8ef] text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
                         Menunggu Konfirmasi
                       </span>
                     </div>
@@ -841,7 +841,7 @@ function AdminKaryawanView() {
                      <span className="text-[#111827] text-[13px] font-bold truncate">{item.full_name}</span>
                      <span className="text-gray-400 text-[11px] truncate">{item.email}</span>
                    </div>
-                   <span className="text-amber-700 border border-amber-300 bg-[#fff8ef] text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
+                   <span className="text-amber-700 bg-[#fff8ef] text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0">
                      Menunggu
                    </span>
                  </div>

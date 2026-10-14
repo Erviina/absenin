@@ -121,7 +121,7 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
             <div className="mb-1 relative">
               {item.icon(isActive)}
               {"badge" in item && typeof item.badge === "number" && item.badge > 0 && (
-                <span className="absolute -top-1.5 -right-2 min-w-[17px] h-[17px] px-1 bg-[#EF4444] text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-sm border border-white leading-none">
+                <span className="absolute -top-1.5 -right-2 min-w-[17px] h-[17px] px-1 bg-[#EF4444] text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-sm leading-none">
                   {item.badge > 99 ? "99+" : item.badge}
                 </span>
               )}

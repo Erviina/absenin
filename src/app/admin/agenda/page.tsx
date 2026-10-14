@@ -852,7 +852,7 @@ export default function AdminAgendaPage() {
                 <h2 className="text-[16px] font-bold text-[#111827]">
                   {selectedDateStr ? `Agenda: ${selectedDateStr}` : "Semua Agenda Bulan Ini"}
                 </h2>
-                <div className="bg-[#E8F3EB] px-3 py-1.5 rounded-full border border-[#D1E5D5]">
+                <div className="bg-[#E8F3EB] px-3 py-1.5 rounded-full">
                   <span className="text-[#356E3B] text-[11px] font-bold">{displayedAgendas.length} Agenda</span>
                 </div>
               </div>

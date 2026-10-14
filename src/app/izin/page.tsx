@@ -504,7 +504,7 @@ export default function IzinPage() {
                 <Badge
                   variant={selectedIzin.status === "Menunggu" ? "warning" : selectedIzin.status === "Disetujui" ? "success" : "danger"}
                   size="md"
-                  dot
+                 
                 >
                   {selectedIzin.status}
                 </Badge>
@@ -555,21 +555,6 @@ export default function IzinPage() {
                 </div>
               )}
             </div>
-
-            {/* Rejection Alert Banner if status is Ditolak */}
-            {selectedIzin.status === "Ditolak" && (
-              <div className="bg-[#FEF2F2] rounded-[24px] p-5 border border-[#FEE2E2] flex items-start gap-3.5 shadow-sm">
-                <div className="w-9 h-9 rounded-full bg-[#FEE2E2] flex items-center justify-center shrink-0 text-[#EF4444] mt-0.5">
-                  <AlertCircle className="w-5 h-5" strokeWidth={2.5} />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[13px] font-bold text-[#991B1B]">Alasan Penolakan</span>
-                  <p className="text-[13px] text-[#7F1D1D] leading-relaxed">
-                    {selectedIzin.rejection_reason || "Tidak ada alasan penolakan yang dicantumkan."}
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* Tracking Status Card */}
             <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB]">
@@ -782,7 +767,6 @@ export default function IzinPage() {
                       <Badge 
                         variant={req.status === "Menunggu" ? "warning" : req.status === "Disetujui" ? "success" : "danger"} 
                         size="sm" 
-                        dot
                       >
                         {req.status}
                       </Badge>

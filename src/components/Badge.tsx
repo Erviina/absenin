@@ -45,14 +45,14 @@ export function Badge({
   ...props
 }: BadgeProps) {
   const variantClasses = {
-    success: "bg-[#E8F3EB] text-[#356E3B] border border-[#D1E5D5]",
-    warning: "bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]",
-    danger: "bg-[#FEF2F2] text-[#DC2626] border-[#FECACA]",
-    info: "bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]",
-    purple: "bg-[#FAF5FF] text-[#9333EA] border-[#E9D5FF]",
-    neutral: "bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]",
-    company: "bg-[#E0E7FF] text-[#4338CA] border-[#C7D2FE]",
-    personal: "bg-[#FEF3C7] text-[#D97706] border-[#FDE68A]",
+    success: "bg-[#E8F3EB] text-[#356E3B]",
+    warning: "bg-[#FEF3C7] text-[#D97706]",
+    danger: "bg-[#FEF2F2] text-[#DC2626]",
+    info: "bg-[#EFF6FF] text-[#2563EB]",
+    purple: "bg-[#FAF5FF] text-[#9333EA]",
+    neutral: "bg-[#F3F4F6] text-[#4B5563]",
+    company: "bg-[#E0E7FF] text-[#4338CA]",
+    personal: "bg-[#FEF3C7] text-[#D97706]",
   }[variant];
 
   const sizeClasses = {
