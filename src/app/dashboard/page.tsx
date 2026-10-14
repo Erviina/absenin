@@ -62,23 +62,21 @@ export default function DashboardPage() {
   } = useCompany();
 
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const [user, setUser] = useState<any>(() => {
-    if (currentUser) return currentUser;
-    if (typeof window !== "undefined") {
-      try {
-        const u = localStorage.getItem("user");
-        return u ? JSON.parse(u) : null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    setMounted(true);
     if (currentUser) {
       setUser(currentUser);
+    } else {
+      try {
+        const u = localStorage.getItem("user");
+        if (u) {
+          setUser(JSON.parse(u));
+        }
+      } catch {}
     }
   }, [currentUser]);
   const [news, setNews] = useState<any[]>([]);
@@ -421,7 +419,7 @@ export default function DashboardPage() {
             className="cursor-pointer shrink-0 relative group"
             title="Lihat Profil"
           >
-            {user?.avatarUrl && !avatarError ? (
+            {mounted && user?.avatarUrl && !avatarError ? (
               <img
                 src={user.avatarUrl}
                 alt="Avatar"
@@ -430,7 +428,7 @@ export default function DashboardPage() {
               />
             ) : (
               <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full flex items-center justify-center text-[#1E4738] font-bold text-[16px] border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 shadow-xs">
-                {user?.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+                {mounted && user?.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
               </div>
             )}
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a859] border-2 border-white rounded-full"></div>
@@ -441,7 +439,7 @@ export default function DashboardPage() {
               Selamat datang,
             </span>
             <h1 className="text-[#1E4738] text-[17px] font-bold leading-tight truncate">
-              {user?.fullName || (isLoading ? "Memuat..." : "Pengguna")}
+              {mounted && user?.fullName ? user.fullName : (isLoading ? "Memuat..." : "Pengguna")}
             </h1>
           </div>
         </div>
