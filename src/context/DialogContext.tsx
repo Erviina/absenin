@@ -58,7 +58,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   const alertResolveRef = useRef<(() => void) | null>(null);
 
   // Show Toast
-  const showToast = useCallback((message: string, type: ToastType = "info", duration = 3500) => {
+  const showToast = useCallback((message: string, type: ToastType = "info", duration = 2000) => {
     const id = `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     setToasts((prev) => [...prev, { id, message, type }]);
 
@@ -164,7 +164,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
 
       {/* 1. TOAST NOTIFICATIONS CONTAINER */}
       {toasts.length > 0 && (
-        <div className="fixed top-5 left-4 right-4 z-[250] max-w-md mx-auto pointer-events-none flex flex-col gap-2.5">
+        <div className="fixed top-4 inset-x-0 z-[250] pointer-events-none flex flex-col items-center gap-2 px-4 max-w-md mx-auto">
           {toasts.map((toast) => {
             const isSuccess = toast.type === "success";
             const isError = toast.type === "error";
@@ -173,24 +173,24 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
             return (
               <div
                 key={toast.id}
-                className={`pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-[18px] shadow-xl border backdrop-blur-md animate-in slide-in-from-top-4 fade-in duration-200 transition-all ${
+                className={`pointer-events-auto flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.06)] border backdrop-blur-md animate-in slide-in-from-top-3 fade-in duration-200 transition-all max-w-[92%] ${
                   isSuccess
-                    ? "bg-[#1E4738] text-white border-[#2A5E4B]/80 shadow-emerald-950/20"
+                    ? "bg-[#EAF5EE] text-[#1E4738] border-[#B8DFC3]"
                     : isError
-                    ? "bg-[#881337] text-white border-rose-700/80 shadow-rose-950/20"
+                    ? "bg-[#FEF2F2] text-[#991B1B] border-[#FECACA]"
                     : isWarning
-                    ? "bg-[#78350F] text-white border-amber-700/80 shadow-amber-950/20"
-                    : "bg-[#1E293B] text-white border-slate-700/80 shadow-slate-950/20"
+                    ? "bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]"
+                    : "bg-[#F0FDF4] text-[#1E4738] border-[#B8DFC3]"
                 }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
                   <div className="shrink-0">
-                    {isSuccess && <CheckCircle2 className="w-5 h-5 text-emerald-300" strokeWidth={2.5} />}
-                    {isError && <AlertCircle className="w-5 h-5 text-rose-300" strokeWidth={2.5} />}
-                    {isWarning && <AlertTriangle className="w-5 h-5 text-amber-300" strokeWidth={2.5} />}
-                    {!isSuccess && !isError && !isWarning && <Info className="w-5 h-5 text-sky-300" strokeWidth={2.5} />}
+                    {isSuccess && <CheckCircle2 className="w-4 h-4 text-[#2D6A4F]" strokeWidth={2.5} />}
+                    {isError && <AlertCircle className="w-4 h-4 text-[#DC2626]" strokeWidth={2.5} />}
+                    {isWarning && <AlertTriangle className="w-4 h-4 text-[#D97706]" strokeWidth={2.5} />}
+                    {!isSuccess && !isError && !isWarning && <Info className="w-4 h-4 text-[#2D6A4F]" strokeWidth={2.5} />}
                   </div>
-                  <span className="text-[13px] font-medium leading-snug break-words">
+                  <span className="text-[12.5px] font-semibold leading-tight truncate">
                     {toast.message}
                   </span>
                 </div>
@@ -198,9 +198,17 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                   type="button"
                   onClick={() => removeToast(toast.id)}
                   aria-label="Tutup notifikasi"
-                  className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 opacity-70 hover:opacity-100 transition-opacity active:scale-95"
+                  className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 opacity-60 hover:opacity-100 transition-opacity active:scale-95 ml-0.5 ${
+                    isSuccess
+                      ? "text-[#1E4738]"
+                      : isError
+                      ? "text-[#991B1B]"
+                      : isWarning
+                      ? "text-[#92400E]"
+                      : "text-[#1E4738]"
+                  }`}
                 >
-                  <X className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+                  <X className="w-3.5 h-3.5" strokeWidth={2.5} />
                 </button>
               </div>
             );

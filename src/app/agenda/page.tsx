@@ -79,6 +79,25 @@ export function isAgendaUrl(str?: string | null): boolean {
   return false;
 }
 
+export function LocationPinIcon({ className = "w-[14px] h-[14px]", strokeWidth = 2, ...props }: React.SVGProps<SVGSVGElement> & { strokeWidth?: number }) {
+  return (
+    <svg 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth={strokeWidth} 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className={className} 
+      {...props}
+    >
+      <path d="M12 13V21" strokeWidth={2.5} />
+      <circle cx="12" cy="7.5" r="5.5" fill="currentColor" />
+      <circle cx="10.5" cy="6" r="1.3" fill="white" fillOpacity={0.45} />
+    </svg>
+  );
+}
+
 export function sortAgendaCategories<T extends { name: string }>(cats: T[]): T[] {
   return [...cats].sort((a, b) => {
     const isALainnya = /lainnya|lain-lain|other/i.test(a.name);
@@ -806,19 +825,12 @@ function AgendaPageContent() {
                               </div>
                             ) : (
                               <div className="flex items-center gap-2 min-w-0">
-                                <MapPin className="w-[14px] h-[14px] text-[#6B7280] shrink-0" strokeWidth={2.5} />
+                                <LocationPinIcon className="w-[14px] h-[14px] text-[#6B7280] shrink-0" />
                                 <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.link_or_location}>
                                   {agenda.link_or_location}
                                 </span>
                               </div>
                             )
-                          ) : agenda.notes ? (
-                            <div className="flex items-center gap-2 min-w-0">
-                              <FileText className="w-[14px] h-[14px] text-[#6B7280] shrink-0" strokeWidth={2.5} />
-                              <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.notes}>
-                                {agenda.notes}
-                              </span>
-                            </div>
                           ) : null}
                         </div>
                       </div>
@@ -990,7 +1002,7 @@ function AgendaPageContent() {
                     </>
                   ) : (
                     <>
-                      <MapPin className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
+                      <LocationPinIcon className="w-5 h-5 text-[#356E3B] shrink-0" />
                       <span className="text-[#374151] text-[14px] font-medium truncate flex-1">
                         {selectedAgendaDetail.link_or_location}
                       </span>
@@ -1001,7 +1013,12 @@ function AgendaPageContent() {
 
               {selectedAgendaDetail.notes && (
                 <div className="flex flex-col gap-1.5 bg-[#F9FAFB] p-4 rounded-[14px]">
-                  <h3 className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">Catatan Tambahan</h3>
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#356E3B] shrink-0" strokeWidth={2} />
+                    <h3 className="text-[12px] font-bold text-[#6B7280] uppercase tracking-wider">
+                      Catatan Tambahan
+                    </h3>
+                  </div>
                   <p className="text-[#374151] text-[14px] leading-relaxed whitespace-pre-wrap">
                     {selectedAgendaDetail.notes}
                   </p>

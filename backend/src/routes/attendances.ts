@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db";
 import { attendances, profiles, companies } from "../db/schema";
-import { eq, and, sql, isNull, desc } from "drizzle-orm";
+import { eq, and, or, sql, isNull, desc } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import multer from "multer";
 import { calculateHaversineDistance } from "../utils/haversine";
@@ -383,53 +383,6 @@ router.get("/", authenticate, async (req: AuthRequest, res: Response): Promise<a
   }
 });
 
-router.get("/:id", authenticate, async (req: AuthRequest, res: Response): Promise<any> => {
-  try {
-    const userId = req.user.id;
-    const id = req.params.id as string;
-
-    const detail = await db
-      .select({
-        id: attendances.id,
-        work_mode: attendances.work_mode,
-        check_in_time: attendances.check_in_time,
-        check_in_latitude: attendances.check_in_latitude,
-        check_in_longitude: attendances.check_in_longitude,
-        check_in_address: attendances.check_in_address,
-        check_in_photo_url: attendances.check_in_photo_url,
-        check_out_time: attendances.check_out_time,
-        check_out_latitude: attendances.check_out_latitude,
-        check_out_longitude: attendances.check_out_longitude,
-        check_out_address: attendances.check_out_address,
-        check_out_photo_url: attendances.check_out_photo_url,
-        created_at: attendances.created_at,
-        updated_at: attendances.updated_at
-      })
-      .from(attendances)
-      .where(
-        and(
-          eq(attendances.id, id as string),
-          eq(attendances.profile_id, userId),
-          isNull(attendances.deleted_at)
-        )
-      )
-      .limit(1);
-
-    if (detail.length === 0) {
-      return res.status(404).json({ success: false, message: "Attendance not found" });
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: detail[0]
-    });
-
-  } catch (error: any) {
-    console.error("Get attendance detail error:", error);
-    return res.status(500).json({ success: false, message: "Internal server error." });
-  }
-});
-
 router.get("/management/summary", authenticate, async (req: AuthRequest, res: Response): Promise<any> => {
   try {
     const userId = req.user.id;
@@ -690,6 +643,71 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
 
   } catch (error: any) {
     console.error("Get management employee detail error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error." });
+  }
+});
+
+router.get("/:id", authenticate, async (req: AuthRequest, res: Response): Promise<any> => {
+  try {
+    const userId = req.user.id;
+    const id = req.params.id as string;
+
+    // UUID format guard
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ success: false, message: "Invalid attendance ID format" });
+    }
+
+    // User can view their own attendance (profile_id = userId),
+    // OR if user is in management (owner/admin/manager) in the company that owns the attendance record
+    const conditions = [
+      eq(attendances.id, id),
+      isNull(attendances.deleted_at),
+      or(
+        eq(attendances.profile_id, userId),
+        sql`EXISTS (
+          SELECT 1 FROM company_members cm 
+          WHERE cm.profile_id = ${userId} 
+            AND cm.company_id = ${attendances.company_id} 
+            AND cm.role IN ('owner', 'admin', 'manager') 
+            AND cm.status = 'active' 
+            AND cm.deleted_at IS NULL
+        )`
+      )
+    ];
+
+    const detail = await db
+      .select({
+        id: attendances.id,
+        work_mode: attendances.work_mode,
+        check_in_time: attendances.check_in_time,
+        check_in_latitude: attendances.check_in_latitude,
+        check_in_longitude: attendances.check_in_longitude,
+        check_in_address: attendances.check_in_address,
+        check_in_photo_url: attendances.check_in_photo_url,
+        check_out_time: attendances.check_out_time,
+        check_out_latitude: attendances.check_out_latitude,
+        check_out_longitude: attendances.check_out_longitude,
+        check_out_address: attendances.check_out_address,
+        check_out_photo_url: attendances.check_out_photo_url,
+        created_at: attendances.created_at,
+        updated_at: attendances.updated_at
+      })
+      .from(attendances)
+      .where(and(...conditions))
+      .limit(1);
+
+    if (detail.length === 0) {
+      return res.status(404).json({ success: false, message: "Attendance not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: detail[0]
+    });
+
+  } catch (error: any) {
+    console.error("Get attendance detail error:", error);
     return res.status(500).json({ success: false, message: "Internal server error." });
   }
 });

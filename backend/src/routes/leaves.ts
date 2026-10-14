@@ -20,24 +20,44 @@ router.get("/categories", async (req: Request, res: Response) => {
   }
 });
 
-// Get user's leave requests
+// Get user's leave requests with approver info
 router.get("/", authenticate, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const tenant = await resolveTenant(req, user.id);
 
-    const conditions = [eq(leaveRequests.profile_id, user.id), isNull(leaveRequests.deleted_at)];
-    if (tenant) {
-      conditions.push(eq(leaveRequests.company_id, tenant.companyId));
-    }
-    
-    // Fetch leave requests for this user, ordered by created_at desc
-    const userLeaves = await db.select()
-      .from(leaveRequests)
-      .where(and(...conditions))
-      .orderBy(desc(leaveRequests.created_at));
+    const companyCondition = tenant ? sql`AND (lr.company_id = ${tenant.companyId} OR lr.company_id IS NULL)` : sql``;
+
+    // Fetch leave requests for this user, ordered by created_at desc with approver profile info
+    const userLeaves = await db.execute(sql`
+      SELECT 
+        lr.id,
+        lr.profile_id,
+        lr.company_id,
+        lr.leave_category_id,
+        lr.start_date,
+        lr.end_date,
+        lr.description,
+        lr.attachment_url,
+        lr.status,
+        lr.approved_at,
+        lr.approved_by,
+        lr.rejection_reason,
+        lr.created_at,
+        lr.updated_at,
+        COALESCE(p_app.full_name, p_app.email) as approver_name,
+        p_app.avatar_url as approver_avatar,
+        COALESCE(lc.name, 'Lainnya') as category_name
+      FROM leave_requests lr
+      LEFT JOIN profiles p_app ON p_app.id = lr.approved_by
+      LEFT JOIN leave_categories lc ON lc.id = lr.leave_category_id
+      WHERE lr.profile_id = ${user.id} 
+        AND lr.deleted_at IS NULL
+        ${companyCondition}
+      ORDER BY lr.created_at DESC
+    `);
       
-    res.json({ success: true, data: userLeaves });
+    res.json({ success: true, data: userLeaves.rows });
   } catch (error) {
     console.error("Error fetching user leaves:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -69,16 +89,17 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
 
     // Use transaction with transaction-level advisory lock to serialize concurrent submissions and check daily quota
     const txResult = await db.transaction(async (tx) => {
-      // 1. Transaction-level advisory lock on (hashtext('leave_requests'), hashtext(userAuth.id))
-      // Serializes concurrent requests from the same user to prevent race conditions
+      // 1. Transaction-level advisory lock on (hashtext('leave_requests'), hashtext(userAuth.id || companyId))
+      // Serializes concurrent requests from the same user for this company
       await tx.execute(sql`
-        SELECT pg_advisory_xact_lock(hashtext('leave_requests'), hashtext(${userAuth.id}))
+        SELECT pg_advisory_xact_lock(hashtext('leave_requests'), hashtext(${userAuth.id} || ${companyId}))
       `);
 
-      // 2. Check if user already submitted an active leave request today with status 'Menunggu' or 'Disetujui' in Asia/Jakarta timezone
+      // 2. Check if user already submitted an active leave request today for THIS company with status 'Menunggu' or 'Disetujui' in Asia/Jakarta timezone
       const existingToday = await tx.execute(sql`
         SELECT id FROM leave_requests
         WHERE profile_id = ${userAuth.id}
+          AND company_id = ${companyId}
           AND status IN ('Menunggu', 'Disetujui')
           AND deleted_at IS NULL
           AND DATE(created_at AT TIME ZONE 'Asia/Jakarta') = DATE(now() AT TIME ZONE 'Asia/Jakarta')
@@ -88,7 +109,7 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
       if (existingToday.rows.length > 0) {
         return {
           conflict: true,
-          message: "Anda sudah mengajukan izin hari ini. Silakan ajukan kembali besok."
+          message: "Anda sudah mengajukan izin di perusahaan ini hari ini. Silakan ajukan kembali besok."
         };
       }
 
@@ -122,30 +143,54 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
 
     const createdLeave = txResult.data!;
 
-    // Add notification logic
-    const requesterRes = await db.execute(sql`SELECT full_name, email FROM profiles WHERE id = ${userAuth.id}`);
-    const requesterName = requesterRes.rows[0]?.full_name || requesterRes.rows[0]?.email || "Employee";
+    // Add notification logic for management
+    try {
+      const requesterRes = await db.execute(sql`SELECT full_name, email FROM profiles WHERE id = ${userAuth.id}`);
+      const requesterName = requesterRes.rows[0]?.full_name || requesterRes.rows[0]?.email || "Karyawan";
 
-    const managersAdminsRes = await db.execute(sql`
-      SELECT profile_id
-      FROM company_members
-      WHERE company_id = ${companyId} 
-        AND role IN ('owner', 'admin', 'manager')
-        AND profile_id != ${userAuth.id}
-        AND status = 'active'
-        AND deleted_at IS NULL
-    `);
+      const catRes = await db.execute(sql`
+        SELECT name FROM leave_categories WHERE id = ${validatedData.leave_category_id}
+      `);
+      const categoryName = catRes.rows[0]?.name || "Izin / Cuti";
 
-    if (managersAdminsRes.rows.length > 0) {
-      const notifData = managersAdminsRes.rows.map((userRow: any) => ({
-        company_id: companyId as string,
-        recipient_id: userRow.profile_id as string,
-        type: "LEAVE_PENDING",
-        title: "Pengajuan Izin Baru",
-        message: `${requesterName} mengajukan izin/cuti baru.`,
-        reference_id: createdLeave.id as string,
-      }));
-      await db.insert(notifications).values(notifData);
+      // Ambil seluruh pengelola (owner, admin, manager) di perusahaan
+      const managersRes = await db.execute(sql`
+        SELECT DISTINCT profile_id
+        FROM company_members
+        WHERE company_id = ${companyId} 
+          AND role IN ('owner', 'admin', 'manager')
+          AND status = 'active'
+          AND deleted_at IS NULL
+      `);
+
+      const adminsRes = await db.execute(sql`
+        SELECT DISTINCT pr.profile_id
+        FROM profile_roles pr
+        JOIN profiles p ON p.id = pr.profile_id
+        WHERE p.company_id = ${companyId} AND pr.role = 'Admin'
+      `);
+
+      const recipientIds = new Set<string>();
+      managersRes.rows.forEach((r: any) => {
+        if (r.profile_id) recipientIds.add(r.profile_id as string);
+      });
+      adminsRes.rows.forEach((r: any) => {
+        if (r.profile_id) recipientIds.add(r.profile_id as string);
+      });
+
+      if (recipientIds.size > 0) {
+        const notifData = Array.from(recipientIds).map((targetId: string) => ({
+          company_id: companyId as string,
+          recipient_id: targetId,
+          type: "LEAVE_PENDING",
+          title: "Pengajuan Izin Baru",
+          message: `${requesterName} telah mengajukan permohonan ${categoryName} baru.`,
+          reference_id: createdLeave.id as string,
+        }));
+        await db.insert(notifications).values(notifData);
+      }
+    } catch (notifErr) {
+      console.error("Gagal mengirim notifikasi pengajuan izin ke pengelola:", notifErr);
     }
 
     return res.status(201).json({ success: true, data: createdLeave });
@@ -178,12 +223,18 @@ router.get("/admin", authenticate, async (req: Request, res: Response): Promise<
     const companyLeaves = await db.execute(sql`
       SELECT 
         lr.id, lr.start_date, lr.end_date, lr.description, lr.attachment_url, lr.status, lr.created_at, lr.rejection_reason,
-        p.full_name as employee_name, p.avatar_url as employee_avatar,
-        lc.name as category_name
+        lr.approved_by, lr.approved_at,
+        COALESCE(p.full_name, p.email, 'Karyawan') as employee_name, 
+        p.avatar_url as employee_avatar,
+        COALESCE(p_app.full_name, p_app.email) as approver_name,
+        p_app.avatar_url as approver_avatar,
+        COALESCE(lc.name, 'Lainnya') as category_name
       FROM leave_requests lr
-      JOIN profiles p ON p.id = lr.profile_id
-      JOIN leave_categories lc ON lc.id = lr.leave_category_id
+      LEFT JOIN profiles p ON p.id = lr.profile_id
+      LEFT JOIN profiles p_app ON p_app.id = lr.approved_by
+      LEFT JOIN leave_categories lc ON lc.id = lr.leave_category_id
       WHERE lr.company_id = ${companyId}
+        AND lr.deleted_at IS NULL
       ORDER BY lr.created_at DESC
     `);
       

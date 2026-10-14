@@ -1,10 +1,11 @@
 "use client";
 
 import { TopBar } from "@/components/TopBar";
-import { Bell, Clock, Calendar, Users, Megaphone, Info } from "lucide-react";
+import { Bell, Clock, Calendar, Users, Megaphone, Info, UserCheck, ShieldCheck } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { formatDateTime } from "@/lib/dateUtils";
+import { parseMembershipNotification } from "@/lib/membershipNotificationUtils";
 
 export default function NotifikasiDetailPage() {
   const router = useRouter();
@@ -93,6 +94,7 @@ export default function NotifikasiDetailPage() {
   }
 
   const { icon, bgIcon, category } = getIconAndCategory(notif.type);
+  const membershipInfo = parseMembershipNotification(notif.message, notif.type);
 
   return (
     <div className="min-h-screen bg-[#fbfdfc]">
@@ -121,6 +123,45 @@ export default function NotifikasiDetailPage() {
           <p className="text-[#4B5563] text-[15px] leading-relaxed text-left w-full">
             {notif.message}
           </p>
+
+          {/* Kartu Informasi Keanggotaan (Siapa yang bergabung & siapa yang meng-approve) */}
+          {membershipInfo && (membershipInfo.memberName || membershipInfo.approverName) && (
+            <div className="w-full mt-6 bg-[#f7faf8] border border-[#d2e4d7] rounded-2xl p-4 text-left flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#356E3B] uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#356E3B]" />
+                  Informasi Keanggotaan
+                </span>
+                <span className="text-[11px] font-bold bg-[#eef5f0] text-[#356E3B] px-2.5 py-0.5 rounded-full border border-[#356E3B]/20">
+                  {membershipInfo.statusText}
+                </span>
+              </div>
+              
+              <div className="flex flex-col gap-2.5 pt-1">
+                {membershipInfo.memberName && (
+                  <div className="flex justify-between items-center text-[13px]">
+                    <span className="text-[#6B7280] flex items-center gap-1.5">
+                      <UserCheck className="w-4 h-4 text-[#6B7280]" />
+                      Anggota Bergabung:
+                    </span>
+                    <span className="font-bold text-[#111827]">{membershipInfo.memberName}</span>
+                  </div>
+                )}
+                {membershipInfo.memberName && membershipInfo.approverName && (
+                  <div className="w-full h-[1px] bg-[#e4ede7]" />
+                )}
+                {membershipInfo.approverName && (
+                  <div className="flex justify-between items-center text-[13px]">
+                    <span className="text-[#6B7280] flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-[#356E3B]" />
+                      Disetujui Oleh:
+                    </span>
+                    <span className="font-bold text-[#356E3B]">{membershipInfo.approverName}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
 import { formatDateRange } from "@/lib/dateUtils";
 
+import { useCompany } from "@/context/CompanyContext";
+
 // Types mapped from backend
 type IzinRequest = {
   id: string;
@@ -21,11 +23,13 @@ type IzinRequest = {
 
 export default function KelolaIzinPage() {
   const router = useRouter();
+  const { activeCompanyId } = useCompany();
   
   const [data, setData] = useState<IzinRequest[]>([]);
   const [selectAll, setSelectAll] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]); 
   const [activeFilter, setFilter] = useState<string>("Semua");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   // Modal and action states
@@ -45,18 +49,19 @@ export default function KelolaIzinPage() {
   // Fetch Leaves
   const fetchLeaves = async () => {
     try {
+      setIsLoading(true);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      const activeCompanyId = localStorage.getItem("activeCompanyId");
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const companyId = activeCompanyId || localStorage.getItem("activeCompanyId");
+      if (companyId) headers["x-company-id"] = companyId;
 
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/admin", {
         headers
       });
       const resData = await res.json();
-      if (resData.success) {
+      if (resData.success && Array.isArray(resData.data)) {
         const mappedData = resData.data.map((item: any) => ({
           id: item.id,
           name: item.employee_name || "Unknown",
@@ -79,12 +84,23 @@ export default function KelolaIzinPage() {
 
   useEffect(() => {
     fetchLeaves();
-  }, []);
+  }, [activeCompanyId]);
 
   const baseFilteredData = data.filter(item => {
+    // 1. Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchName = (item.name || "").toLowerCase().includes(q);
+      const matchReason = (item.reason || "").toLowerCase().includes(q);
+      if (!matchName && !matchReason) return false;
+    }
+
+    // 2. Category filter
     if (activeFilter === "Semua") return true;
-    if (activeFilter === "Cuti") return item.type.toLowerCase().includes("cuti");
-    if (activeFilter === "Izin Sakit") return item.type.toLowerCase().includes("sakit");
+    const typeLower = (item.type || "").toLowerCase();
+    if (activeFilter === "Cuti") return typeLower.includes("cuti");
+    if (activeFilter === "Sakit" || activeFilter === "Izin Sakit") return typeLower.includes("sakit");
+    if (activeFilter === "Izin") return typeLower.includes("izin") && !typeLower.includes("sakit");
     return true;
   });
 
@@ -282,14 +298,16 @@ export default function KelolaIzinPage() {
           <Search className="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" strokeWidth={2} />
           <input 
             type="text" 
-            placeholder="Cari nama karyawan..."
+            placeholder="Cari nama karyawan atau alasan..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-[#f4f6f5] rounded-[14px] pl-12 pr-4 py-3.5 text-[14px] text-[#1E4738] placeholder-gray-400 outline-none focus:ring-1 focus:ring-[#356E3B] transition-shadow border-none"
           />
         </div>
 
         {/* Tabs / Filters */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
-          {["Semua", "Cuti", "Izin Sakit"].map((filter) => (
+          {["Semua", "Izin", "Sakit", "Cuti"].map((filter) => (
             <button 
               key={filter}
               onClick={() => {

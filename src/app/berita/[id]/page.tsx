@@ -209,19 +209,29 @@ export default function BeritaDetailPage() {
             {/* Separator */}
             <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-[#e4eee7] to-transparent my-1" />
 
-            {/* News Content Body - Rapi dan nyaman dibaca */}
-            <div className="space-y-4 text-[#2C3E35] text-[15px] sm:text-[16px] leading-[1.8] sm:leading-[1.85] tracking-[0.01em]">
-              {formattedParagraphs.length > 0 ? (
-                formattedParagraphs.map((paragraph, index) => (
-                  <p key={index} className="whitespace-pre-line break-words [overflow-wrap:anywhere]">
-                    {paragraph}
-                  </p>
-                ))
-              ) : (
-                <p className="whitespace-pre-line break-words [overflow-wrap:anywhere]">
-                  {sanitizeText(news.content)}
-                </p>
-              )}
+            {/* News Content Body */}
+            <div className="text-[#374151] text-[15px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere]">
+              {sanitizeText(news.content)}
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="pt-4 border-t border-[#f0f6f2] flex justify-between items-center gap-3">
+              <button
+                onClick={() => router.push("/berita")}
+                className="flex items-center gap-2 text-[#356E3B] text-[13px] font-semibold hover:underline active:scale-95 transition-transform"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Lihat Berita Lainnya
+              </button>
+
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#eef5f0] text-[#1E4738] text-[12px] font-bold hover:bg-[#e2ede5] active:scale-95 transition-all shadow-xs"
+                aria-label="Bagikan Berita"
+              >
+                <Share2 className="w-3.5 h-3.5 text-[#1E4738]" />
+                <span>Bagikan</span>
+              </button>
             </div>
           </article>
         )}
