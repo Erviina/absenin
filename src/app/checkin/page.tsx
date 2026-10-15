@@ -298,6 +298,11 @@ export default function CheckinPage() {
 
     const fetchAttendanceStatus = async () => {
       try {
+        if (!activeCompanyId) {
+          setSubmitError("Silakan masuk atau bergabung ke perusahaan terlebih dahulu untuk melakukan presensi.");
+          setIsStatusLoading(false);
+          return;
+        }
         const token = localStorage.getItem("accessToken");
         if (!token) {
           router.push("/login");
@@ -358,6 +363,11 @@ export default function CheckinPage() {
     const token = localStorage.getItem("accessToken");
     if (!token) {
       router.push("/login");
+      return;
+    }
+
+    if (!activeCompanyId) {
+      setSubmitError("Silakan masuk atau bergabung ke perusahaan terlebih dahulu untuk melakukan presensi.");
       return;
     }
 

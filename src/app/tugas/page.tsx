@@ -40,6 +40,11 @@ export default function TugasPage() {
 
   useEffect(() => {
     const fetchTasks = async () => {
+      if (!activeCompanyId) {
+        setTasks([]);
+        setIsLoadingTasks(false);
+        return;
+      }
       setIsLoadingTasks(true);
       try {
         const token = localStorage.getItem("accessToken");
@@ -98,6 +103,10 @@ export default function TugasPage() {
   }, [activeCompanyId]);
 
   const toggleTask = async (id: string) => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const t = tasks.find(x => x.id === id);
     if (!t) return;
     
@@ -123,6 +132,10 @@ export default function TugasPage() {
   };
 
   const handleOpenAdd = () => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu untuk membuat tugas.", "warning");
+      return;
+    }
     setEditingTaskId(null);
     setTaskTitle("");
     setTaskDate(new Date().toISOString().split("T")[0]);
@@ -134,6 +147,10 @@ export default function TugasPage() {
   };
 
   const handleEditTask = (id: string) => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const t = tasks.find(x => x.id === id);
     if (t) {
       setTaskTitle(t.title);
@@ -176,6 +193,10 @@ export default function TugasPage() {
   });
 
   const handleDeleteTask = async (id: string) => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const taskToDelete = tasks.find(t => t.id === id);
     const confirmed = await showConfirm({
       title: "Hapus Tugas?",
@@ -211,6 +232,10 @@ export default function TugasPage() {
   };
 
   const handleSaveTask = async () => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     if (!taskTitle.trim()) return;
 
     if (activeTab === "group" && !activeCompanyId) {

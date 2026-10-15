@@ -74,6 +74,13 @@ export default function KehadiranPage() {
   };
 
   const fetchAttendances = async (silent = false) => {
+    if (!activeCompanyId) {
+      cachedAttendances = [];
+      setAttendances([]);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
     if (!silent && attendances.length === 0) {
       setIsLoading(true);
     }
@@ -151,6 +158,10 @@ export default function KehadiranPage() {
 
   const handleDownloadPDF = () => {
     setIsDownloadOpen(false);
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const doc = new jsPDF();
     doc.text("Rekap Kehadiran", 14, 15);
     
@@ -175,6 +186,10 @@ export default function KehadiranPage() {
 
   const handleDownloadExcel = () => {
     setIsDownloadOpen(false);
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const excelData = searchedAttendances.map((item, idx) => ({
       No: idx + 1,
       Tanggal: formatDate(item.check_in_time),
@@ -271,30 +286,27 @@ export default function KehadiranPage() {
         <div className="flex flex-col gap-4">
           
           {isLoading && attendances.length === 0 ? (
-            <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
-              <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
-              <p className="text-[#4B5563] font-medium text-[14px]">Memuat riwayat kehadiran...</p>
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
+              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+              <span className="text-[13px] font-medium text-[#7d998c]">Memuat riwayat kehadiran...</span>
             </div>
           ) : error && attendances.length === 0 ? (
-            <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
-              <XCircle className="w-12 h-12 text-red-400 mb-3" />
-              <p className="text-red-600 font-medium text-[15px]">Gagal Memuat Data</p>
-              <p className="text-[#9CA3AF] text-[13px] mt-1 mb-4">{error}</p>
+            <div className="py-8 text-center flex flex-col items-center justify-center">
+              <p className="text-red-600 font-medium text-[14px]">Gagal Memuat Data</p>
+              <p className="text-[#9CA3AF] text-[13px] mt-1 mb-3">{error}</p>
               <button 
                 onClick={() => fetchAttendances()}
-                className="px-6 h-10 rounded-full bg-[#356E3B] text-white font-bold text-[13px] flex items-center gap-2 hover:bg-[#1E4738] transition-colors"
+                className="px-5 h-9 rounded-full bg-[#356E3B] text-white font-medium text-[13px] flex items-center gap-2 hover:bg-[#1E4738] transition-colors"
               >
-                <RefreshCcw className="w-4 h-4" /> Coba Lagi
+                <RefreshCcw className="w-3.5 h-3.5" /> Coba Lagi
               </button>
             </div>
           ) : searchedAttendances.length === 0 ? (
-            <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
-              <CalendarDays className="w-12 h-12 text-[#D1D5DB] mb-3" />
-              <p className="text-[#4B5563] font-medium text-[15px]">Belum ada riwayat kehadiran.</p>
-              {appliedStartDate || appliedEndDate ? (
-                <p className="text-[#9CA3AF] text-[13px] mt-1">Coba sesuaikan rentang tanggal filter Anda.</p>
-              ) : null}
-            </div>
+            <p className="text-sm text-gray-500 text-center py-6">
+              {appliedStartDate || appliedEndDate || searchQuery
+                ? "Tidak ada riwayat kehadiran yang sesuai."
+                : "Belum ada riwayat kehadiran."}
+            </p>
           ) : (
             searchedAttendances.map((item) => (
               <div 
@@ -357,11 +369,13 @@ export default function KehadiranPage() {
         </div>
 
         {/* Footer Text */}
-        <p className="text-center text-[#9CA3AF] text-[13px] font-medium mt-6 mb-24">
-          {appliedStartDate && appliedEndDate 
-            ? `Menampilkan riwayat periode ${formatDateRange(appliedStartDate, appliedEndDate)}`
-            : "Menampilkan semua riwayat kehadiran"}
-        </p>
+        {searchedAttendances.length > 0 && (
+          <p className="text-center text-[#9CA3AF] text-[13px] font-medium mt-6 mb-2">
+            {appliedStartDate && appliedEndDate 
+              ? `Menampilkan riwayat periode ${formatDateRange(appliedStartDate, appliedEndDate)}`
+              : "Menampilkan semua riwayat kehadiran"}
+          </p>
+        )}
 
       </div>
 

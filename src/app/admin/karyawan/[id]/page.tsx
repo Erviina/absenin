@@ -713,24 +713,16 @@ export default function DetailKaryawanMonitoringPage() {
               </div>
 
               {isLoadingAttendance ? (
-                <div className="bg-white rounded-[20px] p-8 border border-gray-100 text-center text-gray-400 text-[13px] flex flex-col items-center justify-center gap-2">
-                  <RefreshCw className="w-5 h-5 animate-spin text-[#356E3B]" />
-                  <span>Memuat riwayat kehadiran...</span>
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2.5">
+                  <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                  <span className="text-[13px] font-medium text-[#7d998c]">Memuat riwayat kehadiran...</span>
                 </div>
               ) : attendanceError ? (
-                <div className="bg-red-50 rounded-[20px] p-5 border border-red-100 text-center text-red-600 text-[12px]">
-                  {attendanceError}
-                </div>
+                <div className="p-4 text-center text-red-500 text-[13px]">{attendanceError}</div>
               ) : attendances.length === 0 ? (
-                <div className="bg-white rounded-[20px] p-8 border border-gray-100 text-center flex flex-col items-center justify-center gap-2">
-                  <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-gray-400">
-                    <CalendarCheck className="w-6 h-6 stroke-1" />
-                  </div>
-                  <span className="text-[#111827] text-[13px] font-bold">Belum Ada Presensi</span>
-                  <span className="text-gray-400 text-[11px] max-w-[240px]">
-                    Karyawan belum melakukan presensi untuk periode waktu yang dipilih.
-                  </span>
-                </div>
+                <p className="text-sm text-gray-500 text-center py-6">
+                  Belum ada riwayat kehadiran.
+                </p>
               ) : (
                 attendances.map((att) => (
                   <div 
@@ -947,28 +939,20 @@ export default function DetailKaryawanMonitoringPage() {
               </div>
 
               {isLoadingTasks ? (
-                <div className="bg-white rounded-[20px] p-8 border border-gray-100 text-center text-gray-400 text-[13px] flex flex-col items-center justify-center gap-2">
-                  <RefreshCw className="w-5 h-5 animate-spin text-[#356E3B]" />
-                  <span>Memuat daftar tugas...</span>
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2.5">
+                  <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                  <span className="text-[13px] font-medium text-[#7d998c]">Memuat daftar tugas...</span>
                 </div>
               ) : tasksError ? (
-                <div className="bg-red-50 rounded-[20px] p-5 border border-red-100 text-center text-red-600 text-[12px]">
-                  {tasksError}
-                </div>
+                <div className="p-4 text-center text-red-500 text-[13px]">{tasksError}</div>
               ) : filteredTasks.length === 0 ? (
-                <div className="bg-white rounded-[20px] p-8 border border-gray-100 text-center flex flex-col items-center justify-center gap-2">
-                  <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-gray-400">
-                    <ListTodo className="w-6 h-6 stroke-1" />
-                  </div>
-                  <span className="text-[#111827] text-[13px] font-bold">Tidak Ada Tugas</span>
-                  <span className="text-gray-400 text-[11px] max-w-[240px]">
-                    {taskFilter === "today" 
-                      ? "Tidak ada tugas dengan tenggat hari ini."
-                      : taskFilter === "completed"
-                      ? "Belum ada tugas yang selesai."
-                      : "Belum ada tugas yang ditugaskan atau dikerjakan oleh karyawan ini."}
-                  </span>
-                </div>
+                <p className="text-sm text-gray-500 text-center py-6">
+                  {taskFilter === "today" 
+                    ? "Tidak ada tugas dengan tenggat hari ini."
+                    : taskFilter === "completed"
+                    ? "Belum ada tugas yang selesai."
+                    : "Belum ada tugas yang ditugaskan."}
+                </p>
               ) : (
                 filteredTasks.map((task) => {
                   const todayJakarta = new Intl.DateTimeFormat("en-CA", {
@@ -1093,26 +1077,18 @@ export default function DetailKaryawanMonitoringPage() {
 
             {/* Agenda List */}
             {isLoadingAgendas ? (
-              <div className="bg-white rounded-[20px] p-8 border border-gray-100 text-center text-gray-400 text-[13px] flex flex-col items-center justify-center gap-2">
-                <RefreshCw className="w-5 h-5 animate-spin text-[#356E3B]" />
-                <span>Memuat agenda...</span>
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2.5">
+                <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                <span className="text-[13px] font-medium text-[#7d998c]">Memuat agenda...</span>
               </div>
             ) : agendasError ? (
-              <div className="bg-red-50 rounded-[20px] p-5 border border-red-100 text-center text-red-600 text-[12px]">
-                {agendasError}
-              </div>
+              <div className="p-4 text-center text-red-500 text-[13px]">{agendasError}</div>
             ) : filteredAgendas.length === 0 ? (
-              <div className="bg-white rounded-[20px] p-8 border border-gray-100 text-center flex flex-col items-center justify-center gap-2">
-                <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-gray-400">
-                  <Calendar className="w-6 h-6 stroke-1" />
-                </div>
-                <span className="text-[#111827] text-[13px] font-bold">Tidak Ada Agenda</span>
-                <span className="text-gray-400 text-[11px] max-w-[240px]">
-                  {agendaFilter === "Semua"
-                    ? "Karyawan ini belum memiliki agenda yang tercatat."
-                    : `Tidak ada agenda dengan kategori "${agendaFilter}".`}
-                </span>
-              </div>
+              <p className="text-sm text-gray-500 text-center py-6">
+                {agendaFilter === "Semua"
+                  ? "Belum ada agenda."
+                  : `Tidak ada agenda dengan kategori "${agendaFilter}".`}
+              </p>
             ) : (
               filteredAgendas.map((agenda) => {
                 const categoryName = agenda.category?.name || "Acara";

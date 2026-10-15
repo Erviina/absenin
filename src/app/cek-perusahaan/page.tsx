@@ -157,10 +157,10 @@ function CekPerusahaanContent() {
   }
   
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] relative px-6 py-8">
+    <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] relative">
       
       {/* Top Bar with Back Button & Logo */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="h-[72px] px-6 flex items-center justify-between shrink-0">
         <button
           onClick={handleBack}
           aria-label="Kembali"
@@ -178,6 +178,8 @@ function CekPerusahaanContent() {
           />
         </div>
       </div>
+
+      <div className="flex-1 px-6 pb-8 pt-2 flex flex-col">
 
       {/* Illustration */}
       <div className="flex justify-center mb-8 w-full max-h-[220px]">
@@ -248,6 +250,7 @@ function CekPerusahaanContent() {
         >
           Nanti saja
         </button>
+      </div>
       </div>
 
     </div>

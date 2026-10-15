@@ -216,13 +216,12 @@ export default function NotifikasiPage() {
         {/* Notifications List */}
         <div className="flex flex-col gap-3">
           {isLoading ? (
-            <div className="flex justify-center py-10">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#356E3B]"></div>
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
+              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+              <span className="text-[13px] font-medium text-[#7d998c]">Memuat aktivitas...</span>
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center py-10 opacity-60">
-              <p className="text-[14px] text-red-500">{error}</p>
-            </div>
+            <p className="text-sm text-red-500 text-center py-6">{error}</p>
           ) : filteredNotifications.length > 0 ? (
             filteredNotifications.map((notif) => {
               const { icon, bgIcon } = getIconAndCategory(notif.type);
@@ -270,9 +269,11 @@ export default function NotifikasiPage() {
               </div>
             )})
           ) : (
-            <div className="flex flex-col items-center justify-center py-10 opacity-60">
-              <p className="text-[14px] text-[#6B7280]">Tidak ada aktivitas yang ditemukan.</p>
-            </div>
+            <p className="text-sm text-gray-500 text-center py-6">
+              {appliedStartDate || appliedEndDate || searchQuery || activeCategory !== "Semua"
+                ? "Tidak ada aktivitas yang sesuai."
+                : "Belum ada aktivitas."}
+            </p>
           )}
         </div>
       </div>

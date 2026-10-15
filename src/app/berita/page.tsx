@@ -288,37 +288,21 @@ export default function BeritaPage() {
         {/* News List */}
         <div className="flex flex-col gap-3.5 mt-1">
           {isLoading ? (
-            <div className="flex flex-col gap-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] animate-pulse">
-                  <div className="w-[84px] h-[84px] bg-gray-200 rounded-[16px] shrink-0" />
-                  <div className="flex flex-col flex-1 gap-2 justify-center">
-                    <div className="w-20 h-4 bg-gray-200 rounded-full" />
-                    <div className="w-full h-4 bg-gray-200 rounded" />
-                    <div className="w-3/4 h-3 bg-gray-200 rounded" />
-                  </div>
-                </div>
-              ))}
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
+              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+              <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
             </div>
           ) : filteredNews.length === 0 ? (
-            <div className="bg-white rounded-[24px] p-8 text-center border border-[#eef5f0] shadow-sm flex flex-col items-center gap-2 mt-2">
-              <div className="w-12 h-12 rounded-full bg-[#f4f9f6] flex items-center justify-center text-[#7d998c] mb-1">
-                <Newspaper className="w-6 h-6" />
-              </div>
-              <h3 className="text-[#1E4738] text-[15px] font-bold">
-                {hasActiveFilters ? "Tidak Ada Berita yang Cocok" : "Belum Ada Berita"}
-              </h3>
-              <p className="text-[#7d998c] text-[12px] max-w-xs">
-                {hasActiveFilters
-                  ? "Coba ubah kata kunci pencarian, kategori, atau tanggal yang dipilih."
-                  : "Belum ada berita atau pengumuman yang diterbitkan oleh perusahaan saat ini."}
+            <div className="py-8 text-center flex flex-col items-center justify-center">
+              <p className="text-sm text-gray-500">
+                {hasActiveFilters ? "Tidak ada berita yang cocok." : "Belum ada berita."}
               </p>
               {hasActiveFilters && (
                 <button
                   onClick={handleResetFilters}
-                  className="mt-3 px-4 py-2 rounded-full bg-[#1E4738] text-white text-[12px] font-semibold hover:bg-[#153428] transition-colors"
+                  className="mt-2 text-xs font-bold text-[#356E3B] hover:underline"
                 >
-                  Tampilkan Semua Berita
+                  Reset Filter
                 </button>
               )}
             </div>

@@ -319,11 +319,9 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
               </div>
 
               {attendances.length === 0 ? (
-                <div className="bg-white rounded-[24px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
-                  <CalendarDays className="w-12 h-12 text-[#D1D5DB] mb-3" />
-                  <p className="text-[#4B5563] font-medium text-[15px]">Tidak ada riwayat</p>
-                  <p className="text-[#9CA3AF] text-[13px] mt-1">Belum ada data kehadiran pada bulan ini.</p>
-                </div>
+                <p className="text-sm text-gray-500 text-center py-6">
+                  Belum ada data kehadiran pada bulan ini.
+                </p>
               ) : (
                 attendances.map((item) => {
                   const hasCheckInCoords = 

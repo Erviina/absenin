@@ -153,11 +153,14 @@ export default function KelolaBeritaPage() {
 
         <div className="flex flex-col gap-4 mt-2">
           {isLoading ? (
-            <div className="text-center py-10 text-gray-400 text-[13px]">Memuat berita...</div>
-          ) : filteredNews.length === 0 ? (
-            <div className="bg-white rounded-[24px] p-8 text-center border border-[#eef5f0] shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-              <p className="text-[#7d998c] text-[13px] font-medium">Belum ada berita yang diterbitkan.</p>
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
+              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+              <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
             </div>
+          ) : filteredNews.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">
+              Belum ada berita yang diterbitkan.
+            </p>
           ) : (
             filteredNews.map(item => (
               <div key={item.id} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#dce9df]">

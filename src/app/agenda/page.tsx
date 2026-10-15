@@ -232,6 +232,10 @@ function AgendaPageContent() {
 
   const fetchCategories = useCallback(async () => {
     try {
+      if (!activeCompanyId) {
+        setCategories([]);
+        return;
+      }
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -249,6 +253,12 @@ function AgendaPageContent() {
 
   const fetchAgendas = useCallback(async () => {
     try {
+      if (!activeCompanyId) {
+        setAgendasMap({});
+        setIsLoading(false);
+        setErrorMsg("");
+        return;
+      }
       setIsLoading(true);
       setErrorMsg("");
       const token = localStorage.getItem("accessToken");
@@ -396,6 +406,10 @@ function AgendaPageContent() {
   };
 
   const handleOpenAddModal = () => {
+    if (!activeCompanyId) {
+      showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu untuk membuat agenda.", "warning");
+      return;
+    }
     setFormId("");
     setFormScope("PERSONAL");
     setFormKegiatan("");
@@ -423,6 +437,10 @@ function AgendaPageContent() {
   };
 
   const handleOpenEditModal = (agenda: AgendaItem) => {
+    if (!activeCompanyId) {
+      showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     setFormId(agenda.id);
     const isCompany = (agenda.scope || "").toUpperCase() === "COMPANY" || agenda.type === "COMPANY";
     setFormScope(isCompany ? "COMPANY" : "PERSONAL");
@@ -445,6 +463,11 @@ function AgendaPageContent() {
 
   const handleSubmit = async () => {
     setSubmitError("");
+    if (!activeCompanyId) {
+      setSubmitError("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.");
+      showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     if (!formKegiatan.trim()) {
       setSubmitError("Judul agenda wajib diisi");
       return;
@@ -513,6 +536,10 @@ function AgendaPageContent() {
   };
 
   const handleDeleteAgenda = async (agendaId: string) => {
+    if (!activeCompanyId) {
+      showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const confirmed = await showConfirm({
       title: "Hapus Agenda?",
       message: "Apakah Anda yakin ingin menghapus agenda ini? Tindakan ini tidak dapat dibatalkan.",
@@ -638,9 +665,9 @@ function AgendaPageContent() {
 
       <div className="px-6 pt-6 flex flex-col flex-1">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center flex-1 py-12">
-            <div className="w-8 h-8 border-4 border-[#356E3B] border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-[#6B7280] text-[14px] font-medium">Memuat data agenda...</p>
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
+            <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+            <span className="text-[13px] font-medium text-[#7d998c]">Memuat data agenda...</span>
           </div>
         ) : errorMsg ? (
           <div className="flex flex-col items-center justify-center flex-1 py-12 px-4 text-center">
@@ -904,10 +931,9 @@ function AgendaPageContent() {
                 );
               })
               ) : (
-                <div className="flex flex-col items-center justify-center py-10 opacity-60">
-                  <CalendarIcon className="w-12 h-12 text-[#9CA3AF] mb-3" strokeWidth={1.5} />
-                  <p className="text-[#6B7280] font-medium">Tidak ada agenda.</p>
-                </div>
+                <p className="text-sm text-gray-500 text-center py-6">
+                  Belum ada agenda.
+                </p>
               )}
             </div>
           </>

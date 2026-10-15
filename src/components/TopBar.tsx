@@ -38,7 +38,7 @@ export function TopBar({
   };
 
   return (
-    <div className={`${bgColor} py-4 px-6 flex items-center justify-between sticky top-0 z-20 shrink-0`}>
+    <div className={`${bgColor} h-[72px] px-6 flex items-center justify-between sticky top-0 z-20 shrink-0`}>
       <button 
         onClick={handleBack}
         className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all z-10"

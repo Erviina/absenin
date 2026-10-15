@@ -64,6 +64,11 @@ export default function IzinPage() {
 
   // Fetch categories and leaves
   const fetchCategoriesAndLeaves = async () => {
+    if (!activeCompanyId) {
+      setCategories([]);
+      setPengajuanList([]);
+      return;
+    }
     try {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
@@ -122,6 +127,10 @@ export default function IzinPage() {
 
   // Handler form submit
   const handleSubmit = async () => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     if (isLoading || !startDate || !kategori) return;
     setIsLoading(true);
     
@@ -249,6 +258,10 @@ export default function IzinPage() {
 
   // Handler saat tombol plus (+) ditekan: verifikasi kuota sebelum membuka form
   const handleOpenAddIzin = async () => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu untuk mengajukan izin.", "warning");
+      return;
+    }
     if (isCheckingQuota) return;
     setIsCheckingQuota(true);
 
@@ -794,11 +807,9 @@ export default function IzinPage() {
               <div className="flex flex-col gap-4">
                 
                 {filteredList.length === 0 ? (
-                  <div className="bg-white rounded-[20px] p-8 border border-[#E5E7EB] shadow-sm flex flex-col items-center justify-center text-center">
-                    <Calendar className="w-10 h-10 text-gray-300 mb-2.5" />
-                    <p className="text-[#111827] font-semibold text-[14px]">Belum Ada Pengajuan Izin</p>
-                    <p className="text-[#9CA3AF] text-[12px] mt-1">Riwayat permohonan izin atau cuti Anda akan ditampilkan di sini.</p>
-                  </div>
+                  <p className="text-sm text-gray-500 text-center py-6">
+                    Belum ada pengajuan izin.
+                  </p>
                 ) : (
                   filteredList.map((req) => {
                     const catName = categories.find(c => c.id === req.leave_category_id)?.name || req.category_name || "Lainnya";

@@ -189,21 +189,26 @@ export default function DashboardPage() {
         }
 
         try {
-          const attendData = await attendRes.json();
-          if (attendData.success && attendData.data) {
-            setAttendanceStatus(attendData.data.status);
+          if (!activeCompanyId) {
             setAttendanceError(false);
-            if (attendData.data.company) {
-              setCompanySchedule(attendData.data.company);
-              const offset = calculateServerOffsetMs(attendData.data.company.server_time);
-              setServerOffsetMs(offset);
-            }
+            setAttendanceStatus("NOT_CHECKED_IN");
           } else {
-            setAttendanceError(true);
+            const attendData = await attendRes.json();
+            if (attendData.success && attendData.data) {
+              setAttendanceStatus(attendData.data.status);
+              setAttendanceError(false);
+              if (attendData.data.company) {
+                setCompanySchedule(attendData.data.company);
+                const offset = calculateServerOffsetMs(attendData.data.company.server_time);
+                setServerOffsetMs(offset);
+              }
+            } else {
+              setAttendanceError(true);
+            }
           }
         } catch (e) {
           console.error("Failed to parse attendance data", e);
-          setAttendanceError(true);
+          if (activeCompanyId) setAttendanceError(true);
         }
 
         try {
@@ -272,6 +277,11 @@ export default function DashboardPage() {
 
   const handleToggleTask = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      setIsContextDrawerOpen(true);
+      return;
+    }
     const target = tasks.find((t) => t.id === taskId);
     if (!target) return;
 
@@ -348,7 +358,12 @@ export default function DashboardPage() {
   let btnHelperText: string | null = null;
   let btnColorClass = "bg-[#1E4738] hover:bg-[#153428] text-white active:scale-95 cursor-pointer";
 
-  if (isAttendanceLoading) {
+  if (!activeCompanyId) {
+    isBtnDisabled = false;
+    btnLabel = "Pilih Perusahaan";
+    btnColorClass = "bg-[#356E3B] hover:bg-[#1E4738] text-white active:scale-95 cursor-pointer";
+    btnHelperText = "Pilih atau gabung perusahaan untuk melakukan presensi";
+  } else if (isAttendanceLoading) {
     isBtnDisabled = true;
     btnLabel = "Memuat...";
     btnColorClass = "bg-[#1E4738] text-white opacity-70 cursor-not-allowed";
@@ -388,6 +403,11 @@ export default function DashboardPage() {
   }
 
   const handleCtaClick = () => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu sebelum melakukan presensi.", "warning");
+      setIsContextDrawerOpen(true);
+      return;
+    }
     if (isBtnDisabled) {
       if (btnHelperText) {
         showToast(btnHelperText, "info");
@@ -407,10 +427,10 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
+    <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-32">
       
       {/* Top Header: Profil & Notifikasi */}
-      <div className="flex justify-between items-center px-6 pt-9 sm:pt-10 pb-3.5 bg-[#fbfdfc]">
+      <div className="h-[72px] px-6 flex justify-between items-center bg-[#fbfdfc] shrink-0 sticky top-0 z-20">
         {/* Avatar & Greeting */}
         <div className="flex items-center gap-3 min-w-0">
           <Link 
@@ -423,22 +443,22 @@ export default function DashboardPage() {
               <img
                 src={user.avatarUrl}
                 alt="Avatar"
-                className="w-[46px] h-[46px] rounded-full shrink-0 object-cover border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 group-hover:ring-[#1E4738]/30 transition-all shadow-xs"
+                className="w-10 h-10 rounded-full shrink-0 object-cover border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 group-hover:ring-[#1E4738]/30 transition-all shadow-xs"
                 onError={() => setAvatarError(true)}
               />
             ) : (
-              <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full flex items-center justify-center text-[#1E4738] font-bold text-[16px] border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 shadow-xs">
+              <div className="w-10 h-10 bg-[#d3e5d9] rounded-full flex items-center justify-center text-[#1E4738] font-bold text-[15px] border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 shadow-xs">
                 {mounted && user?.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
               </div>
             )}
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a859] border-2 border-white rounded-full"></div>
+            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#00a859] border-2 border-white rounded-full"></div>
           </Link>
 
           <div className="flex flex-col min-w-0">
-            <span className="text-[#5C786C] text-[12px] font-medium leading-none mb-1">
+            <span className="text-[#5C786C] text-[11.5px] font-medium leading-none mb-1">
               Selamat datang,
             </span>
-            <h1 className="text-[#1E4738] text-[17px] font-bold leading-tight truncate">
+            <h1 className="text-[#1E4738] text-[16px] font-bold leading-tight truncate">
               {mounted && user?.fullName ? user.fullName : (isLoading ? "Memuat..." : "Pengguna")}
             </h1>
           </div>
@@ -603,16 +623,15 @@ export default function DashboardPage() {
 
           <div className="flex flex-col gap-2.5">
             {isTasksAgendasLoading ? (
-              <div className="text-center text-[#7d998c] text-[13px] font-medium py-4 animate-pulse">
-                Memuat aktivitas...
+              <div className="flex flex-col items-center justify-center py-8 text-gray-400 gap-2.5">
+                <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                <span className="text-[13px] font-medium text-[#7d998c]">Memuat aktivitas...</span>
               </div>
             ) : resumeTab === "all" ? (
               todayTasks.length === 0 && todayAgendas.length === 0 ? (
-                <div className="bg-white rounded-[20px] p-6 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center">
-                  <p className="text-[#7d998c] text-[13px] font-medium">
-                    Belum ada tugas atau agenda untuk hari ini.
-                  </p>
-                </div>
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Belum ada tugas atau agenda untuk hari ini.
+                </p>
               ) : (
                 <div className="flex flex-col gap-4">
                   {/* Subheading Tugas */}
@@ -636,10 +655,9 @@ export default function DashboardPage() {
                     </div>
 
                     {todayTasks.length === 0 ? (
-                      <div className="bg-white rounded-[20px] p-4 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[12.5px] font-medium">
-                        <CheckCircle2 className="w-4 h-4 text-[#356E3B]" />
-                        <span>Semua tugas hari ini telah selesai!</span>
-                      </div>
+                      <p className="text-sm text-gray-500 text-center py-3">
+                        Semua tugas hari ini telah selesai!
+                      </p>
                     ) : (
                       <div className="flex flex-col gap-2.5">
                         {todayTasks.slice(0, 3).map((task) => (
@@ -711,10 +729,9 @@ export default function DashboardPage() {
                     </div>
 
                     {todayAgendas.length === 0 ? (
-                      <div className="bg-white rounded-[20px] p-4 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[12.5px] font-medium">
-                        <Calendar className="w-4 h-4 text-[#356E3B]" />
-                        <span>Belum ada agenda untuk hari ini.</span>
-                      </div>
+                      <p className="text-sm text-gray-500 text-center py-3">
+                        Belum ada agenda untuk hari ini.
+                      </p>
                     ) : (
                       <div className="flex flex-col gap-2.5">
                         {todayAgendas.slice(0, 3).map((agenda) => {
@@ -766,10 +783,9 @@ export default function DashboardPage() {
               )
             ) : resumeTab === "tasks" ? (
               todayTasks.length === 0 ? (
-                <div className="bg-white rounded-[20px] p-5 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[13px] font-medium">
-                  <CheckCircle2 className="w-4 h-4 text-[#356E3B]" />
-                  <span>Semua tugas hari ini telah selesai dikerjakan!</span>
-                </div>
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Semua tugas hari ini telah selesai dikerjakan!
+                </p>
               ) : (
                 <div className="flex flex-col gap-2.5">
                   {todayTasks.slice(0, 6).map((task) => (
@@ -827,10 +843,9 @@ export default function DashboardPage() {
               )
             ) : (
               todayAgendas.length === 0 ? (
-                <div className="bg-white rounded-[20px] p-5 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[13px] font-medium">
-                  <Calendar className="w-4 h-4 text-[#356E3B]" />
-                  <span>Belum ada agenda kegiatan untuk hari ini.</span>
-                </div>
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Belum ada agenda kegiatan untuk hari ini.
+                </p>
               ) : (
                 <div className="flex flex-col gap-2.5">
                   {todayAgendas.slice(0, 6).map((agenda) => {
@@ -905,11 +920,14 @@ export default function DashboardPage() {
 
           <div className="flex flex-col gap-4">
             {isLoading ? (
-              <div className="text-center text-[#7d998c] text-[13px] font-medium py-4 animate-pulse">Memuat berita...</div>
-            ) : news.length === 0 ? (
-              <div className="bg-white rounded-[20px] p-6 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-                <p className="text-[#7d998c] text-[13px] font-medium">Belum ada berita terbaru saat ini.</p>
+              <div className="flex flex-col items-center justify-center py-8 text-gray-400 gap-2.5">
+                <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
               </div>
+            ) : news.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">
+                Belum ada berita terbaru saat ini.
+              </p>
             ) : (
               news.map((item, idx) => (
                 <div 
