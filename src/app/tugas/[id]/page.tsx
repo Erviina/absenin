@@ -229,7 +229,7 @@ export default function TugasDetailPage() {
                 {task.assignees.map((assignee: any, idx: number) => {
                   const name = assignee.name || assignee.full_name || "Anggota Tim";
                   const initial = name.charAt(0).toUpperCase();
-                  const role = assignee.role ? assignee.role.toUpperCase() : "MEMBER";
+                  const role = (assignee.role || "KARYAWAN").toUpperCase() === "MEMBER" ? "KARYAWAN" : (assignee.role || "KARYAWAN").toUpperCase();
 
                   return (
                     <div key={assignee.id || idx} className="py-3 first:pt-0 last:pb-0 flex items-center gap-3">

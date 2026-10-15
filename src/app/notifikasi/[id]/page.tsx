@@ -5,7 +5,7 @@ import { Bell, Clock, Calendar, Users, Megaphone, Info, UserCheck, ShieldCheck }
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { formatDateTime } from "@/lib/dateUtils";
-import { parseMembershipNotification } from "@/lib/membershipNotificationUtils";
+import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
 
 export default function NotifikasiDetailPage() {
   const router = useRouter();
@@ -121,7 +121,7 @@ export default function NotifikasiDetailPage() {
           <div className="w-full h-[1px] bg-[#E5E7EB] mb-6"></div>
 
           <p className="text-[#4B5563] text-[15px] leading-relaxed text-left w-full">
-            {notif.message}
+            {cleanNotificationMessage(notif.message)}
           </p>
 
           {/* Kartu Informasi Keanggotaan (Siapa yang bergabung & siapa yang meng-approve) */}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { 
   ChevronLeft, 
   Building2, 
@@ -19,10 +20,9 @@ import {
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
-import { parseMembershipNotification } from "@/lib/membershipNotificationUtils";
+import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -464,7 +464,7 @@ export default function AdminDashboardPage() {
                 let icon = <ClipboardList className="w-[22px] h-[22px] text-[#D97706]" strokeWidth={1.5} />;
                 let bgIcon = "bg-[#fdf5e6]";
                 let title = act.title;
-                let desc = act.message;
+                let desc = cleanNotificationMessage(act.message);
 
                 if (act.type.startsWith('LEAVE')) {
                   icon = <ClipboardList className="w-[22px] h-[22px] text-[#D97706]" strokeWidth={1.5} />;

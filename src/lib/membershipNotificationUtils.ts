@@ -90,3 +90,22 @@ export function parseMembershipNotification(
 
   return null;
 }
+
+/**
+ * Merapikan teks notifikasi persetujuan agar cukup sampai kata "disetujui."
+ * Menghilangkan kalimat tambahan seperti "Selamat datang di organisasi / perusahaan!".
+ */
+export function cleanNotificationMessage(message?: string | null): string {
+  if (!message) return "";
+
+  const welcomeIndex = message.search(/\s*Selamat datang/i);
+  if (welcomeIndex !== -1) {
+    let beforeWelcome = message.slice(0, welcomeIndex).trim().replace(/[,;]\s*$/, "");
+    if (!beforeWelcome.endsWith(".") && !beforeWelcome.endsWith("!")) {
+      beforeWelcome += ".";
+    }
+    return beforeWelcome;
+  }
+
+  return message;
+}

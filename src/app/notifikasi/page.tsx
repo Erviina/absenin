@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 import { formatDate, formatDateRange } from "@/lib/dateUtils";
-import { parseMembershipNotification } from "@/lib/membershipNotificationUtils";
+import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
 
 export default function NotifikasiPage() {
   const router = useRouter();
@@ -253,7 +253,7 @@ export default function NotifikasiPage() {
                   </div>
                   <div className="flex justify-between items-center gap-2 mt-0.5">
                     <p className={`text-[13px] leading-snug line-clamp-2 ${notif.is_read ? 'text-[#9CA3AF]' : 'text-[#6B7280]'}`}>
-                      {notif.message}
+                      {cleanNotificationMessage(notif.message)}
                     </p>
                     <ChevronRight className="w-5 h-5 text-[#D1D5DB] shrink-0" />
                   </div>

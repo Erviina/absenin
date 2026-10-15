@@ -108,7 +108,7 @@ export function CompanySwitcher({ compact = false, variant = "light" }: CompanyS
       case "member":
       default:
         return {
-          label: "Member",
+          label: "Karyawan",
           icon: Users,
           className: "bg-slate-50 text-slate-600 font-medium",
         };

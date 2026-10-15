@@ -223,7 +223,7 @@ async function reverseGeocodeCoord(lat: number, lon: number): Promise<string | n
 
 export default function KelolaPerusahaanPage() {
   const router = useRouter();
-  const { showToast } = useDialog();
+  const { showToast, showConfirm } = useDialog();
   const { refreshMemberships } = useCompany();
 
   const [initialData, setInitialData] = useState({ name: "", phone: "", address: "", latitude: -6.9175, longitude: 107.6191 });
@@ -231,11 +231,16 @@ export default function KelolaPerusahaanPage() {
     name: "", phone: "", address: "", latitude: -6.9175, longitude: 107.6191, memberCount: 0, join_code: "",
     work_days: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
     work_start_time: "08:00",
-    work_end_time: "17:00"
+    work_end_time: "17:00",
+    category: null as any
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+
+  // Edit Informasi Perusahaan (Nama & Kontak) State
+  const [isEditInfoOpen, setIsEditInfoOpen] = useState(false);
+  const [infoForm, setInfoForm] = useState({ name: "", phone: "" });
 
   // Search Address State in Modal
   const [searchQuery, setSearchQuery] = useState("");
@@ -378,7 +383,8 @@ export default function KelolaPerusahaanPage() {
             join_code: data.data.join_code || "",
             work_days: fetchedWorkDays,
             work_start_time: fetchedStart,
-            work_end_time: fetchedEnd
+            work_end_time: fetchedEnd,
+            category: data.data.category || null
           });
           setInitialData({
             name: data.data.name || "",
@@ -471,6 +477,19 @@ export default function KelolaPerusahaanPage() {
       return;
     }
 
+    const confirmed = await showConfirm({
+      title: "Ganti Foto Perusahaan?",
+      message: "Apakah Anda yakin ingin memperbarui foto profil perusahaan ini?",
+      confirmText: "Ya, Ganti",
+      cancelText: "Batal",
+      type: "primary",
+      icon: "info"
+    });
+    if (!confirmed) {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     setIsUploadingImage(true);
     try {
       const token = localStorage.getItem("accessToken");
@@ -507,6 +526,76 @@ export default function KelolaPerusahaanPage() {
       }
     }
   };
+
+  const openEditInfo = () => {
+    setInfoForm({
+      name: companyData.name || "",
+      phone: companyData.phone || ""
+    });
+    setIsEditInfoOpen(true);
+  };
+
+  const handleSaveInfo = async () => {
+    if (!infoForm.name.trim()) {
+      showToast("Nama perusahaan tidak boleh kosong", "warning");
+      return;
+    }
+
+    const confirmed = await showConfirm({
+      title: "Simpan Informasi Perusahaan?",
+      message: "Apakah Anda yakin ingin menyimpan perubahan nama dan nomor kontak perusahaan?",
+      confirmText: "Ya, Simpan",
+      cancelText: "Batal",
+      type: "primary",
+      icon: "check"
+    });
+    if (!confirmed) return;
+
+    setIsSaving(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+      const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+      const activeCompanyId = localStorage.getItem("activeCompanyId");
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ 
+          name: infoForm.name.trim(), 
+          phone: infoForm.phone.trim(),
+          address: companyData.address,
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lng)
+        })
+      });
+      const data = await res.json();
+      if (res.status === 403) {
+        showToast("Akses ditolak: Anda bukan Admin perusahaan ini.", "error");
+      } else if (!data.success) {
+        showToast(data.message || "Gagal menyimpan perubahan.", "error");
+      } else {
+        showToast("Informasi perusahaan berhasil diperbarui.", "success");
+        setCompanyData(prev => ({ 
+          ...prev, 
+          name: infoForm.name.trim(), 
+          phone: infoForm.phone.trim()
+        }));
+        setInitialData(prev => ({ 
+          ...prev, 
+          name: infoForm.name.trim(), 
+          phone: infoForm.phone.trim()
+        }));
+        setIsEditInfoOpen(false);
+        await refreshMemberships().catch(console.error);
+      }
+    } catch (error) {
+      console.error(error);
+      showToast("Terjadi kesalahan jaringan.", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
   
   // Data state
   const [lat, setLat] = useState("-6.9175");
@@ -528,6 +617,16 @@ export default function KelolaPerusahaanPage() {
   const [isTambahKaryawanOpen, setIsTambahKaryawanOpen] = useState(false);
 
   const handleSaveJadwal = async () => {
+    const confirmed = await showConfirm({
+      title: "Simpan Jam Kerja?",
+      message: "Apakah Anda yakin ingin menerapkan hari dan jam operasional baru untuk perusahaan?",
+      confirmText: "Ya, Simpan",
+      cancelText: "Batal",
+      type: "primary",
+      icon: "check"
+    });
+    if (!confirmed) return;
+
     try {
       setIsSaving(true);
       const token = localStorage.getItem("accessToken");
@@ -576,6 +675,16 @@ export default function KelolaPerusahaanPage() {
   };
 
   const handleSimpan = async () => {
+    const confirmed = await showConfirm({
+      title: "Simpan Lokasi Kantor?",
+      message: "Apakah Anda yakin ingin memperbarui titik koordinat dan alamat kantor perusahaan ini?",
+      confirmText: "Ya, Simpan",
+      cancelText: "Batal",
+      type: "primary",
+      icon: "check"
+    });
+    if (!confirmed) return;
+
     try {
       setIsSaving(true);
       const token = localStorage.getItem("accessToken");
@@ -646,12 +755,18 @@ export default function KelolaPerusahaanPage() {
       <div className="flex-1 px-5 py-5 flex flex-col gap-4 z-10 pb-24">
         
         {/* Profile Header */}
-        <div className="flex items-center gap-4 mb-2">
-          <div className="relative cursor-pointer active:scale-95 transition-transform" onClick={() => !isUploadingImage && fileInputRef.current?.click()}>
-            <div className="w-[84px] h-[84px] rounded-full overflow-hidden border-[3px] border-[#356E3B]/20 ring-2 ring-[#356E3B]/10 shadow-sm bg-gray-100">
+        <div className="flex items-center gap-5 pt-1 pb-2">
+          <div className="relative">
+            <div 
+              className="w-[84px] h-[84px] rounded-full overflow-hidden border-[3px] border-[#356E3B]/20 ring-2 ring-[#356E3B]/10 shadow-sm bg-gray-100 cursor-pointer active:scale-95 transition-transform"
+              onClick={() => !isUploadingImage && fileInputRef.current?.click()}
+            >
               <img src={companyImage} alt="Company" className="w-full h-full object-cover" />
             </div>
-            <div className="absolute bottom-0 right-0 w-7 h-7 bg-[#1E4738] rounded-full border-[3px] border-white flex items-center justify-center">
+            <div 
+              className="absolute bottom-0 right-0 w-[26px] h-[26px] bg-[#1E4738] rounded-full border-[3px] border-white flex items-center justify-center cursor-pointer hover:bg-[#153428] transition-colors"
+              onClick={() => !isUploadingImage && fileInputRef.current?.click()}
+            >
               <Camera className="w-3.5 h-3.5 text-white" />
             </div>
             
@@ -670,208 +785,321 @@ export default function KelolaPerusahaanPage() {
               onChange={handleImageChange}
             />
           </div>
-          <div className="flex flex-col gap-0.5 flex-1">
-            <input 
-              type="text"
-              value={companyData.name}
-              onChange={(e) => setCompanyData({...companyData, name: e.target.value})}
-              className="text-[#111827] text-[17px] font-bold leading-tight bg-transparent border-b border-transparent focus:border-[#356E3B] outline-none w-full"
-              placeholder="Nama Perusahaan"
-            />
-            <div className="flex items-center gap-1.5 text-[#356E3B] mt-1">
-              <Users className="w-4 h-4" />
-              <span className="text-[12px] font-bold">{companyData.memberCount} Anggota</span>
+          
+          <div className="flex flex-col gap-1 min-w-0 flex-1">
+            <h1 className="text-[#111827] text-[20px] font-bold leading-tight truncate">
+              {companyData.name || "Perusahaan"}
+            </h1>
+            <div className="flex items-center gap-1.5 text-[#356E3B]">
+              <Users className="w-3.5 h-3.5" />
+              <span className="text-[13px] font-semibold">{companyData.memberCount} Anggota Terdaftar</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[#6B7280]">
+              <Building2 className="w-3.5 h-3.5" />
+              <span className="text-[13px] font-medium">
+                {companyData.category?.name || "Organisasi / Perusahaan"}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Kontak Perusahaan Card */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
-              <Phone className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
+        {/* Card Group 1: Informasi Perusahaan */}
+        <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
+          <div className="p-5 flex items-center justify-between border-b border-[#F3F4F6]">
+            <div className="flex items-center gap-3">
+              <div className="w-[34px] h-[34px] rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
+                <Building2 className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
+              </div>
+              <h2 className="text-[#111827] text-[15px] font-bold">Informasi Perusahaan</h2>
             </div>
-            <div>
-              <h2 className="text-[#111827] text-[15px] font-bold">Kontak Perusahaan</h2>
-              <p className="text-gray-400 text-[11px]">Nomor telepon atau WhatsApp resmi</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <div className="relative">
-              <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input 
-                type="tel"
-                value={companyData.phone || ""}
-                onChange={(e) => setCompanyData({ ...companyData, phone: e.target.value })}
-                className="text-[#111827] text-[14px] font-medium bg-[#fbfdfc] border border-gray-200 focus:border-[#356E3B] rounded-[14px] pl-10 pr-3.5 py-3 outline-none w-full transition-colors"
-                placeholder="Contoh: 08123456789 atau (021) 555-1234"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Lokasi Perusahaan Card */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
-              <Building2 className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
-            </div>
-            <h2 className="text-[#111827] text-[15px] font-bold">Lokasi Perusahaan</h2>
-          </div>
-
-          <div className="bg-[#f4f6f5] rounded-[12px] p-3 flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-[#7d998c]" />
-              <span className="text-[#7d998c] text-[12px] font-mono">Lat/Long: <span className="font-bold text-[#111827]">{lat}, {lng}</span></span>
-            </div>
-          </div>
-
-          <div className="mb-4 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                Alamat Perusahaan
-              </label>
-              {isGeocodingAddress && (
-                <span className="text-[11px] text-[#356E3B] flex items-center gap-1 font-medium animate-pulse">
-                  <div className="w-2.5 h-2.5 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-                  Menyesuaikan lokasi di peta...
-                </span>
-              )}
-            </div>
-            <textarea
-              value={companyData.address}
-              onChange={(e) => handleAddressChange(e.target.value)}
-              className="text-[#111827] text-[13px] font-medium leading-relaxed w-full bg-[#fbfdfc] border border-gray-200 focus:border-[#356E3B] rounded-[14px] p-3 outline-none resize-none min-h-[54px] transition-colors"
-              placeholder="Ketik alamat atau nama kota perusahaan..."
-            />
-          </div>
-
-          {/* Real Leaflet Map Preview */}
-          <div className="relative w-full h-[190px] bg-[#f4f6f5] rounded-[16px] overflow-hidden mb-4 border border-gray-200 shadow-inner z-0">
-            {isMounted && (
-              <MapContainer
-                key={`admin-company-map-${lat}-${lng}`}
-                center={[parseFloat(lat) || -6.9175, parseFloat(lng) || 107.6191]}
-                zoom={16}
-                scrollWheelZoom={false}
-                zoomControl={false}
-                attributionControl={false}
-                className="w-full h-full"
-                style={{ width: "100%", height: "100%", zIndex: 0 }}
-              >
-                <TileLayer
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <Marker 
-                  position={[parseFloat(lat) || -6.9175, parseFloat(lng) || 107.6191]} 
-                  icon={getCustomIcon(companyData.name || "Perusahaan")} 
-                />
-                <MapControls 
-                  targetLat={parseFloat(lat) || -6.9175} 
-                  targetLng={parseFloat(lng) || 107.6191} 
-                />
-                <MapUpdater lat={parseFloat(lat) || -6.9175} lng={parseFloat(lng) || 107.6191} />
-              </MapContainer>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            <a
-              href={`https://www.google.com/maps?q=${lat},${lng}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#f8fafc] hover:bg-gray-100 text-[#4B5563] border border-gray-200 rounded-[14px] text-[12px] font-semibold transition-colors"
+            <button
+              type="button"
+              onClick={openEditInfo}
+              className="flex items-center gap-1.5 text-[12px] font-bold text-[#1E4738] bg-[#E8F3EB] hover:bg-[#D5E8DA] px-3.5 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer"
             >
-              <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
-              <span>Buka di Google Maps</span>
-            </a>
-
-            <button 
-              onClick={openModal}
-              className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-sm"
-            >
-              <Pencil className="w-4 h-4" strokeWidth={2} />
-              Ubah Lokasi
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Ubah</span>
             </button>
           </div>
+
+          <div className="flex flex-col divide-y divide-[#F3F4F6]">
+            {/* Nama Perusahaan */}
+            <div className="p-5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <Building2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[#9CA3AF] text-[11px] font-medium mb-0.5">Nama Perusahaan</span>
+                  <span className="text-[#111827] text-[14px] font-bold">{companyData.name}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Kontak Perusahaan */}
+            <div className="p-5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <Phone className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[#9CA3AF] text-[11px] font-medium mb-0.5">Kontak / WhatsApp Resmi</span>
+                  <span className="text-[#111827] text-[14px] font-bold">
+                    {companyData.phone || <span className="text-gray-400 font-normal italic">Belum diatur</span>}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Kode Undangan */}
+            <div 
+              onClick={() => setIsTambahKaryawanOpen(true)}
+              className="p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <QrCode className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[#9CA3AF] text-[11px] font-medium mb-0.5">Kode Undangan & QR</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#111827] text-[14px] font-bold font-mono tracking-wider">
+                      {companyData.join_code || "------"}
+                    </span>
+                    <span className="text-[10.5px] bg-[#E8F3EB] text-[#2D5A3F] font-bold px-2.5 py-0.5 rounded-full">
+                      Lihat QR
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+            </div>
+          </div>
         </div>
 
-        {/* Jam Kerja Card */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col">
-          <div className="flex justify-between items-center pb-4 border-b border-gray-100">
-            <div className="flex gap-3 items-center">
-              <div className="w-10 h-10 bg-[#e6f0ea] rounded-full flex items-center justify-center shrink-0">
-                <Clock className="w-5 h-5 text-[#356E3B]" strokeWidth={1.5} />
+        {/* Card Group 2: Lokasi Perusahaan */}
+        <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
+          <div className="p-5 flex items-center justify-between border-b border-[#F3F4F6]">
+            <div className="flex items-center gap-3">
+              <div className="w-[34px] h-[34px] rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
+                <MapPin className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
+              </div>
+              <h2 className="text-[#111827] text-[15px] font-bold">Lokasi Perusahaan</h2>
+            </div>
+            <button
+              type="button"
+              onClick={openModal}
+              className="flex items-center gap-1.5 text-[12px] font-bold text-[#1E4738] bg-[#E8F3EB] hover:bg-[#D5E8DA] px-3.5 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Ubah</span>
+            </button>
+          </div>
+
+          <div className="flex flex-col divide-y divide-[#F3F4F6]">
+            {/* Koordinat */}
+            <div className="p-5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <Target className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[#9CA3AF] text-[11px] font-medium mb-0.5">Koordinat Titik Absen (Lat/Long)</span>
+                  <span className="text-[#111827] text-[13.5px] font-mono font-bold">{lat}, {lng}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Alamat Lengkap */}
+            <div className="p-5 flex items-start gap-4">
+              <div className="w-9 flex justify-center pt-0.5">
+                <MapPin className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />
+              </div>
+              <div className="flex flex-col flex-1">
+                <span className="text-[#9CA3AF] text-[11px] font-medium mb-0.5">Alamat Lengkap</span>
+                <span className="text-[#111827] text-[13.5px] font-medium leading-relaxed">
+                  {companyData.address || <span className="text-gray-400 italic">Belum ada alamat kantor</span>}
+                </span>
+              </div>
+            </div>
+
+            {/* Peta Interaktif Preview & Link */}
+            <div className="p-5 flex flex-col gap-3">
+              <div className="relative w-full h-[180px] bg-[#f4f6f5] rounded-[16px] overflow-hidden border border-gray-200 shadow-inner z-0">
+                {isMounted && (
+                  <MapContainer
+                    key={`admin-company-map-${lat}-${lng}`}
+                    center={[parseFloat(lat) || -6.9175, parseFloat(lng) || 107.6191]}
+                    zoom={16}
+                    scrollWheelZoom={false}
+                    zoomControl={false}
+                    attributionControl={false}
+                    className="w-full h-full"
+                    style={{ width: "100%", height: "100%", zIndex: 0 }}
+                  >
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <Marker 
+                      position={[parseFloat(lat) || -6.9175, parseFloat(lng) || 107.6191]} 
+                      icon={getCustomIcon(companyData.name || "Perusahaan")} 
+                    />
+                    <MapControls 
+                      targetLat={parseFloat(lat) || -6.9175} 
+                      targetLng={parseFloat(lng) || 107.6191} 
+                    />
+                    <MapUpdater lat={parseFloat(lat) || -6.9175} lng={parseFloat(lng) || 107.6191} />
+                  </MapContainer>
+                )}
+              </div>
+
+              <a
+                href={`https://www.google.com/maps?q=${lat},${lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#f8fafc] hover:bg-gray-100 text-[#4B5563] border border-gray-200 rounded-[14px] text-[12px] font-semibold transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
+                <span>Buka di Google Maps</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Card Group 3: Jam & Hari Kerja */}
+        <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
+          <div className="p-5 flex items-center justify-between border-b border-[#F3F4F6]">
+            <div className="flex items-center gap-3">
+              <div className="w-[34px] h-[34px] rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
               </div>
               <h2 className="text-[#111827] text-[15px] font-bold">Jam Kerja</h2>
             </div>
-            <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
+            <button
+              type="button"
+              onClick={() => {
+                setJadwalForm({
+                  work_days: companyData.work_days,
+                  work_start_time: companyData.work_start_time,
+                  work_end_time: companyData.work_end_time
+                });
+                setIsKelolaJadwalOpen(true);
+              }}
+              className="flex items-center gap-1.5 text-[12px] font-bold text-[#1E4738] bg-[#E8F3EB] hover:bg-[#D5E8DA] px-3.5 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Kelola</span>
+            </button>
           </div>
 
-          <div className="flex flex-col gap-3 py-4">
-            <div className="flex items-center gap-1.5 text-[#7d998c]">
-              <Clock className="w-3.5 h-3.5" strokeWidth={2} />
-              <span className="text-[12px] font-semibold">Jam Operasional</span>
-            </div>
-            
-            <div className="flex flex-col gap-2.5 ml-5">
-              <div className="flex justify-between items-center text-[13px] text-[#111827] font-bold gap-4">
-                <span className="leading-tight flex-1">
-                  {companyData.work_days.length > 0 ? (companyData.work_days.length === 7 ? "Setiap Hari" : companyData.work_days.join(", ")) : "Belum diatur"}
-                </span>
-                <span className="shrink-0 whitespace-nowrap">{companyData.work_start_time} - {companyData.work_end_time}</span>
+          <div className="flex flex-col divide-y divide-[#F3F4F6]">
+            {/* Hari Kerja */}
+            <div className="p-5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <Calendar className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[#9CA3AF] text-[11px] font-medium mb-0.5">Hari Operasional</span>
+                  <span className="text-[#111827] text-[14px] font-bold">
+                    {companyData.work_days.length > 0 ? (companyData.work_days.length === 7 ? "Setiap Hari" : companyData.work_days.join(", ")) : "Belum diatur"}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <button 
-            onClick={() => {
-              setJadwalForm({
-                work_days: companyData.work_days,
-                work_start_time: companyData.work_start_time,
-                work_end_time: companyData.work_end_time
-              });
-              setIsKelolaJadwalOpen(true);
-            }}
-            className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 mt-2 transition-transform active:scale-[0.98] shadow-sm"
-          >
-            <Pencil className="w-4 h-4" strokeWidth={2} />
-            Kelola
-          </button>
-        </div>
-
-        {/* Kode Perusahaan Card */}
-        <div 
-          onClick={() => setIsTambahKaryawanOpen(true)}
-          className="bg-white rounded-[24px] p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex items-center gap-4 cursor-pointer hover:bg-gray-50 active:scale-[0.98] transition-all"
-        >
-          <div className="w-[84px] h-[84px] bg-[#f4f6f5] rounded-[16px] flex items-center justify-center shrink-0 border border-gray-100">
-             {companyData.join_code ? (
-               <QRCodeSVG value={qrUrl} size={48} />
-             ) : (
-               <QrCode className="w-14 h-14 text-[#111827]" />
-             )}
-          </div>
-          <div className="flex flex-col justify-center flex-1">
-            <span className="text-[#7d998c] text-[11px] font-medium mb-1">Kode Perusahaan</span>
-            <div className="flex items-center justify-between">
-              <span className="text-[#111827] text-[20px] font-bold tracking-wider">{companyData.join_code || "------"}</span>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigator.clipboard.writeText(companyData.join_code);
-                  showToast("Kode berhasil disalin!", "success");
-                }}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-[#356E3B] transition-colors"
-              >
-                <Copy className="w-4 h-4" />
-              </button>
+            {/* Jam Masuk & Pulang */}
+            <div className="p-5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <Clock className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[#9CA3AF] text-[11px] font-medium mb-0.5">Jam Masuk & Pulang</span>
+                  <span className="text-[#111827] text-[14px] font-bold">
+                    {companyData.work_start_time} - {companyData.work_end_time} WIB
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
       </div>
+
+      {/* Modal Ubah Informasi Perusahaan */}
+      {isEditInfoOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div 
+            className="absolute inset-0 bg-black/40 transition-opacity"
+            onClick={() => !isSaving && setIsEditInfoOpen(false)}
+          />
+          <div className="relative bg-white w-full sm:max-w-md mx-auto rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300">
+            <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1"></div>
+            
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-[#e6f0ea] rounded-full flex items-center justify-center">
+                  <Building2 className="w-4 h-4 text-[#356E3B]" strokeWidth={2} />
+                </div>
+                <h2 className="text-[#1E4738] text-[17px] font-bold">Ubah Informasi Perusahaan</h2>
+              </div>
+              <button 
+                onClick={() => setIsEditInfoOpen(false)}
+                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[12px] font-bold text-[#111827]">Nama Perusahaan</label>
+                <div className="relative">
+                  <Building2 className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input 
+                    type="text"
+                    value={infoForm.name}
+                    onChange={(e) => setInfoForm({ ...infoForm, name: e.target.value })}
+                    className="text-[#111827] text-[14px] font-medium bg-[#fbfdfc] border border-gray-200 focus:border-[#356E3B] rounded-[14px] pl-10 pr-3.5 py-3 outline-none w-full transition-colors"
+                    placeholder="Nama Perusahaan"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[12px] font-bold text-[#111827]">Nomor Telepon / WhatsApp</label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input 
+                    type="tel"
+                    value={infoForm.phone}
+                    onChange={(e) => setInfoForm({ ...infoForm, phone: e.target.value })}
+                    className="text-[#111827] text-[14px] font-medium bg-[#fbfdfc] border border-gray-200 focus:border-[#356E3B] rounded-[14px] pl-10 pr-3.5 py-3 outline-none w-full transition-colors"
+                    placeholder="Contoh: 08123456789 atau (021) 555-1234"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleSaveInfo}
+                  disabled={isSaving}
+                  className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[14px] py-3.5 rounded-[16px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-sm cursor-pointer"
+                >
+                  {isSaving ? "Menyimpan..." : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Simpan Perubahan</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Overlay */}
       {isUbahLokasiOpen && (
@@ -1212,24 +1440,6 @@ export default function KelolaPerusahaanPage() {
       )}
 
       </>
-      )}
-
-      {/* Floating Save Button */}
-      {!isLoading && (companyData.name !== initialData.name || companyData.address !== initialData.address) && (
-        <div className="fixed bottom-6 left-0 right-0 px-5 z-40 animate-in slide-in-from-bottom-5">
-          <button 
-            onClick={handleSimpanPerusahaan}
-            disabled={isSaving}
-            className="w-full sm:max-w-md mx-auto bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[15px] py-4 rounded-[20px] flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(53,110,59,0.3)] transition-all active:scale-[0.98]"
-          >
-            {isSaving ? "Menyimpan..." : (
-              <>
-                <Save className="w-5 h-5" />
-                Simpan Perubahan
-              </>
-            )}
-          </button>
-        </div>
       )}
 
     </div>

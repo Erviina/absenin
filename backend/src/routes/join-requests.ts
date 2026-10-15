@@ -369,7 +369,7 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
           recipient_id: joinRequest.profile_id as string,
           type: "JOIN_REQUEST_APPROVED",
           title: "Permintaan Bergabung Disetujui",
-          message: `Permintaan bergabung atas nama ${memberName} telah disetujui oleh ${approverName}. Selamat datang di ${companyName}!`,
+          message: "Permintaan bergabung Anda telah disetujui.",
           reference_id: joinRequest.id as string,
         });
 

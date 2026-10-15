@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   ChevronLeft, 
+  ChevronRight,
   Plus, 
   Calendar as CalendarIcon, 
   Clock, 
@@ -776,18 +777,24 @@ export default function AdminAgendaPage() {
           <>
             {/* Kalender Card dengan Rentang Waktu (Date Range) */}
             <div className="mb-6 px-1">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-[16px] font-bold text-[#111827]">
+              <div className="flex items-center justify-between mb-4">
+                <button 
+                  onClick={handlePrevMonth} 
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-[#4B5563] hover:text-[#111827] hover:bg-gray-100 active:scale-95 transition-all cursor-pointer"
+                  aria-label="Bulan Sebelumnya"
+                >
+                  <ChevronLeft className="w-5 h-5 stroke-[2]" />
+                </button>
+                <h2 className="text-[14px] sm:text-[15px] font-bold text-[#111827] uppercase tracking-wider text-center select-none">
                   {currentDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}
                 </h2>
-                <div className="flex gap-2">
-                  <button onClick={handlePrevMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-[#4B5563] shadow-sm hover:bg-gray-50 border border-[#E5E7EB]">
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button onClick={handleNextMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-[#4B5563] shadow-sm hover:bg-gray-50 border border-[#E5E7EB] rotate-180">
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                </div>
+                <button 
+                  onClick={handleNextMonth} 
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-[#4B5563] hover:text-[#111827] hover:bg-gray-100 active:scale-95 transition-all cursor-pointer"
+                  aria-label="Bulan Berikutnya"
+                >
+                  <ChevronRight className="w-5 h-5 stroke-[2]" />
+                </button>
               </div>
               
               <div className="grid grid-cols-7 gap-y-2 text-center select-none">

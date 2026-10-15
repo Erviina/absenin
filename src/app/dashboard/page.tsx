@@ -337,6 +337,16 @@ export default function DashboardPage() {
     }
   };
 
+  const formatRoleLabel = (role?: string | null) => {
+    if (!role) return "Karyawan";
+    const r = role.toLowerCase();
+    if (r === "member") return "Karyawan";
+    if (r === "owner") return "Owner";
+    if (r === "admin") return "Admin";
+    if (r === "manager") return "Manajer";
+    return role;
+  };
+
   const scheduleEval = evaluateSchedule(
     companySchedule,
     serverOffsetMs,
@@ -501,7 +511,7 @@ export default function DashboardPage() {
                 </span>
                 {activeCompany && (
                   <span className={`text-[10px] px-2.5 py-0.5 rounded-full capitalize shrink-0 font-bold ${getRoleBadgeStyle(activeRole)}`}>
-                    {activeRole || "Member"}
+                    {formatRoleLabel(activeRole)}
                   </span>
                 )}
               </div>

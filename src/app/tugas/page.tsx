@@ -525,7 +525,7 @@ export default function TugasPage() {
                                   {member.full_name}
                                 </span>
                                 <span className="text-[10px] text-gray-400 truncate">
-                                  {member.role ? member.role.toUpperCase() : "MEMBER"}
+                                  {(member.role || "KARYAWAN").toUpperCase() === "MEMBER" ? "KARYAWAN" : (member.role || "KARYAWAN").toUpperCase()}
                                 </span>
                               </div>
                             </div>
