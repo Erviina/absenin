@@ -21,16 +21,103 @@ import {
   X, 
   Info,
   CheckCircle2,
-  Navigation
+  Navigation,
+  Plus,
+  Minus,
+  Target
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
-import { MapContainer, TileLayer, Marker, Circle } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
+
+function MapControls({ 
+  targetLat, 
+  targetLng,
+  position = "top-right"
+}: { 
+  targetLat: number; 
+  targetLng: number;
+  position?: "top-right" | "bottom-right";
+}) {
+  const map = useMap();
+  const controlsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (controlsRef.current) {
+      L.DomEvent.disableClickPropagation(controlsRef.current);
+      L.DomEvent.disableScrollPropagation(controlsRef.current);
+    }
+  }, []);
+
+  const handleZoomIn = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    map.zoomIn();
+  };
+
+  const handleZoomOut = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    map.zoomOut();
+  };
+
+  const handleFocusTarget = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const targetZoom = Math.max(map.getZoom(), 16);
+    map.flyTo([targetLat, targetLng], targetZoom, {
+      animate: true,
+      duration: 0.8,
+    });
+  };
+
+  const posClass = position === "bottom-right" 
+    ? "bottom-3 right-3 flex flex-col gap-1.5" 
+    : "top-3 right-3 flex flex-col gap-1.5";
+
+  return (
+    <div
+      ref={controlsRef}
+      className={`absolute ${posClass} z-[1000] pointer-events-auto select-none`}
+    >
+      <div className="bg-white/95 backdrop-blur-xs rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex flex-col overflow-hidden border border-gray-200/80">
+        <button
+          type="button"
+          onClick={handleZoomIn}
+          title="Perbesar (Zoom in)"
+          aria-label="Perbesar"
+          className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 text-[#1E4738] transition-colors cursor-pointer"
+        >
+          <Plus className="w-4 h-4 stroke-[2.5]" />
+        </button>
+        <button
+          type="button"
+          onClick={handleZoomOut}
+          title="Perkecil (Zoom out)"
+          aria-label="Perkecil"
+          className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 text-[#1E4738] transition-colors cursor-pointer"
+        >
+          <Minus className="w-4 h-4 stroke-[2.5]" />
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleFocusTarget}
+        title="Pusatkan ke Lokasi Target"
+        aria-label="Pusatkan ke Lokasi Target"
+        className="w-8 h-8 bg-white/95 backdrop-blur-xs rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 border border-gray-200/80 transition-all active:scale-95 text-[#356E3B] hover:text-[#1E4738] cursor-pointer"
+      >
+        <Target className="w-4 h-4 stroke-[2.5]" />
+      </button>
+    </div>
+  );
+}
 
 const getCustomIcon = (label: string) => new L.DivIcon({
   className: "custom-leaflet-icon",
@@ -427,7 +514,7 @@ export default function ProfilPerusahaanContent() {
               </div>
               <div className="flex flex-col">
                 <h2 className="text-[#111827] text-[14px] font-bold leading-none">Detail Alamat & Lokasi</h2>
-                <span className="text-[11px] text-[#6B7280] mt-1">Titik pusat dan radius presensi kehadiran</span>
+                <span className="text-[11px] text-[#6B7280] mt-1">Titik lokasi kantor perusahaan</span>
               </div>
             </div>
           </div>
@@ -463,16 +550,7 @@ export default function ProfilPerusahaanContent() {
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
                 <Marker position={[lat, lng]} icon={getCustomIcon(company.name)} />
-                <Circle
-                  center={[lat, lng]}
-                  radius={50}
-                  pathOptions={{
-                    color: "#356E3B",
-                    fillColor: "#356E3B",
-                    fillOpacity: 0.18,
-                    weight: 2
-                  }}
-                />
+                <MapControls targetLat={lat} targetLng={lng} />
               </MapContainer>
             </div>
 

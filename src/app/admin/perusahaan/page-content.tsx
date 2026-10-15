@@ -1,14 +1,14 @@
 "use client";
 
-import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, Target, Calendar, UserPlus, QrCode, AlignLeft, Send, Copy, Camera, Users, Trash2, Phone } from "lucide-react";
+import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, Target, Calendar, UserPlus, QrCode, AlignLeft, Send, Copy, Camera, Users, Trash2, Phone, ExternalLink, Plus, Minus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { CustomSelect } from "@/components/CustomSelect";
 import { CustomTimePicker } from "@/components/CustomTimePicker";
 import { QRCodeSVG } from "qrcode.react";
-import { MapContainer, TileLayer, Marker, Circle, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useDialog } from "@/context/DialogContext";
@@ -41,11 +41,183 @@ const getCustomIcon = (label: string) => new L.DivIcon({
   iconAnchor: [60, 43],
 });
 
+function MapControls({ 
+  targetLat, 
+  targetLng,
+  position = "top-right"
+}: { 
+  targetLat: number; 
+  targetLng: number;
+  position?: "top-right" | "bottom-right";
+}) {
+  const map = useMap();
+  const controlsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (controlsRef.current) {
+      L.DomEvent.disableClickPropagation(controlsRef.current);
+      L.DomEvent.disableScrollPropagation(controlsRef.current);
+    }
+  }, []);
+
+  const handleZoomIn = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    map.zoomIn();
+  };
+
+  const handleZoomOut = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    map.zoomOut();
+  };
+
+  const handleFocusTarget = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const targetZoom = Math.max(map.getZoom(), 16);
+    map.flyTo([targetLat, targetLng], targetZoom, {
+      animate: true,
+      duration: 0.8,
+    });
+  };
+
+  const posClass = position === "bottom-right" 
+    ? "bottom-3 right-3 flex flex-col gap-1.5" 
+    : "top-3 right-3 flex flex-col gap-1.5";
+
+  return (
+    <div
+      ref={controlsRef}
+      className={`absolute ${posClass} z-[1000] pointer-events-auto select-none`}
+    >
+      <div className="bg-white/95 backdrop-blur-xs rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex flex-col overflow-hidden border border-gray-200/80">
+        <button
+          type="button"
+          onClick={handleZoomIn}
+          title="Perbesar (Zoom in)"
+          aria-label="Perbesar"
+          className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 text-[#1E4738] transition-colors cursor-pointer"
+        >
+          <Plus className="w-4 h-4 stroke-[2.5]" />
+        </button>
+        <button
+          type="button"
+          onClick={handleZoomOut}
+          title="Perkecil (Zoom out)"
+          aria-label="Perkecil"
+          className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 text-[#1E4738] transition-colors cursor-pointer"
+        >
+          <Minus className="w-4 h-4 stroke-[2.5]" />
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleFocusTarget}
+        title="Pusatkan ke Lokasi Target"
+        aria-label="Pusatkan ke Lokasi Target"
+        className="w-8 h-8 bg-white/95 backdrop-blur-xs rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 border border-gray-200/80 transition-all active:scale-95 text-[#356E3B] hover:text-[#1E4738] cursor-pointer"
+      >
+        <Target className="w-4 h-4 stroke-[2.5]" />
+      </button>
+    </div>
+  );
+}
+
 function MapUpdater({ lat, lng }: { lat: number, lng: number }) {
   const map = useMap();
   useEffect(() => {
     map.flyTo([lat, lng], map.getZoom(), { duration: 1.5 });
   }, [lat, lng, map]);
+  return null;
+}
+
+function ModalMapEvents({ onLocationSelected }: { onLocationSelected: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onLocationSelected(e.latlng.lat, e.latlng.lng);
+    }
+  });
+  return null;
+}
+
+// Helper to perform address search using Nominatim with Geoapify fallback/priority
+async function searchAddresses(query: string): Promise<Array<{ name: string; detail: string; formatted: string; lat: number; lon: number }>> {
+  const q = query.trim();
+  if (q.length < 3) return [];
+
+  const apiKey = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY;
+  if (apiKey) {
+    try {
+      const res = await fetch(`https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(q)}&filter=countrycode:id&format=json&apiKey=${apiKey}`);
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        return data.results.map((r: any) => ({
+          name: r.address_line1 || r.name || r.formatted,
+          detail: r.address_line2 || r.city || r.formatted,
+          formatted: r.formatted,
+          lat: r.lat,
+          lon: r.lon
+        }));
+      }
+    } catch (e) {
+      console.warn("Geoapify search failed, falling back to Nominatim", e);
+    }
+  }
+
+  // Free OpenStreetMap Nominatim fallback (requires no API key)
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=id&limit=6&addressdetails=1`,
+      { headers: { "Accept-Language": "id,en" } }
+    );
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      return data.map((r: any) => ({
+        name: r.name || r.display_name.split(",")[0],
+        detail: r.display_name,
+        formatted: r.display_name,
+        lat: parseFloat(r.lat),
+        lon: parseFloat(r.lon)
+      }));
+    }
+  } catch (e) {
+    console.error("Nominatim search failed", e);
+  }
+
+  return [];
+}
+
+// Helper to reverse geocode coordinate to human-readable address
+async function reverseGeocodeCoord(lat: number, lon: number): Promise<string | null> {
+  const apiKey = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY;
+  if (apiKey) {
+    try {
+      const res = await fetch(`https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lon}&format=json&apiKey=${apiKey}`);
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        return data.results[0].formatted;
+      }
+    } catch (e) {
+      console.warn("Geoapify reverse failed, falling back to Nominatim", e);
+    }
+  }
+
+  // Free OpenStreetMap Nominatim fallback (requires no API key)
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`,
+      { headers: { "Accept-Language": "id,en" } }
+    );
+    const data = await res.json();
+    if (data && data.display_name) {
+      return data.display_name;
+    }
+  } catch (e) {
+    console.error("Nominatim reverse failed", e);
+  }
+
   return null;
 }
 
@@ -65,11 +237,48 @@ export default function KelolaPerusahaanPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Search Address State
+  // Search Address State in Modal
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const skipSearch = React.useRef(false);
+
+  // Auto geocoding address in main card
+  const [isGeocodingAddress, setIsGeocodingAddress] = useState(false);
+  const addressDebounceRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const handleAddressChange = (newAddress: string) => {
+    setCompanyData(prev => ({ ...prev, address: newAddress }));
+
+    if (addressDebounceRef.current) {
+      clearTimeout(addressDebounceRef.current);
+    }
+
+    if (newAddress.trim().length >= 3) {
+      addressDebounceRef.current = setTimeout(async () => {
+        setIsGeocodingAddress(true);
+        try {
+          const results = await searchAddresses(newAddress);
+          if (results.length > 0) {
+            const top = results[0];
+            const newLatStr = top.lat.toFixed(6);
+            const newLngStr = top.lon.toFixed(6);
+            setLat(newLatStr);
+            setLng(newLngStr);
+            setCompanyData(prev => ({
+              ...prev,
+              latitude: top.lat,
+              longitude: top.lon
+            }));
+          }
+        } catch (err) {
+          console.error("Auto geocoding address failed", err);
+        } finally {
+          setIsGeocodingAddress(false);
+        }
+      }, 800);
+    }
+  };
 
   const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "http://192.168.100.11:3000";
   const qrUrl = `${BASE_URL}/gabung-perusahaan?code=${companyData.join_code}`;
@@ -79,39 +288,46 @@ export default function KelolaPerusahaanPage() {
       skipSearch.current = false;
       return;
     }
-    if (searchQuery.length < 3) {
+    if (searchQuery.trim().length < 3) {
       setSearchResults([]);
       return;
     }
     
     const timer = setTimeout(async () => {
-      const apiKey = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY;
-      if (!apiKey) {
-        showToast("API key Geoapify belum dikonfigurasi pada NEXT_PUBLIC_GEOAPIFY_API_KEY", "warning");
-        return;
-      }
       setIsSearching(true);
       try {
-        const res = await fetch(`https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(searchQuery)}&filter=countrycode:id&format=json&apiKey=${apiKey}`);
-        const data = await res.json();
-        if (data.results) {
-          setSearchResults(data.results);
-        }
+        const results = await searchAddresses(searchQuery);
+        setSearchResults(results);
       } catch (err) {
         console.error(err);
       } finally {
         setIsSearching(false);
       }
-    }, 500);
+    }, 400);
     return () => clearTimeout(timer);
-  }, [searchQuery, showToast]);
+  }, [searchQuery]);
 
   const handleSelectResult = (result: any) => {
     skipSearch.current = true;
-    setTempLat(result.lat.toString());
-    setTempLng(result.lon.toString());
-    setSearchQuery(result.formatted || "");
+    setTempLat(result.lat.toFixed(6));
+    setTempLng(result.lon.toFixed(6));
+    setSearchQuery(result.formatted || result.name || "");
     setSearchResults([]);
+  };
+
+  const handleMapClick = async (clickedLat: number, clickedLng: number) => {
+    setTempLat(clickedLat.toFixed(6));
+    setTempLng(clickedLng.toFixed(6));
+    setIsSearching(true);
+    try {
+      const addr = await reverseGeocodeCoord(clickedLat, clickedLng);
+      if (addr) {
+        skipSearch.current = true;
+        setSearchQuery(addr);
+      }
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   useEffect(() => {
@@ -200,7 +416,13 @@ export default function KelolaPerusahaanPage() {
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
         method: "PATCH",
         headers,
-        body: JSON.stringify({ name: companyData.name, address: companyData.address, phone: companyData.phone })
+        body: JSON.stringify({ 
+          name: companyData.name, 
+          address: companyData.address, 
+          phone: companyData.phone,
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lng)
+        })
       });
       const data = await res.json();
       if (res.status === 403) {
@@ -209,7 +431,14 @@ export default function KelolaPerusahaanPage() {
         showToast(data.message || "Gagal menyimpan perubahan.", "error");
       } else {
         showToast("Data perusahaan berhasil diperbarui.", "success");
-        setInitialData(prev => ({ ...prev, name: companyData.name, address: companyData.address, phone: companyData.phone }));
+        setInitialData(prev => ({ 
+          ...prev, 
+          name: companyData.name, 
+          address: companyData.address, 
+          phone: companyData.phone,
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lng)
+        }));
         await refreshMemberships().catch(console.error);
       }
     } catch (error) {
@@ -282,12 +511,10 @@ export default function KelolaPerusahaanPage() {
   // Data state
   const [lat, setLat] = useState("-6.9175");
   const [lng, setLng] = useState("107.6191");
-  const [radius, setRadius] = useState(100);
 
   // Temp state for modal inputs
   const [tempLat, setTempLat] = useState(lat);
   const [tempLng, setTempLng] = useState(lng);
-  const [tempRadius, setTempRadius] = useState(radius);
 
   // Jadwal State
   const [isKelolaJadwalOpen, setIsKelolaJadwalOpen] = useState(false);
@@ -342,7 +569,9 @@ export default function KelolaPerusahaanPage() {
   const openModal = () => {
     setTempLat(lat);
     setTempLng(lng);
-    setTempRadius(radius);
+    skipSearch.current = true;
+    setSearchQuery(companyData.address || "");
+    setSearchResults([]);
     setIsUbahLokasiOpen(true);
   };
 
@@ -350,11 +579,16 @@ export default function KelolaPerusahaanPage() {
     try {
       setIsSaving(true);
       const token = localStorage.getItem("accessToken");
-      const requestBody = { 
-        latitude: parseFloat(tempLat),
-        longitude: parseFloat(tempLng),
-        ...(searchQuery ? { address: searchQuery } : {})
+      const chosenAddress = searchQuery.trim() || companyData.address;
+      const parsedLat = parseFloat(tempLat);
+      const parsedLng = parseFloat(tempLng);
+      const requestBody: any = { 
+        latitude: parsedLat,
+        longitude: parsedLng,
       };
+      if (chosenAddress) {
+        requestBody.address = chosenAddress;
+      }
 
       const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
       const activeCompanyId = localStorage.getItem("activeCompanyId");
@@ -369,21 +603,20 @@ export default function KelolaPerusahaanPage() {
       if (res.ok && data.success) {
         setLat(tempLat);
         setLng(tempLng);
-        setRadius(tempRadius);
         setCompanyData(prev => ({ 
           ...prev, 
-          latitude: parseFloat(tempLat), 
-          longitude: parseFloat(tempLng),
-          ...(searchQuery ? { address: searchQuery } : {})
+          latitude: parsedLat, 
+          longitude: parsedLng,
+          ...(chosenAddress ? { address: chosenAddress } : {})
         }));
         setInitialData(prev => ({ 
           ...prev, 
-          latitude: parseFloat(tempLat), 
-          longitude: parseFloat(tempLng),
-          ...(searchQuery ? { address: searchQuery } : {})
+          latitude: parsedLat, 
+          longitude: parsedLng,
+          ...(chosenAddress ? { address: chosenAddress } : {})
         }));
         setIsUbahLokasiOpen(false);
-        showToast("Lokasi berhasil diperbarui!", "success");
+        showToast("Lokasi dan alamat berhasil diperbarui!", "success");
       } else {
         showToast(data.message || "Gagal menyimpan lokasi.", "error");
       }
@@ -487,42 +720,81 @@ export default function KelolaPerusahaanPage() {
             <h2 className="text-[#111827] text-[15px] font-bold">Lokasi Perusahaan</h2>
           </div>
 
-          <div className="bg-[#f4f6f5] rounded-[12px] p-3 flex items-center gap-2 mb-4">
-            <MapPin className="w-4 h-4 text-[#7d998c]" />
-            <span className="text-[#7d998c] text-[12px] font-mono">Lat/Long: <span className="font-bold text-[#111827]">{lat}, {lng}</span></span>
-          </div>
-
-          <textarea
-            value={companyData.address}
-            onChange={(e) => setCompanyData({...companyData, address: e.target.value})}
-            className="text-[#4B5563] text-[13px] leading-relaxed mb-4 w-full bg-transparent border-b border-transparent focus:border-[#356E3B] outline-none resize-none min-h-[60px]"
-            placeholder="Alamat Perusahaan"
-          />
-
-          {/* Mock Map */}
-          <div className="relative w-full h-[120px] bg-[#eef5f0] rounded-[16px] overflow-hidden mb-4 border border-[#dce9df]">
-            {/* SVG Roads / Paths */}
-            <svg className="absolute inset-0 w-full h-full text-[#cce0d4]" preserveAspectRatio="none" viewBox="0 0 300 140" xmlns="http://www.w3.org/2000/svg">
-              <path d="M-20,70 Q100,40 180,90 T320,60" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="6,6" />
-              <path d="M220,-20 Q240,60 200,160" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="6,6" />
-              <path d="M100,-20 Q120,60 80,160" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="6,6" />
-            </svg>
-            {/* Center Radius */}
-            <div className="absolute top-[55%] left-[55%] -translate-x-1/2 -translate-y-1/2 bg-[#356E3B]/15 rounded-full border border-[#356E3B]/30 flex items-center justify-center transition-all duration-300" style={{ width: `80px`, height: `80px` }}>
-              {/* Pin */}
-              <div className="w-[14px] h-[14px] bg-[#1E4738] rounded-full border-2 border-white shadow-sm ring-4 ring-[#1E4738]/20 relative">
-                <div className="absolute top-[12px] left-1/2 -translate-x-1/2 w-1 h-2 bg-[#1E4738]/40 blur-sm rounded-full"></div>
-              </div>
+          <div className="bg-[#f4f6f5] rounded-[12px] p-3 flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-[#7d998c]" />
+              <span className="text-[#7d998c] text-[12px] font-mono">Lat/Long: <span className="font-bold text-[#111827]">{lat}, {lng}</span></span>
             </div>
           </div>
 
-          <button 
-            onClick={openModal}
-            className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-sm"
-          >
-            <Pencil className="w-4 h-4" strokeWidth={2} />
-            Ubah Lokasi
-          </button>
+          <div className="mb-4 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                Alamat Perusahaan
+              </label>
+              {isGeocodingAddress && (
+                <span className="text-[11px] text-[#356E3B] flex items-center gap-1 font-medium animate-pulse">
+                  <div className="w-2.5 h-2.5 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                  Menyesuaikan lokasi di peta...
+                </span>
+              )}
+            </div>
+            <textarea
+              value={companyData.address}
+              onChange={(e) => handleAddressChange(e.target.value)}
+              className="text-[#111827] text-[13px] font-medium leading-relaxed w-full bg-[#fbfdfc] border border-gray-200 focus:border-[#356E3B] rounded-[14px] p-3 outline-none resize-none min-h-[54px] transition-colors"
+              placeholder="Ketik alamat atau nama kota perusahaan..."
+            />
+          </div>
+
+          {/* Real Leaflet Map Preview */}
+          <div className="relative w-full h-[190px] bg-[#f4f6f5] rounded-[16px] overflow-hidden mb-4 border border-gray-200 shadow-inner z-0">
+            {isMounted && (
+              <MapContainer
+                key={`admin-company-map-${lat}-${lng}`}
+                center={[parseFloat(lat) || -6.9175, parseFloat(lng) || 107.6191]}
+                zoom={16}
+                scrollWheelZoom={false}
+                zoomControl={false}
+                attributionControl={false}
+                className="w-full h-full"
+                style={{ width: "100%", height: "100%", zIndex: 0 }}
+              >
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <Marker 
+                  position={[parseFloat(lat) || -6.9175, parseFloat(lng) || 107.6191]} 
+                  icon={getCustomIcon(companyData.name || "Perusahaan")} 
+                />
+                <MapControls 
+                  targetLat={parseFloat(lat) || -6.9175} 
+                  targetLng={parseFloat(lng) || 107.6191} 
+                />
+                <MapUpdater lat={parseFloat(lat) || -6.9175} lng={parseFloat(lng) || 107.6191} />
+              </MapContainer>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <a
+              href={`https://www.google.com/maps?q=${lat},${lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#f8fafc] hover:bg-gray-100 text-[#4B5563] border border-gray-200 rounded-[14px] text-[12px] font-semibold transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
+              <span>Buka di Google Maps</span>
+            </a>
+
+            <button 
+              onClick={openModal}
+              className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-semibold text-[13px] py-3.5 rounded-full flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-sm"
+            >
+              <Pencil className="w-4 h-4" strokeWidth={2} />
+              Ubah Lokasi
+            </button>
+          </div>
         </div>
 
         {/* Jam Kerja Card */}
@@ -677,11 +949,6 @@ export default function KelolaPerusahaanPage() {
                     <TileLayer
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                    <Circle 
-                      center={[parseFloat(tempLat) || -6.9175, parseFloat(tempLng) || 107.6191]}
-                      radius={tempRadius}
-                      pathOptions={{ color: '#1E4738', fillColor: '#1E4738', fillOpacity: 0.1, weight: 2, dashArray: '5, 5' }}
-                    />
                     <Marker 
                       position={[parseFloat(tempLat) || -6.9175, parseFloat(tempLng) || 107.6191]} 
                       draggable={true}
@@ -691,32 +958,30 @@ export default function KelolaPerusahaanPage() {
                           const position = marker.getLatLng();
                           setTempLat(position.lat.toFixed(6));
                           setTempLng(position.lng.toFixed(6));
-                          
-                          const apiKey = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY;
-                          if (apiKey) {
-                            try {
-                              const res = await fetch(`https://api.geoapify.com/v1/geocode/reverse?lat=${position.lat}&lon=${position.lng}&format=json&apiKey=${apiKey}`);
-                              const data = await res.json();
-                              if (data.results && data.results.length > 0) {
-                                skipSearch.current = true;
-                                setSearchQuery(data.results[0].formatted);
-                              }
-                            } catch (err) {
-                              console.error(err);
+                          setIsSearching(true);
+                          try {
+                            const addr = await reverseGeocodeCoord(position.lat, position.lng);
+                            if (addr) {
+                              skipSearch.current = true;
+                              setSearchQuery(addr);
                             }
+                          } catch (err) {
+                            console.error(err);
+                          } finally {
+                            setIsSearching(false);
                           }
                         }
                       }}
                       icon={getCustomIcon(companyData.name || "Perusahaan")}
                     />
+                    <MapControls 
+                      targetLat={parseFloat(tempLat) || -6.9175} 
+                      targetLng={parseFloat(tempLng) || 107.6191} 
+                    />
+                    <ModalMapEvents onLocationSelected={handleMapClick} />
                     <MapUpdater lat={parseFloat(tempLat) || -6.9175} lng={parseFloat(tempLng) || 107.6191} />
                   </MapContainer>
                 )}
-
-                {/* Badge Bottom Right */}
-                <div className="absolute bottom-4 right-4 w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border-[3px] border-[#356E3B] z-10">
-                  <span className="text-[10px] font-bold text-[#1E4738]">{tempRadius}m</span>
-                </div>
               </div>
 
               {/* Coordinates Inputs */}
@@ -740,33 +1005,6 @@ export default function KelolaPerusahaanPage() {
                     onChange={(e) => setTempLng(e.target.value)}
                     className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-[#1E4738] font-medium outline-none focus:border-[#356E3B] transition-colors"
                   />
-                </div>
-              </div>
-
-              {/* Radius Input */}
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5 text-[#1E4738]">
-                  <Target className="w-4 h-4" strokeWidth={2} />
-                  <label className="text-[13px] font-bold">Radius Lokasi</label>
-                </div>
-                <div className="text-[14px] font-bold text-[#1E4738] mt-1 pl-6 border-l-2 border-[#356E3B]/30 ml-2">
-                  {tempRadius} meter
-                </div>
-                
-                {/* Custom Slider */}
-                <div className="flex items-center gap-4 mt-4">
-                  <input
-                    type="range"
-                    min="10"
-                    max="500"
-                    value={tempRadius}
-                    onChange={(e) => setTempRadius(parseInt(e.target.value))}
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#356E3B]"
-                    style={{
-                      background: `linear-gradient(to right, #356E3B 0%, #356E3B ${(tempRadius - 10) / 490 * 100}%, #e5e7eb ${(tempRadius - 10) / 490 * 100}%, #e5e7eb 100%)`
-                    }}
-                  />
-                  <span className="text-[12px] font-medium text-gray-400 w-8">{tempRadius}m</span>
                 </div>
               </div>
 

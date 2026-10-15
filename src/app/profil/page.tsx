@@ -6,15 +6,10 @@ import {
   Building2, 
   Camera, 
   Mail, 
-  Phone, 
   Lock, 
   LogOut, 
-  LogIn, 
   ChevronRight,
-  Clock,
-  Shield,
-  X,
-  AlertTriangle
+  ArrowLeftRight
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -26,25 +21,9 @@ export default function ProfilPage() {
   const router = useRouter();
   const { activeCompany, activeRole, memberships, currentUser, setCurrentUser } = useCompany();
   const { showConfirm, showToast } = useDialog();
-  const [user, setUser] = useState<any>(() => {
-    if (currentUser) return currentUser;
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("user");
-        return saved ? JSON.parse(saved) : null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
-  const [isLoading, setIsLoading] = useState<boolean>(() => {
-    if (currentUser) return false;
-    if (typeof window !== "undefined") {
-      return !localStorage.getItem("user");
-    }
-    return true;
-  });
+  const [mounted, setMounted] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -52,20 +31,20 @@ export default function ProfilPage() {
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     if (currentUser) {
       setUser(currentUser);
       setIsLoading(false);
+    } else {
+      try {
+        const saved = localStorage.getItem("user");
+        if (saved) {
+          setUser(JSON.parse(saved));
+          setIsLoading(false);
+        }
+      } catch {}
     }
   }, [currentUser]);
-
-  // Exit Request States
-  const [myExitRequest, setMyExitRequest] = useState<any>(null);
-  const [isLoadingExitReq, setIsLoadingExitReq] = useState(false);
-  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
-  const [exitReason, setExitReason] = useState("");
-  const [isSubmittingExit, setIsSubmittingExit] = useState(false);
-  const [exitError, setExitError] = useState("");
-  const [isCancellingExit, setIsCancellingExit] = useState(false);
 
   const fetchUser = async (silent = false) => {
     try {
@@ -108,117 +87,8 @@ export default function ProfilPage() {
     }
   };
 
-  const fetchExitRequestMe = async () => {
-    const token = localStorage.getItem("accessToken");
-    if (!token || !activeCompany?.id) {
-      setMyExitRequest(null);
-      return;
-    }
-
-    setIsLoadingExitReq(true);
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests/me?company_id=${activeCompany.id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "x-company-id": activeCompany.id,
-          },
-        }
-      );
-      const data = await res.json();
-      if (data.success) {
-        setMyExitRequest(data.data);
-      } else {
-        setMyExitRequest(null);
-      }
-    } catch (err) {
-      console.error("Fetch exit request error:", err);
-    } finally {
-      setIsLoadingExitReq(false);
-    }
-  };
-
-  const handleSubmitExitRequest = async () => {
-    if (!activeCompany?.id || isSubmittingExit) return;
-    const token = localStorage.getItem("accessToken");
-    if (!token) return;
-
-    setIsSubmittingExit(true);
-    setExitError("");
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "x-company-id": activeCompany.id,
-        },
-        body: JSON.stringify({
-          company_id: activeCompany.id,
-          reason: exitReason.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setIsExitModalOpen(false);
-        setExitReason("");
-        await fetchExitRequestMe();
-        showToast("Permohonan keluar berhasil diajukan ke Admin", "success");
-      } else {
-        setExitError(data.message || "Gagal mengajukan permohonan keluar");
-      }
-    } catch (err) {
-      setExitError("Terjadi kesalahan jaringan");
-    } finally {
-      setIsSubmittingExit(false);
-    }
-  };
-
-  const handleCancelExitRequest = async () => {
-    if (!activeCompany?.id || isCancellingExit) return;
-    const token = localStorage.getItem("accessToken");
-    if (!token) return;
-
-    const confirmed = await showConfirm({
-      title: "Batalkan Permohonan Keluar?",
-      message: `Apakah Anda yakin ingin membatalkan permohonan keluar dari ${activeCompany.name}?`,
-      confirmText: "Ya, Batalkan",
-      cancelText: "Kembali",
-      type: "warning",
-      icon: "alert",
-    });
-    if (!confirmed) return;
-
-    setIsCancellingExit(true);
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests/cancel`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "x-company-id": activeCompany.id,
-        },
-        body: JSON.stringify({ company_id: activeCompany.id }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMyExitRequest(null);
-        showToast("Permohonan keluar berhasil dibatalkan", "success");
-      } else {
-        showToast(data.message || "Gagal membatalkan permohonan keluar", "error");
-      }
-    } catch (err) {
-      showToast("Terjadi kesalahan jaringan", "error");
-    } finally {
-      setIsCancellingExit(false);
-    }
-  };
-
-  // Sinkronisasi data user di latar belakang tanpa memblokir tampilan jika data lokal sudah ada
   useEffect(() => {
     fetchUser(true);
-    fetchExitRequestMe();
   }, [activeCompany?.id]);
 
   const getRoleDisplay = () => {
@@ -363,16 +233,10 @@ export default function ProfilPage() {
               <User className="w-3.5 h-3.5" />
               <span className="text-[13px] font-medium">{getRoleDisplay()}</span>
             </div>
-            <div 
-              onClick={() => setIsContextDrawerOpen(true)}
-              className="flex items-center gap-1.5 text-[#6B7280] hover:text-[#183B2B] cursor-pointer transition-colors group"
-            >
+            <div className="flex items-center gap-1.5 text-[#6B7280]">
               <Building2 className="w-3.5 h-3.5" />
-              <span className="text-[13px] font-medium group-hover:underline">
+              <span className="text-[13px] font-medium">
                 {activeCompany?.name || user.company?.name || "Belum ada organisasi"}
-              </span>
-              <span className="text-[10px] font-bold text-[#183B2B] bg-[#EAF3ED] px-2 py-0.5 rounded-full ml-1">
-                Ganti
               </span>
             </div>
           </div>
@@ -419,40 +283,52 @@ export default function ProfilPage() {
           </div>
         </div>
 
-        {/* Profil Perusahaan Card */}
-        {(activeCompany || user?.company) && (
-          <div 
-            onClick={() => router.push("/perusahaan")}
-            className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-9 flex justify-center">
-                <Building2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[#111827] text-[14px] font-bold">Profil Perusahaan</span>
-                <span className="text-[#6B7280] text-[12px]">{activeCompany?.name || user?.company?.name || "Lihat profil & informasi organisasi"}</span>
-              </div>
+        {/* Informasi Perusahaan Card */}
+        <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
+          <div className="p-5 flex items-center gap-3 border-b border-[#F3F4F6]">
+            <div className="w-[34px] h-[34px] rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
+              <Building2 className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
             </div>
-            <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+            <h2 className="text-[#111827] text-[15px] font-bold">Informasi Perusahaan</h2>
           </div>
-        )}
 
-        {/* Akses & Perusahaan Card */}
-        <div 
-          onClick={() => setIsContextDrawerOpen(true)}
-          className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-9 flex justify-center">
-              <Building2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[#111827] text-[14px] font-bold">Akses & Perusahaan</span>
-              <span className="text-[#6B7280] text-[12px]">Kelola mode tampilan dan organisasi aktif.</span>
+          <div className="flex flex-col">
+            {/* Profil Perusahaan */}
+            {(activeCompany || user?.company) && (
+              <div 
+                onClick={() => router.push("/perusahaan")}
+                className="p-5 flex items-center justify-between border-b border-[#F3F4F6] active:bg-gray-50 cursor-pointer transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-9 flex justify-center">
+                    <Building2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.75} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[#111827] text-[14px] font-bold">Profil Perusahaan</span>
+                    <span className="text-[#6B7280] text-[12px]">{activeCompany?.name || user?.company?.name || "Lihat profil & informasi organisasi"}</span>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+              </div>
+            )}
+
+            {/* Ganti Perusahaan */}
+            <div 
+              onClick={() => setIsContextDrawerOpen(true)}
+              className="p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <ArrowLeftRight className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.75} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[#111827] text-[14px] font-bold">Ganti Perusahaan</span>
+                  <span className="text-[#6B7280] text-[12px]">Beralih ke organisasi atau perusahaan lain</span>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
         </div>
 
         {/* Keluar dari Akun Card */}

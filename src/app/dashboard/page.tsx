@@ -62,23 +62,21 @@ export default function DashboardPage() {
   } = useCompany();
 
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const [user, setUser] = useState<any>(() => {
-    if (currentUser) return currentUser;
-    if (typeof window !== "undefined") {
-      try {
-        const u = localStorage.getItem("user");
-        return u ? JSON.parse(u) : null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
+    setMounted(true);
     if (currentUser) {
       setUser(currentUser);
+    } else {
+      try {
+        const u = localStorage.getItem("user");
+        if (u) {
+          setUser(JSON.parse(u));
+        }
+      } catch {}
     }
   }, [currentUser]);
   const [news, setNews] = useState<any[]>([]);
@@ -421,7 +419,7 @@ export default function DashboardPage() {
             className="cursor-pointer shrink-0 relative group"
             title="Lihat Profil"
           >
-            {user?.avatarUrl && !avatarError ? (
+            {mounted && user?.avatarUrl && !avatarError ? (
               <img
                 src={user.avatarUrl}
                 alt="Avatar"
@@ -430,7 +428,7 @@ export default function DashboardPage() {
               />
             ) : (
               <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full flex items-center justify-center text-[#1E4738] font-bold text-[16px] border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 shadow-xs">
-                {user?.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+                {mounted && user?.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
               </div>
             )}
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a859] border-2 border-white rounded-full"></div>
@@ -441,7 +439,7 @@ export default function DashboardPage() {
               Selamat datang,
             </span>
             <h1 className="text-[#1E4738] text-[17px] font-bold leading-tight truncate">
-              {user?.fullName || (isLoading ? "Memuat..." : "Pengguna")}
+              {mounted && user?.fullName ? user.fullName : (isLoading ? "Memuat..." : "Pengguna")}
             </h1>
           </div>
         </div>
@@ -566,147 +564,326 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Bagian 1: Tugas Hari Ini (Hanya yang belum dikerjakan) */}
+        {/* Aktivitas Hari Ini (Resume Tugas & Agenda) */}
         <div className="flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[17.5px] font-bold text-[#1E4738]">Tugas Hari Ini</h2>
-              {todayTasks.length > 0 && (
-                <span className="bg-[#EEF5F0] text-[#1E4738] text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  {todayTasks.length} belum selesai
-                </span>
-              )}
+          <div className="flex justify-between items-center gap-2 flex-wrap">
+            <h2 className="text-[17.5px] font-bold text-[#1E4738] shrink-0">Aktivitas Hari Ini</h2>
+
+            {/* Tab Filter Switcher */}
+            <div className="flex items-center gap-1 p-0.5 bg-[#EEF5F0] rounded-full shrink-0">
+              <button
+                type="button"
+                onClick={() => setResumeTab("all")}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                  resumeTab === "all" ? "bg-white text-[#1E4738] shadow-xs" : "text-[#5C786C] hover:text-[#1E4738]"
+                }`}
+              >
+                Semua {todayTasks.length + todayAgendas.length > 0 && `(${todayTasks.length + todayAgendas.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setResumeTab("tasks")}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                  resumeTab === "tasks" ? "bg-white text-[#1E4738] shadow-xs" : "text-[#5C786C] hover:text-[#1E4738]"
+                }`}
+              >
+                Tugas {todayTasks.length > 0 && `(${todayTasks.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setResumeTab("agendas")}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                  resumeTab === "agendas" ? "bg-white text-[#1E4738] shadow-xs" : "text-[#5C786C] hover:text-[#1E4738]"
+                }`}
+              >
+                Agenda {todayAgendas.length > 0 && `(${todayAgendas.length})`}
+              </button>
             </div>
-            <button
-              onClick={() => router.push("/tugas")}
-              className="text-[#356E3B] text-[12.5px] font-bold hover:underline cursor-pointer"
-            >
-              Lihat Semua
-            </button>
           </div>
 
           <div className="flex flex-col gap-2.5">
             {isTasksAgendasLoading ? (
-              <div className="text-center text-[#7d998c] text-[13px] font-medium py-3 animate-pulse">
-                Memuat tugas...
+              <div className="text-center text-[#7d998c] text-[13px] font-medium py-4 animate-pulse">
+                Memuat aktivitas...
               </div>
-            ) : todayTasks.length === 0 ? (
-              <div className="bg-white rounded-[20px] p-5 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[13px] font-medium">
-                <CheckCircle2 className="w-4 h-4 text-[#356E3B]" />
-                <span>Semua tugas hari ini telah selesai dikerjakan!</span>
-              </div>
-            ) : (
-              todayTasks.slice(0, 4).map((task) => (
-                <div
-                  key={`task-${task.id}`}
-                  onClick={() => router.push(`/tugas/${task.id}`)}
-                  className="bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                    <button
-                      type="button"
-                      onTouchStart={(e) => e.stopPropagation()}
-                      onTouchEnd={(e) => e.stopPropagation()}
-                      onClick={(e) => handleToggleTask(task.id, e)}
-                      className="w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer bg-white border-[#D1E0D6] hover:border-[#356E3B]"
-                      title="Tandai selesai"
-                    >
-                    </button>
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <h3 className="text-[13.5px] font-bold text-[#111827] leading-tight truncate">
-                        {task.title}
-                      </h3>
-                      <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
-                        <span className="flex items-center gap-1 font-medium">
-                          <Clock className="w-3 h-3 text-[#356E3B]" />
-                          {task.time ? `Pukul ${task.time}` : "Hari Ini"}
-                        </span>
-                        <span className="text-gray-300">•</span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#356E3B]">
-                          {task.type === "group" ? "Tugas Grup" : "Personal"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+            ) : resumeTab === "all" ? (
+              todayTasks.length === 0 && todayAgendas.length === 0 ? (
+                <div className="bg-white rounded-[20px] p-6 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center">
+                  <p className="text-[#7d998c] text-[13px] font-medium">
+                    Belum ada tugas atau agenda untuk hari ini.
+                  </p>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Bagian 2: Agenda Hari Ini */}
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[17.5px] font-bold text-[#1E4738]">Agenda Hari Ini</h2>
-              {todayAgendas.length > 0 && (
-                <span className="bg-[#EEF5F0] text-[#1E4738] text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  {todayAgendas.length}
-                </span>
-              )}
-            </div>
-            <button
-              onClick={() => router.push("/agenda")}
-              className="text-[#356E3B] text-[12.5px] font-bold hover:underline cursor-pointer"
-            >
-              Lihat Semua
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            {isTasksAgendasLoading ? (
-              <div className="text-center text-[#7d998c] text-[13px] font-medium py-3 animate-pulse">
-                Memuat agenda...
-              </div>
-            ) : todayAgendas.length === 0 ? (
-              <div className="bg-white rounded-[20px] p-5 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[13px] font-medium">
-                <Calendar className="w-4 h-4 text-[#356E3B]" />
-                <span>Belum ada agenda kegiatan untuk hari ini.</span>
-              </div>
-            ) : (
-              todayAgendas.slice(0, 4).map((agenda) => {
-                const catColor = getAgendaCategoryColor(agenda.category?.name || agenda.type);
-                return (
-                  <div
-                    key={`agenda-${agenda.id}`}
-                    onClick={() => router.push(`/agenda/${agenda.id}`)}
-                    className={`bg-white rounded-[20px] p-4 pl-4.5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3`}
-                  >
-                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
-                    <div className="flex flex-col min-w-0 flex-1 pl-1">
-                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <Badge variant={catColor.variant} size="xs" uppercase>
-                          {agenda.category?.name || agenda.type || "Kegiatan"}
-                        </Badge>
-                        <Badge
-                          variant={agenda.scope === "company" || agenda.type === "COMPANY" ? "company" : "personal"}
-                          size="xs"
-                          uppercase
-                        >
-                          {agenda.scope === "company" || agenda.type === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
-                        </Badge>
-                      </div>
-                      <h3 className="text-[13.5px] font-bold text-[#111827] leading-tight truncate">
-                        {agenda.title}
-                      </h3>
-                      <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
-                        <span className="flex items-center gap-1 font-medium shrink-0">
-                          <Clock className="w-3 h-3 text-[#356E3B]" />
-                          {agenda.time_range || "Hari ini"}
-                        </span>
-                        {agenda.link_or_location && (
-                          <>
-                            <span className="text-gray-300">•</span>
-                            <span className="truncate max-w-[160px] font-medium">{agenda.link_or_location}</span>
-                          </>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {/* Subheading Tugas */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center px-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13.5px] font-bold text-[#1E4738]">Tugas</span>
+                        {todayTasks.length > 0 && (
+                          <span className="bg-[#EEF5F0] text-[#1E4738] text-[10.5px] font-bold px-2 py-0.5 rounded-full">
+                            {todayTasks.length} belum selesai
+                          </span>
                         )}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/tugas")}
+                        className="text-[#356E3B] text-[11.5px] font-bold hover:underline cursor-pointer"
+                      >
+                        Lihat Semua
+                      </button>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+
+                    {todayTasks.length === 0 ? (
+                      <div className="bg-white rounded-[20px] p-4 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[12.5px] font-medium">
+                        <CheckCircle2 className="w-4 h-4 text-[#356E3B]" />
+                        <span>Semua tugas hari ini telah selesai!</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2.5">
+                        {todayTasks.slice(0, 3).map((task) => (
+                          <div
+                            key={`task-${task.id}`}
+                            onClick={() => router.push(`/tugas/${task.id}`)}
+                            className="bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
+                          >
+                            <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onTouchStart={(e) => e.stopPropagation()}
+                                onTouchEnd={(e) => e.stopPropagation()}
+                                onClick={(e) => handleToggleTask(task.id, e)}
+                                className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                                  task.completed
+                                    ? "bg-[#2D5A3F] border-[#2D5A3F]"
+                                    : "bg-white border-[#D1E0D6] hover:border-[#356E3B]"
+                                }`}
+                                title={task.completed ? "Tandai belum selesai" : "Tandai selesai"}
+                              >
+                                {task.completed && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                              </button>
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <h3
+                                  className={`text-[13.5px] font-bold leading-tight truncate ${
+                                    task.completed ? "text-[#6B7280]" : "text-[#111827]"
+                                  }`}
+                                >
+                                  {task.title}
+                                </h3>
+                                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
+                                  <span className="flex items-center gap-1 font-medium">
+                                    <Clock className="w-3 h-3 text-[#356E3B]" />
+                                    {task.time ? `Pukul ${task.time}` : "Hari Ini"}
+                                  </span>
+                                  <span className="text-gray-300">•</span>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#356E3B]">
+                                    {task.type === "group" ? "Tugas Grup" : "Personal"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                );
-              })
+
+                  {/* Subheading Agenda */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center px-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13.5px] font-bold text-[#1E4738]">Agenda</span>
+                        {todayAgendas.length > 0 && (
+                          <span className="bg-[#EEF5F0] text-[#1E4738] text-[10.5px] font-bold px-2 py-0.5 rounded-full">
+                            {todayAgendas.length}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => router.push("/agenda")}
+                        className="text-[#356E3B] text-[11.5px] font-bold hover:underline cursor-pointer"
+                      >
+                        Lihat Semua
+                      </button>
+                    </div>
+
+                    {todayAgendas.length === 0 ? (
+                      <div className="bg-white rounded-[20px] p-4 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[12.5px] font-medium">
+                        <Calendar className="w-4 h-4 text-[#356E3B]" />
+                        <span>Belum ada agenda untuk hari ini.</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2.5">
+                        {todayAgendas.slice(0, 3).map((agenda) => {
+                          const catColor = getAgendaCategoryColor(agenda.category?.name || agenda.type);
+                          return (
+                            <div
+                              key={`agenda-${agenda.id}`}
+                              onClick={() => router.push(`/agenda/${agenda.id}`)}
+                              className={`bg-white rounded-[20px] p-4 pl-4.5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3`}
+                            >
+                              <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
+                              <div className="flex flex-col min-w-0 flex-1 pl-1">
+                                <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                  <Badge variant={catColor.variant} size="xs" uppercase>
+                                    {agenda.category?.name || agenda.type || "Kegiatan"}
+                                  </Badge>
+                                  <Badge
+                                    variant={agenda.scope === "company" || agenda.type === "COMPANY" ? "company" : "personal"}
+                                    size="xs"
+                                    uppercase
+                                  >
+                                    {agenda.scope === "company" || agenda.type === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
+                                  </Badge>
+                                </div>
+                                <h3 className="text-[13.5px] font-bold text-[#111827] leading-tight truncate">
+                                  {agenda.title}
+                                </h3>
+                                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
+                                  <span className="flex items-center gap-1 font-medium shrink-0">
+                                    <Clock className="w-3 h-3 text-[#356E3B]" />
+                                    {agenda.time_range || "Hari ini"}
+                                  </span>
+                                  {agenda.link_or_location && (
+                                    <>
+                                      <span className="text-gray-300">•</span>
+                                      <span className="truncate max-w-[160px] font-medium">{agenda.link_or_location}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            ) : resumeTab === "tasks" ? (
+              todayTasks.length === 0 ? (
+                <div className="bg-white rounded-[20px] p-5 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[13px] font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-[#356E3B]" />
+                  <span>Semua tugas hari ini telah selesai dikerjakan!</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {todayTasks.slice(0, 6).map((task) => (
+                    <div
+                      key={`task-${task.id}`}
+                      onClick={() => router.push(`/tugas/${task.id}`)}
+                      className="bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onTouchStart={(e) => e.stopPropagation()}
+                          onTouchEnd={(e) => e.stopPropagation()}
+                          onClick={(e) => handleToggleTask(task.id, e)}
+                          className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                            task.completed
+                              ? "bg-[#2D5A3F] border-[#2D5A3F]"
+                              : "bg-white border-[#D1E0D6] hover:border-[#356E3B]"
+                          }`}
+                          title={task.completed ? "Tandai belum selesai" : "Tandai selesai"}
+                        >
+                          {task.completed && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                        </button>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <h3
+                            className={`text-[13.5px] font-bold leading-tight truncate ${
+                              task.completed ? "text-[#6B7280]" : "text-[#111827]"
+                            }`}
+                          >
+                            {task.title}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
+                            <span className="flex items-center gap-1 font-medium">
+                              <Clock className="w-3 h-3 text-[#356E3B]" />
+                              {task.time ? `Pukul ${task.time}` : "Hari Ini"}
+                            </span>
+                            <span className="text-gray-300">•</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#356E3B]">
+                              {task.type === "group" ? "Tugas Grup" : "Personal"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/tugas")}
+                    className="w-full py-2.5 mt-1 text-center text-[#356E3B] text-[12px] font-bold bg-[#EEF5F0] hover:bg-[#E2EFE5] rounded-[14px] transition-colors cursor-pointer"
+                  >
+                    Buka Halaman Tugas
+                  </button>
+                </div>
+              )
+            ) : (
+              todayAgendas.length === 0 ? (
+                <div className="bg-white rounded-[20px] p-5 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[13px] font-medium">
+                  <Calendar className="w-4 h-4 text-[#356E3B]" />
+                  <span>Belum ada agenda kegiatan untuk hari ini.</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {todayAgendas.slice(0, 6).map((agenda) => {
+                    const catColor = getAgendaCategoryColor(agenda.category?.name || agenda.type);
+                    return (
+                      <div
+                        key={`agenda-${agenda.id}`}
+                        onClick={() => router.push(`/agenda/${agenda.id}`)}
+                        className={`bg-white rounded-[20px] p-4 pl-4.5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3`}
+                      >
+                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
+                        <div className="flex flex-col min-w-0 flex-1 pl-1">
+                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                            <Badge variant={catColor.variant} size="xs" uppercase>
+                              {agenda.category?.name || agenda.type || "Kegiatan"}
+                            </Badge>
+                            <Badge
+                              variant={agenda.scope === "company" || agenda.type === "COMPANY" ? "company" : "personal"}
+                              size="xs"
+                              uppercase
+                            >
+                              {agenda.scope === "company" || agenda.type === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
+                            </Badge>
+                          </div>
+                          <h3 className="text-[13.5px] font-bold text-[#111827] leading-tight truncate">
+                            {agenda.title}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
+                            <span className="flex items-center gap-1 font-medium shrink-0">
+                              <Clock className="w-3 h-3 text-[#356E3B]" />
+                              {agenda.time_range || "Hari ini"}
+                            </span>
+                            {agenda.link_or_location && (
+                              <>
+                                <span className="text-gray-300">•</span>
+                                <span className="truncate max-w-[160px] font-medium">{agenda.link_or_location}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/agenda")}
+                    className="w-full py-2.5 mt-1 text-center text-[#356E3B] text-[12px] font-bold bg-[#EEF5F0] hover:bg-[#E2EFE5] rounded-[14px] transition-colors cursor-pointer"
+                  >
+                    Buka Halaman Agenda
+                  </button>
+                </div>
+              )
             )}
           </div>
         </div>
@@ -737,7 +914,7 @@ export default function DashboardPage() {
               news.map((item, idx) => (
                 <div 
                   key={item.id || idx} 
-                  onClick={() => router.push(`/berita/${item.id}`)}
+                  onClick={() => router.push(`/berita/${item.id}?from=/dashboard`)}
                   className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#dce9df] hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
                 >
                   {item.cover_image_url ? (
