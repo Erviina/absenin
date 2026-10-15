@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { Building2, Plus, Hourglass, ChevronLeft } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
@@ -171,24 +170,21 @@ function CekPerusahaanContent() {
         </button>
 
         {/* Logo */}
-        <div className="relative w-[100px] h-[30px]">
-          <Image 
+        <div className="h-[30px] flex items-center">
+          <img 
             src="/img/assets/Logo.png" 
             alt="AbsenIN Logo" 
-            fill
-            className="object-contain object-right"
+            className="h-[30px] w-auto object-contain"
           />
         </div>
       </div>
 
       {/* Illustration */}
-      <div className="flex justify-center mb-8 relative w-full aspect-[4/3] max-h-[220px]">
-        <Image 
+      <div className="flex justify-center mb-8 w-full max-h-[220px]">
+        <img 
           src="/img/assets/cekperusahaan.png" 
           alt="Illustration" 
-          fill
-          className="object-contain"
-          priority
+          className="max-h-[220px] w-auto object-contain"
         />
       </div>
 
