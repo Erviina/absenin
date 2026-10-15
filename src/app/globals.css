@@ -65,8 +65,19 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    @apply antialiased;
+    background-color: var(--background);
+    overflow-x: clip;
+  }
+  @media (min-width: 640px) {
+    html {
+      background-color: #EDF3EF;
+    }
+  }
   body {
     @apply bg-background text-foreground antialiased;
+    overflow-x: clip;
   }
 }
 

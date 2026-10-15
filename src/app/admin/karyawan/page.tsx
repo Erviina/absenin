@@ -981,7 +981,7 @@ function AdminKaryawanView() {
       {/* QR Code Modal (Hanya untuk Admin) */}
       {isBarcodeModalOpen && (
         <div className="fixed inset-0 z-[100] flex justify-center sm:bg-black/80">
-          <div className="w-full max-w-md h-full flex flex-col bg-[#fbfdfc] relative">
+          <div className="w-full sm:max-w-md h-full flex flex-col bg-[#fbfdfc] relative">
             
             {/* Top Actions */}
             <div className="absolute top-6 left-5 right-6 flex items-center justify-between">
@@ -1044,7 +1044,7 @@ function AdminKaryawanView() {
       {/* Modal Edit Role Karyawan */}
       {selectedEmployeeForRole && (
         <div className="fixed inset-0 z-[100] flex justify-end flex-col sm:justify-center sm:items-center bg-black/60">
-          <div className="w-full max-w-md bg-white rounded-t-[24px] sm:rounded-[24px] p-6 flex flex-col gap-4 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0">
+          <div className="w-full sm:max-w-md bg-white rounded-t-[24px] sm:rounded-[24px] p-6 flex flex-col gap-4 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0">
             <div className="flex justify-between items-center mb-2">
               <h2 className="text-[16px] font-bold text-[#111827]">Kelola Karyawan</h2>
               <button onClick={() => { setSelectedEmployeeForRole(null); setSaveRoleError(""); }} className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200 active:scale-95 transition-colors">

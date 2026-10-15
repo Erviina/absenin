@@ -386,7 +386,7 @@ export default function KehadiranPage() {
 
       {/* Filter Modal Overlay */}
       {isFilterOpen && (
-        <div className="fixed inset-0 z-[100] flex flex-col justify-end max-w-md mx-auto">
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end w-full sm:max-w-md mx-auto">
           {/* Backdrop */}
           <div 
             className="absolute inset-0 bg-black/40 transition-opacity animate-in fade-in duration-300"

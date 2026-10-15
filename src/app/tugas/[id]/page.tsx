@@ -296,8 +296,8 @@ export default function TugasDetailPage() {
       </div>
 
       {/* Bottom Floating Complete Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] z-20">
-        <div className="max-w-md mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full sm:max-w-md p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 sm:border-x sm:border-border/40 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] z-20">
+        <div className="w-full">
           <button
             type="button"
             onClick={handleToggleComplete}

@@ -268,7 +268,7 @@ export default function BuatPerusahaanPage() {
         <div className="absolute bottom-6 left-6 right-6 flex justify-center">
           <button 
             onClick={() => router.push("/admin/dashboard")}
-            className="w-full max-w-md bg-[#356E3B] hover:bg-[#2b5930] text-white py-4 rounded-full text-[15px] font-bold transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] active:scale-[0.98]"
+            className="w-full sm:max-w-md bg-[#356E3B] hover:bg-[#2b5930] text-white py-4 rounded-full text-[15px] font-bold transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] active:scale-[0.98]"
           >
             Mulai ke Beranda
           </button>
@@ -352,11 +352,11 @@ export default function BuatPerusahaanPage() {
       </div>
 
       {/* Floating Action Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#f7fbf8] via-[#f7fbf8] to-transparent z-10 pointer-events-none">
+      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full sm:max-w-md p-5 bg-gradient-to-t from-[#f7fbf8] via-[#f7fbf8] to-transparent z-10 pointer-events-none">
         <button 
           onClick={handleLanjutkan}
           disabled={!nama || !alamat || isLoading}
-          className={`w-full max-w-md mx-auto pointer-events-auto py-4 rounded-[20px] text-[15px] font-bold flex items-center justify-center transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] ${nama && alamat && !isLoading ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' : 'bg-gray-300 text-gray-100 shadow-none'}`}
+          className={`w-full pointer-events-auto py-4 rounded-[20px] text-[15px] font-bold flex items-center justify-center transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] ${nama && alamat && !isLoading ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' : 'bg-gray-300 text-gray-100 shadow-none'}`}
         >
           {isLoading ? "Memproses..." : "Lanjutkan"}
         </button>

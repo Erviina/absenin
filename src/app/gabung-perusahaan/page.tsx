@@ -301,7 +301,7 @@ function GabungPerusahaanContent() {
         </p>
 
         {/* Bottom Button */}
-        <div className="absolute bottom-8 left-6 right-6 flex justify-center max-w-md mx-auto">
+        <div className="absolute bottom-8 left-6 right-6 flex justify-center w-full sm:max-w-md mx-auto">
           <button 
             onClick={handleLanjutKeBeranda}
             className="w-full bg-[#2D5A3F] hover:bg-[#234731] text-white py-4 rounded-full text-[15px] font-bold transition-all shadow-[0_6px_20px_rgba(45,90,63,0.25)] active:scale-[0.98] cursor-pointer"

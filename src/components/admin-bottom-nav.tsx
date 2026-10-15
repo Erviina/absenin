@@ -92,7 +92,7 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md bg-white flex justify-between px-6 z-50 shadow-[0_-4px_24px_rgba(0,0,0,0.04)] h-[72px] border-x border-border/40">
+    <div className="fixed bottom-0 left-0 right-0 mx-auto w-full sm:max-w-md bg-white flex justify-between px-6 z-50 shadow-[0_-4px_24px_rgba(0,0,0,0.04)] h-[72px] border-t border-border/40 sm:border-x border-x-0">
       {navItems.map((item) => {
         const isActive = activeTab === item.id;
         return (

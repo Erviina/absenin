@@ -382,7 +382,7 @@ export default function LaporanKehadiranPage() {
 
       {/* Floating Export Button */}
       {selectedItems.length > 0 && (
-        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-5 pb-6 pt-4 bg-gradient-to-t from-white via-white to-transparent z-50 animate-in slide-in-from-bottom-5 pointer-events-none">
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full sm:max-w-md px-5 pb-6 pt-4 bg-gradient-to-t from-white via-white to-transparent z-50 animate-in slide-in-from-bottom-5 pointer-events-none">
           <div className="w-full flex gap-3 pointer-events-auto">
             <button 
               onClick={() => handleExport('pdf')}

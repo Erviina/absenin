@@ -700,7 +700,7 @@ export default function CheckinPage() {
 
       {/* STEP 2: Bukti Foto (Full Screen Responsive) */}
       {step === 2 && (
-        <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] w-full z-50 bg-[#111] flex flex-col justify-between overflow-hidden max-w-md mx-auto select-none">
+        <div className="fixed inset-0 h-[100dvh] max-h-[100dvh] w-full z-50 bg-[#111] flex flex-col justify-between overflow-hidden sm:max-w-md mx-auto select-none">
           {/* Camera Feed */}
           {cameraError ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#111] z-20 px-8 text-center">
@@ -920,7 +920,7 @@ export default function CheckinPage() {
 
       {/* Fixed Bottom Action for Step 3 */}
       {step === 3 && (
-        <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md bg-gradient-to-t from-white via-white to-white/90 p-6 pb-8 z-30 border-x border-border/40">
+        <div className="fixed bottom-0 left-0 right-0 mx-auto w-full sm:max-w-md bg-gradient-to-t from-white via-white to-white/90 p-6 pb-8 z-30 border-t border-border/40 sm:border-x border-x-0">
           {submitError && (
             <div className="mb-4 p-3 bg-red-50 text-red-500 text-[13px] rounded-xl border border-red-100 text-center font-medium">
               {submitError}

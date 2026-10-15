@@ -883,7 +883,7 @@ export default function KelolaPerusahaanPage() {
           />
           
           {/* Bottom Sheet */}
-          <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300">
+          <div className="relative bg-white w-full sm:max-w-md mx-auto rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300">
             {/* Drag handle */}
             <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1"></div>
             
@@ -1035,7 +1035,7 @@ export default function KelolaPerusahaanPage() {
           />
           
           {/* Bottom Sheet */}
-          <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[32px] flex flex-col max-h-[90dvh] animate-in slide-in-from-bottom-full duration-300">
+          <div className="relative bg-white w-full sm:max-w-md mx-auto rounded-t-[32px] flex flex-col max-h-[90dvh] animate-in slide-in-from-bottom-full duration-300">
             {/* Drag handle */}
             <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1"></div>
             
@@ -1143,7 +1143,7 @@ export default function KelolaPerusahaanPage() {
           />
           
           {/* Bottom Sheet */}
-          <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300">
+          <div className="relative bg-white w-full sm:max-w-md mx-auto rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300">
             {/* Drag handle */}
             <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1"></div>
             
@@ -1220,7 +1220,7 @@ export default function KelolaPerusahaanPage() {
           <button 
             onClick={handleSimpanPerusahaan}
             disabled={isSaving}
-            className="w-full max-w-md mx-auto bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[15px] py-4 rounded-[20px] flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(53,110,59,0.3)] transition-all active:scale-[0.98]"
+            className="w-full sm:max-w-md mx-auto bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[15px] py-4 rounded-[20px] flex items-center justify-center gap-2 shadow-[0_8px_24px_rgba(53,110,59,0.3)] transition-all active:scale-[0.98]"
           >
             {isSaving ? "Menyimpan..." : (
               <>

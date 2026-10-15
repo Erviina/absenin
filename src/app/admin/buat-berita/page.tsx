@@ -290,7 +290,7 @@ function BuatBeritaForm() {
       </div>
 
       {/* Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md p-5 bg-gradient-to-t from-[#f4f9f6] via-[#f4f9f6] to-transparent pb-8 z-20 flex gap-3">
+      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full sm:max-w-md p-5 bg-gradient-to-t from-[#f4f9f6] via-[#f4f9f6] to-transparent pb-8 z-20 flex gap-3">
         <button 
           type="button"
           onClick={() => setIsPreviewOpen(true)}
@@ -318,7 +318,7 @@ function BuatBeritaForm() {
             className="fixed inset-0"
             onClick={() => setIsPreviewOpen(false)}
           />
-          <div className="bg-[#fbfdfc] w-full max-w-md rounded-t-[32px] sm:rounded-[28px] max-h-[88vh] flex flex-col shadow-2xl relative z-10 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 border border-[#eef5f0] overflow-hidden">
+          <div className="bg-[#fbfdfc] w-full sm:max-w-md rounded-t-[32px] sm:rounded-[28px] max-h-[88vh] flex flex-col shadow-2xl relative z-10 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 border border-[#eef5f0] overflow-hidden">
             {/* Header Modal */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#eef5f0] bg-white">
               <div className="flex items-center gap-2">

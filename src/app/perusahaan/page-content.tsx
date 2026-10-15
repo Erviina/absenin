@@ -391,7 +391,7 @@ export default function ProfilPerusahaanContent() {
         }
       />
 
-      <div className="flex-1 flex flex-col p-5 gap-5 max-w-md mx-auto w-full pb-24">
+      <div className="flex-1 flex flex-col p-5 gap-5 sm:max-w-md mx-auto w-full pb-24">
         
         {/* Hero Card: Company Header */}
         <div className="bg-gradient-to-br from-[#1E4738] via-[#2A5D44] to-[#356E3B] rounded-[24px] p-6 text-white shadow-lg shadow-[#1E4738]/15 relative overflow-hidden">
@@ -733,7 +733,7 @@ export default function ProfilPerusahaanContent() {
       {/* Modal / Dialog Pengajuan Keluar dari Perusahaan */}
       {isExitModalOpen && (
         <div className="fixed inset-0 z-[100] flex justify-end flex-col sm:justify-center sm:items-center bg-black/60 p-0 sm:p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white rounded-t-[28px] sm:rounded-[24px] p-6 flex flex-col gap-4 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 shadow-2xl">
+          <div className="w-full sm:max-w-md bg-white rounded-t-[28px] sm:rounded-[24px] p-6 flex flex-col gap-4 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 shadow-2xl">
             <div className="flex justify-between items-center pb-2 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center">

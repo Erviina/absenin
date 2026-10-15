@@ -39,7 +39,7 @@ export default function RootLayout({
     >
       <body
         suppressHydrationWarning
-        className="min-h-full flex flex-col bg-background text-foreground max-w-md mx-auto shadow-sm border-x border-border/40 relative font-sans"
+        className="min-h-[100dvh] flex flex-col bg-background text-foreground w-full sm:max-w-md sm:mx-auto sm:shadow-xl sm:border-x sm:border-border/40 border-x-0 relative font-sans"
       >
         <GoogleAuthProvider>
           <CompanyProvider>
