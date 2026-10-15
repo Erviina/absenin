@@ -128,7 +128,7 @@ function GabungPerusahaanContent() {
 
       html5QrCode.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        { fps: 10 },
         onScanSuccess,
         () => {} // onScanFailure ignore
       ).catch(err => {
@@ -337,23 +337,46 @@ function GabungPerusahaanContent() {
 
         {/* Scanner Area */}
         <div className="flex-1 flex flex-col items-center justify-center pb-20">
+          <style>{`
+            #qr-shaded-region {
+              display: none !important;
+            }
+            #qr-reader {
+              border: none !important;
+              width: 100% !important;
+              height: 100% !important;
+            }
+            #qr-reader video {
+              width: 100% !important;
+              height: 100% !important;
+              object-fit: cover !important;
+              border-radius: 1rem !important;
+            }
+            @keyframes qrScan {
+              0% { top: 8%; opacity: 0.7; }
+              50% { top: 92%; opacity: 1; }
+              100% { top: 8%; opacity: 0.7; }
+            }
+            .animate-qr-scan {
+              animation: qrScan 2.4s ease-in-out infinite;
+            }
+          `}</style>
           
           <div className="relative w-[280px] h-[280px] mb-8">
             
-            {/* Corner Brackets */}
-            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#76d8a3] rounded-tl-[24px] z-10"></div>
-            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#76d8a3] rounded-tr-[24px] z-10"></div>
-            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#76d8a3] rounded-bl-[24px] z-10"></div>
-            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#76d8a3] rounded-br-[24px] z-10"></div>
+            {/* Corner Brackets - Only Green Border */}
+            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#76d8a3] rounded-tl-[24px] z-10 pointer-events-none"></div>
+            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#76d8a3] rounded-tr-[24px] z-10 pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#76d8a3] rounded-bl-[24px] z-10 pointer-events-none"></div>
+            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#76d8a3] rounded-br-[24px] z-10 pointer-events-none"></div>
             
-            {/* White Background with QR (Simulating camera focus area) */}
-            <div className="absolute inset-2 bg-[#f4f6f5] rounded-2xl flex items-center justify-center overflow-hidden relative">
-              <div id="qr-reader" className="w-full h-full object-cover"></div>
+            {/* Camera Viewfinder */}
+            <div className="absolute inset-2 bg-black rounded-2xl flex items-center justify-center overflow-hidden">
+              <div id="qr-reader" className="w-full h-full"></div>
               
               {/* Scan Line glow */}
               <div 
-                className="absolute left-0 right-0 h-1 bg-[#76d8a3] shadow-[0_0_16px_8px_rgba(118,216,163,0.5)] z-20"
-                style={{ top: '50%', transform: 'translateY(-50%)' }}
+                className="absolute left-0 right-0 h-1 bg-[#76d8a3] shadow-[0_0_16px_8px_rgba(118,216,163,0.5)] z-20 pointer-events-none animate-qr-scan"
               ></div>
             </div>
             

@@ -978,68 +978,97 @@ function AdminKaryawanView() {
 
       </div>
 
-      {/* QR Code Modal (Hanya untuk Admin) */}
-      {isBarcodeModalOpen && (
-        <div className="fixed inset-0 z-[100] flex justify-center sm:bg-black/80">
-          <div className="w-full sm:max-w-md h-full flex flex-col bg-[#fbfdfc] relative">
+      {/* QR Code Modal (Bottom Sheet Tambah Karyawan) */}
+      {isBarcodeModalOpen && (() => {
+        const joinCode = companyData?.join_code || (activeCompany as any)?.join_code || "";
+        const companyName = companyData?.name || activeCompany?.name || "Perusahaan";
+        const qrUrl = typeof window !== 'undefined' 
+          ? `${window.location.origin}/gabung-perusahaan?code=${joinCode}` 
+          : `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/gabung-perusahaan?code=${joinCode}`;
+
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col justify-end">
+            {/* Backdrop */}
+            <div 
+              className="absolute inset-0 bg-black/40 transition-opacity"
+              onClick={() => setIsBarcodeModalOpen(false)}
+            />
             
-            {/* Top Actions */}
-            <div className="absolute top-6 left-5 right-6 flex items-center justify-between">
-              <button 
-                onClick={() => setIsBarcodeModalOpen(false)}
-                className="w-10 h-10 flex items-center justify-center -ml-2 active:scale-95 transition-transform"
-              >
-                <ChevronLeft className="w-8 h-8 text-[#356E3B] hover:text-[#2b5930] transition-colors" />
-              </button>
-            </div>
-            
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col items-center w-full pt-20 pb-10 px-5">
+            {/* Bottom Sheet */}
+            <div className="relative bg-white w-full max-w-md mx-auto rounded-t-[32px] flex flex-col animate-in slide-in-from-bottom-full duration-300">
+              {/* Drag handle */}
+              <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mt-3 mb-1"></div>
               
-              {isLoadingCompany ? (
-                <div className="text-center py-10 text-gray-500 text-[14px]">Memuat data perusahaan...</div>
-              ) : companyData ? (
-                <>
-                  <div className="bg-[#f0f4fb] flex items-center gap-2 px-4 py-2 rounded-[12px] mb-10 mt-6">
-                    <Building2 className="w-4 h-4 text-[#356E3B]" />
-                    <span className="text-[#111827] text-[13px] font-bold">{companyData.name}</span>
+              {/* Modal Header */}
+              <div className="flex justify-between items-center px-6 py-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-[#e6f0ea] rounded-full flex items-center justify-center">
+                    <UserPlus className="w-4 h-4 text-[#356E3B]" strokeWidth={2} />
                   </div>
+                  <h2 className="text-[#1E4738] text-[17px] font-bold">Tambah Karyawan</h2>
+                </div>
+                <button 
+                  onClick={() => setIsBarcodeModalOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-                  <div className="bg-white rounded-[20px] p-6 shadow-[0_2px_16px_rgba(0,0,0,0.04)] mb-8">
-                    <QRCodeSVG
-                      value={`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/gabung-perusahaan?code=${companyData.join_code}`}
-                      size={180}
-                      level="H"
-                      includeMargin={false}
-                      fgColor="#1a3b28"
-                    />
+              <div className="flex-1 overflow-y-auto px-6 pb-10 flex flex-col items-center">
+                
+                <p className="text-gray-500 text-[13px] text-center max-w-[280px] leading-relaxed mb-6 mt-2">
+                  Bagikan kode QR ini kepada karyawan untuk bergabung ke perusahaan Anda secara instan.
+                </p>
+
+                {/* QR Code Container */}
+                <div className="bg-[#f7fbf8] border border-[#eef5f0] w-full max-w-[280px] rounded-[24px] flex flex-col items-center py-8 mb-8 shadow-[0_2px_16px_rgba(0,0,0,0.02)]">
+                  <div className="w-[180px] h-[180px] bg-white rounded-[16px] shadow-sm flex items-center justify-center mb-6">
+                    {isLoadingCompany ? (
+                      <div className="text-gray-400 text-[13px]">Memuat...</div>
+                    ) : joinCode ? (
+                      <QRCodeSVG value={qrUrl} size={140} />
+                    ) : (
+                      <QrCode className="w-24 h-24 text-[#356E3B]" strokeWidth={1} />
+                    )}
                   </div>
+                  <div className="bg-[#e6f0ea] px-4 py-1.5 rounded-full">
+                    <span className="text-[#356E3B] text-[11px] font-bold tracking-wide">
+                      {companyName}
+                    </span>
+                  </div>
+                </div>
 
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className="text-[#111827] text-[20px] font-bold tracking-wider">{companyData.join_code}</span>
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(companyData.join_code);
+                {/* Divider */}
+                <div className="flex items-center gap-4 w-full mb-6">
+                  <div className="h-[1px] bg-gray-100 flex-1"></div>
+                  <span className="text-gray-400 text-[11px] font-medium">atau via kode</span>
+                  <div className="h-[1px] bg-gray-100 flex-1"></div>
+                </div>
+
+                {/* Input Salin Kode */}
+                <div className="w-full flex items-center justify-between border border-gray-200 rounded-[12px] p-2 bg-white transition-colors focus-within:border-[#356E3B]">
+                  <span className="text-gray-400 font-mono text-[14px] pl-3 tracking-widest">
+                    {joinCode || "------"}
+                  </span>
+                  <button 
+                    onClick={() => {
+                      if (joinCode) {
+                        navigator.clipboard.writeText(joinCode);
                         showToast("Kode berhasil disalin!", "success");
-                      }}
-                      className="text-gray-400 hover:text-[#356E3B] transition-colors active:scale-95"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
+                      }
+                    }}
+                    className="bg-[#356E3B] hover:bg-[#2b5930] text-white text-[12px] font-bold px-5 py-2.5 rounded-[8px] transition-colors active:scale-95"
+                  >
+                    Salin
+                  </button>
+                </div>
 
-                  <p className="text-gray-500 text-[11px] text-center max-w-[200px] leading-relaxed">
-                    Scan QR atau Masukan Kode untuk Bergabung ke Perusahaan
-                  </p>
-                </>
-              ) : (
-                <div className="text-center py-10 text-red-500 text-[14px]">Gagal memuat data perusahaan.</div>
-              )}
-              
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Modal Edit Role Karyawan */}
       {selectedEmployeeForRole && (

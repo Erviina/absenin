@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
-import { Clock, CheckCircle2, AlignLeft, Calendar, Users, Share2, RotateCcw, Check } from "lucide-react";
+import { Clock, CheckCircle2, AlignLeft, Calendar, Users, Share2, RotateCcw } from "lucide-react";
 import { formatDate } from "@/lib/dateUtils";
 import { useDialog } from "@/context/DialogContext";
 import { shareContent } from "@/lib/shareUtils";
@@ -160,41 +160,13 @@ export default function TugasDetailPage() {
             <h1 className={`text-[18px] font-bold leading-snug ${task.completed ? "text-[#6B7280] line-through" : "text-[#111827]"}`}>
               {task.title}
             </h1>
-            <Badge variant={task.type === 'group' ? 'info' : 'success'} size="sm" uppercase>
-              {task.type === 'group' ? 'Grup' : 'Personal'}
-            </Badge>
-          </div>
-          
-          <div className="flex items-center justify-between mt-2 pt-3 border-t border-gray-100">
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full shrink-0 ${task.completed ? 'bg-[#356E3B]' : 'bg-gray-300'}`} />
-              <span className={`text-[13px] font-semibold ${task.completed ? 'text-[#356E3B]' : 'text-gray-500'}`}>
-                {task.completed ? 'Sudah Selesai' : 'Belum Selesai'}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleToggleComplete}
-              disabled={isToggling}
-              className={`text-[12px] font-bold px-3 py-1 rounded-full transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 ${
-                task.completed
-                  ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  : "bg-[#E8F3EB] text-[#1E4738] hover:bg-[#d8ece0]"
-              }`}
+            <Badge 
+              variant={task.completed ? "success" : "neutral"} 
+              size="sm"
+              dot
             >
-              {task.completed ? (
-                <>
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Buka Kembali</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  <span>Selesaikan</span>
-                </>
-              )}
-            </button>
+              {task.completed ? "Sudah Selesai" : "Belum Selesai"}
+            </Badge>
           </div>
         </div>
 

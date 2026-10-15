@@ -246,8 +246,6 @@ export default function AdminDashboardPage() {
   const onTimePercent = Math.min(100, Math.round((onTimeCount / totalSlots) * 100));
   const latePercent = Math.min(100 - onTimePercent, Math.round((lateCount / totalSlots) * 100));
   const leavePercent = Math.min(100 - onTimePercent - latePercent, Math.round((leaveCount / totalSlots) * 100));
-  const totalAttended = onTimeCount + lateCount;
-  const totalAttendancePercent = Math.min(100, Math.round((totalAttended / totalSlots) * 100));
 
   const unreadNotifCount = activities.filter(a => !a.is_read).length;
 
@@ -322,16 +320,11 @@ export default function AdminDashboardPage() {
         {/* Kehadiran Karyawan Hari Ini (100% = total karyawan) */}
         <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col gap-4">
           {/* Header Row */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CalendarCheck className="w-4 h-4 text-[#356E3B]" />
-              <h2 className="text-[15px] font-bold text-[#1E4738] tracking-tight">
-                Kehadiran Karyawan Hari Ini
-              </h2>
-            </div>
-            <span className="text-[12px] font-bold text-[#356E3B] bg-[#EEF5F0] px-2.5 py-0.5 rounded-full">
-              {totalAttendancePercent}% ({totalAttended}/{totalEmployees} Karyawan)
-            </span>
+          <div className="flex items-center gap-2">
+            <CalendarCheck className="w-4 h-4 text-[#356E3B]" />
+            <h2 className="text-[15px] font-bold text-[#1E4738] tracking-tight">
+              Kehadiran Karyawan Hari Ini
+            </h2>
           </div>
 
           {/* Multi-Color Progress Bar */}
