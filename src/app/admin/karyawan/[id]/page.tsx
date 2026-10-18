@@ -22,13 +22,14 @@ import {
   Sparkles,
   RefreshCw,
   FileText
-} from "lucide-react";
+, Loader2 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Badge } from "@/components/Badge";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate, formatDateWithDay, formatTime } from "@/lib/dateUtils";
 import { getAgendaCategoryColor, isAgendaUrl, formatAgendaUrl, sortAgendaCategories } from "@/app/agenda/page";
+import { AgendaCardSchedule, AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
 
 interface EmployeeProfile {
   id: string;
@@ -125,43 +126,6 @@ function getTaskDateInJakarta(task: TaskItem): string | null {
   return null;
 }
 
-function formatAgendaCardTime(startTimeStr?: string, endTimeStr?: string, isAllDay: boolean = false, fallbackTimeRange?: string): string {
-  if (!startTimeStr) return fallbackTimeRange || "Waktu tidak ditentukan";
-  const start = new Date(startTimeStr);
-  const end = endTimeStr ? new Date(endTimeStr) : start;
-  if (isNaN(start.getTime())) return fallbackTimeRange || startTimeStr;
-
-  const optionsDate: Intl.DateTimeFormatOptions = {
-    timeZone: "Asia/Jakarta",
-    day: "numeric",
-    month: "long",
-    year: "numeric"
-  };
-  const optionsTime: Intl.DateTimeFormatOptions = {
-    timeZone: "Asia/Jakarta",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  };
-
-  const startDateParts = new Intl.DateTimeFormat("id-ID", optionsDate).format(start);
-  const endDateParts = new Intl.DateTimeFormat("id-ID", optionsDate).format(end);
-  const isSameDay = startDateParts === endDateParts;
-
-  if (isAllDay) {
-    if (isSameDay) return `${startDateParts} (Seharian)`;
-    return `${startDateParts} - ${endDateParts} (Seharian)`;
-  }
-
-  const startTimeStrFormatted = new Intl.DateTimeFormat("id-ID", optionsTime).format(start).replace(":", ".");
-  const endTimeStrFormatted = new Intl.DateTimeFormat("id-ID", optionsTime).format(end).replace(":", ".");
-
-  if (isSameDay) {
-    return `${startDateParts}, ${startTimeStrFormatted} - ${endTimeStrFormatted} WIB`;
-  }
-
-  return `${startDateParts} ${startTimeStrFormatted} - ${endDateParts} ${endTimeStrFormatted} WIB`;
-}
 
 export default function DetailKaryawanMonitoringPage() {
   const router = useRouter();
@@ -395,7 +359,7 @@ export default function DetailKaryawanMonitoringPage() {
 
   // Handle Save Role
   const handleSaveRole = async () => {
-    if (!employeeId || !canModifyRole) return;
+    if (!employeeId || !canModifyRole || isSavingRole) return;
     setIsSavingRole(true);
     setRoleError("");
 
@@ -427,7 +391,7 @@ export default function DetailKaryawanMonitoringPage() {
 
   // Handle Soft Delete / Remove Member
   const handleRemoveEmployee = async () => {
-    if (!employeeId || !canRemoveMember) return;
+    if (!employeeId || !canRemoveMember || isDeletingMember) return;
     setIsDeletingMember(true);
     setDeleteError("");
 
@@ -587,23 +551,25 @@ export default function DetailKaryawanMonitoringPage() {
             </div>
           </div>
 
-          {/* DEDICATED ACTION: Kelola Hak Akses */}
-          <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
-            <span className="text-[11px] text-gray-400 leading-tight">
-              Atur hak akses karyawan di perusahaan
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setRoleError("");
-                setIsRoleModalOpen(true);
-              }}
-              className="px-4 py-2 bg-[#E8F3EB] hover:bg-[#D5EAD9] border border-[#D1E5D5] text-[#356E3B] rounded-full text-[13px] font-bold flex items-center gap-1.5 active:scale-[0.98] transition-all shrink-0 shadow-sm"
-            >
-              <Shield className="w-4 h-4 text-[#356E3B]" />
-              <span>Kelola Hak Akses</span>
-            </button>
-          </div>
+          {/* DEDICATED ACTION: Kelola Hak Akses (Hanya Admin / Owner) */}
+          {canModifyRole && (
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-gray-400 leading-tight">
+                Atur hak akses karyawan di perusahaan
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setRoleError("");
+                  setIsRoleModalOpen(true);
+                }}
+                className="px-4 py-2 bg-[#E8F3EB] hover:bg-[#D5EAD9] border border-[#D1E5D5] text-[#356E3B] rounded-full text-[13px] font-bold flex items-center gap-1.5 active:scale-[0.98] transition-all shrink-0 shadow-sm"
+              >
+                <Shield className="w-4 h-4 text-[#356E3B]" />
+                <span>Kelola Hak Akses</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* TABS NAVIGATION */}
@@ -1094,7 +1060,6 @@ export default function DetailKaryawanMonitoringPage() {
                 const categoryName = agenda.category?.name || "Acara";
                 const catColor = getAgendaCategoryColor(categoryName);
                 const isCompanyScope = (agenda.scope || "").toLowerCase() === "company" || (agenda.type || "").toUpperCase() === "COMPANY";
-                const timeDisplay = formatAgendaCardTime(agenda.start_time, agenda.end_time, agenda.is_all_day, agenda.time_range);
 
                 return (
                   <div
@@ -1132,10 +1097,12 @@ export default function DetailKaryawanMonitoringPage() {
 
                     {/* Details: Time, Location / Link / Notes */}
                     <div className="flex flex-col gap-2 pl-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
-                        <span className="text-[#4B5563] text-[12px] font-medium">{timeDisplay}</span>
-                      </div>
+                      <AgendaCardSchedule
+                        startTime={agenda.start_time}
+                        endTime={agenda.end_time}
+                        isAllDay={agenda.is_all_day}
+                        fallbackTime={agenda.time_range}
+                      />
                       {agenda.link_or_location ? (
                         isAgendaUrl(agenda.link_or_location) ? (
                           <div className="flex items-center gap-2 min-w-0">
@@ -1227,7 +1194,7 @@ export default function DetailKaryawanMonitoringPage() {
       {/* ======================================================== */}
       {/* ROLE MANAGEMENT MODAL (KELOLA HAK AKSES) */}
       {/* ======================================================== */}
-      {isRoleModalOpen && employee && (
+      {isRoleModalOpen && employee && canModifyRole && (
         <div 
           className="fixed inset-0 z-[100] flex justify-end flex-col sm:justify-center sm:items-center bg-black/60 p-0 sm:p-5 animate-in fade-in duration-200"
           onClick={() => {
@@ -1353,9 +1320,16 @@ export default function DetailKaryawanMonitoringPage() {
                 type="button"
                 onClick={handleSaveRole}
                 disabled={isSavingRole || !canModifyRole}
-                className="w-full py-3.5 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-full font-bold text-[14px] active:scale-[0.98] transition-all shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3.5 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-full font-bold text-[14px] active:scale-[0.98] transition-all shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {isSavingRole ? "Menyimpan Perubahan..." : "Simpan Perubahan Role"}
+                {isSavingRole ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>Menyimpan Perubahan...</span>
+                  </>
+                ) : (
+                  "Simpan Perubahan Role"
+                )}
               </button>
 
               {/* Opsi Keluarkan Karyawan */}
@@ -1419,9 +1393,16 @@ export default function DetailKaryawanMonitoringPage() {
                 type="button"
                 onClick={handleRemoveEmployee}
                 disabled={isDeletingMember}
-                className="flex-1 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
+                className="flex-1 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isDeletingMember ? "Mengeluarkan..." : "Ya, Keluarkan"}
+                {isDeletingMember ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>Mengeluarkan...</span>
+                  </>
+                ) : (
+                  "Ya, Keluarkan"
+                )}
               </button>
             </div>
           </div>
@@ -1470,12 +1451,12 @@ export default function DetailKaryawanMonitoringPage() {
             </h2>
             
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">
-                <Clock className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
-                <span className="text-[#374151] text-[14px] font-medium">
-                  {formatAgendaCardTime(selectedAgendaDetail.start_time, selectedAgendaDetail.end_time, selectedAgendaDetail.is_all_day, selectedAgendaDetail.time_range)}
-                </span>
-              </div>
+              <AgendaDetailSchedule
+                startTime={selectedAgendaDetail.start_time}
+                endTime={selectedAgendaDetail.end_time}
+                isAllDay={selectedAgendaDetail.is_all_day}
+                fallbackTime={selectedAgendaDetail.time_range}
+              />
               
               {selectedAgendaDetail.link_or_location && (
                 <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">

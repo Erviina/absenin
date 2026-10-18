@@ -25,7 +25,7 @@ import {
   Plus,
   Minus,
   Target
-} from "lucide-react";
+, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -34,6 +34,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
+import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
 
 function MapControls({ 
   targetLat, 
@@ -164,6 +165,9 @@ export default function ProfilPerusahaanContent() {
   const [isSubmittingExit, setIsSubmittingExit] = useState(false);
   const [exitError, setExitError] = useState<string | null>(null);
 
+  // Modal QR Code
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+
   const fetchCompanyAndExitStatus = useCallback(async () => {
     try {
       const token = localStorage.getItem("accessToken");
@@ -224,6 +228,7 @@ export default function ProfilPerusahaanContent() {
 
   // Handle Cancel Exit Request
   const handleCancelExitRequest = async () => {
+    if (isCancellingExit) return;
     const confirmed = await showConfirm({
       title: "Batalkan Permohonan Keluar?",
       message: "Apakah Anda yakin ingin membatalkan permohonan keluar dari organisasi ini?",
@@ -267,6 +272,7 @@ export default function ProfilPerusahaanContent() {
 
   // Handle Submit Exit Request
   const handleSubmitExitRequest = async () => {
+    if (isSubmittingExit) return;
     setExitError(null);
     try {
       setIsSubmittingExit(true);
@@ -304,6 +310,7 @@ export default function ProfilPerusahaanContent() {
   };
 
   const isManagement = activeRole === "owner" || activeRole === "admin" || activeRole === "manager";
+  const canManageCompany = activeRole === "owner" || activeRole === "admin";
   const isOwner = (company?.role || activeRole) === "owner";
 
   const getCategoryTitle = (code?: string, name?: string) => {
@@ -378,7 +385,7 @@ export default function ProfilPerusahaanContent() {
         title="Profil Perusahaan" 
         onBack={() => router.back()}
         rightAction={
-          isManagement ? (
+          canManageCompany ? (
             <button
               onClick={() => router.push("/admin/perusahaan")}
               className="bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[12px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all shadow-sm"
@@ -634,16 +641,27 @@ export default function ProfilPerusahaanContent() {
                   {company.join_code}
                 </span>
               </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(company.join_code);
-                  showToast("Kode bergabung berhasil disalin!", "success");
-                }}
-                className="flex items-center gap-1.5 py-2 px-3 bg-white border border-gray-200 text-gray-700 hover:text-[#356E3B] hover:border-[#356E3B] rounded-[12px] text-[12px] font-bold transition-all shadow-sm active:scale-95"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                <span>Salin</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsQrModalOpen(true)}
+                  className="flex items-center gap-1.5 py-2 px-3 bg-[#E8F3EB] text-[#2D5A3F] hover:bg-[#D4E8D9] rounded-[12px] text-[12px] font-bold transition-all active:scale-95 border border-[#C5DEC9]"
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Lihat QR</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(company.join_code);
+                    showToast("Kode bergabung berhasil disalin!", "success");
+                  }}
+                  className="flex items-center gap-1.5 py-2 px-3 bg-white border border-gray-200 text-gray-700 hover:text-[#356E3B] hover:border-[#356E3B] rounded-[12px] text-[12px] font-bold transition-all shadow-sm active:scale-95"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Salin</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -676,9 +694,16 @@ export default function ProfilPerusahaanContent() {
               <button
                 onClick={handleCancelExitRequest}
                 disabled={isCancellingExit}
-                className="w-full py-2.5 px-4 bg-white border border-amber-300 hover:bg-amber-100/50 text-amber-900 rounded-[14px] text-[12px] font-bold transition-all active:scale-95 disabled:opacity-50"
+                className="w-full py-2.5 px-4 bg-white border border-amber-300 hover:bg-amber-100/50 text-amber-900 rounded-[14px] text-[12px] font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isCancellingExit ? "Membatalkan..." : "Batalkan Permohonan Keluar"}
+                {isCancellingExit ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Membatalkan...</span>
+                  </>
+                ) : (
+                  "Batalkan Permohonan Keluar"
+                )}
               </button>
             </div>
           </div>
@@ -785,11 +810,64 @@ export default function ProfilPerusahaanContent() {
               <button
                 onClick={handleSubmitExitRequest}
                 disabled={isSubmittingExit}
-                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-[13px] rounded-full active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-[13px] rounded-full active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isSubmittingExit ? "Mengirim..." : "Kirim Pengajuan"}
+                {isSubmittingExit ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Mengirim...</span>
+                  </>
+                ) : (
+                  "Kirim Pengajuan"
+                )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Tampilkan QR Code */}
+      {isQrModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/40 animate-in fade-in duration-200"
+            onClick={() => setIsQrModalOpen(false)}
+          />
+          <div className="relative bg-white w-full max-w-sm rounded-[28px] p-6 shadow-2xl flex flex-col items-center animate-in zoom-in-95 duration-200 z-10">
+            <div className="w-full flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-[#E8F3EB] rounded-full flex items-center justify-center">
+                  <QrCode className="w-4 h-4 text-[#356E3B]" strokeWidth={2} />
+                </div>
+                <h3 className="text-[#1E4738] text-[16px] font-bold">Kode QR Perusahaan</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQrModalOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="w-full">
+              <CompanyQRCodeCard
+                qrUrl={typeof window !== "undefined" ? `${window.location.origin}/gabung-perusahaan?code=${company.join_code}` : ""}
+                joinCode={company.join_code}
+                companyName={company.name}
+                size={190}
+                showJoinCodeBox={true}
+                onCopy={() => showToast("Kode bergabung berhasil disalin!", "success")}
+                instructionText="Arahkan kamera ke kode QR untuk bergabung instan"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsQrModalOpen(false)}
+              className="mt-4 w-full py-2.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-[13px] font-bold active:scale-95 transition-all text-center"
+            >
+              Tutup
+            </button>
           </div>
         </div>
       )}

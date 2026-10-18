@@ -2,11 +2,12 @@
 
 import { TopBar } from "@/components/TopBar";
 import { CustomCalendar } from "@/components/CustomCalendar";
+import { Pagination } from "@/components/Pagination";
 import { 
   Search, ListFilter, Bell, Clock, Calendar, Users, 
   Megaphone, Info, ChevronRight, X, CalendarDays, Check 
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
@@ -18,6 +19,11 @@ export default function NotifikasiPage() {
   const { activeCompanyId, activeRole, memberships, switchCompany } = useCompany();
   const [activeCategory, setActiveCategory] = useState("Semua");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Pagination states
+  const [offset, setOffset] = useState(0);
+  const [totalNotifications, setTotalNotifications] = useState(0);
+  const limit = 10;
 
   // Date Filter States (sama dengan halaman Kehadiran)
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -33,27 +39,46 @@ export default function NotifikasiPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Reset offset when filter, search, or date changes
   useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const token = localStorage.getItem("accessToken");
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const json = await res.json();
-        if (json.success) {
-          setNotifications(json.data);
-        } else {
-          setError(json.message);
-        }
-      } catch (err: any) {
-        setError(err.message || "Gagal mengambil data");
-      } finally {
-        setIsLoading(false);
+    setOffset(0);
+  }, [activeCategory, searchQuery, appliedStartDate, appliedEndDate]);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(offset));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (activeCategory && activeCategory !== "Semua") params.set("category", activeCategory);
+      if (appliedStartDate) params.set("start_date", appliedStartDate);
+      if (appliedEndDate) params.set("end_date", appliedEndDate);
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const json = await res.json();
+      if (json.success) {
+        setNotifications(json.data || []);
+        const total = json.pagination?.total ?? json.meta?.total ?? (json.data?.length || 0);
+        setTotalNotifications(total);
+      } else {
+        setError(json.message);
       }
-    };
+    } catch (err: any) {
+      setError(err.message || "Gagal mengambil data");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [limit, offset, searchQuery, activeCategory, appliedStartDate, appliedEndDate]);
+
+  useEffect(() => {
     fetchNotifications();
-  }, []);
+  }, [fetchNotifications]);
 
   const getIconAndCategory = (type: string) => {
     switch(type) {
@@ -96,27 +121,6 @@ export default function NotifikasiPage() {
       (id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
     );
   };
-
-  // Filtering Logic (Category, Search, and Date)
-  const filteredNotifications = notifications.filter((notif) => {
-    const { category } = getIconAndCategory(notif.type);
-    const dateOnly = notif.created_at ? notif.created_at.split('T')[0] : "";
-
-    // 1. Filter Category
-    const matchCategory = activeCategory === "Semua" || category === activeCategory;
-    
-    // 2. Filter Search
-    const searchLower = searchQuery.toLowerCase();
-    const matchSearch = notif.title.toLowerCase().includes(searchLower) || 
-                        notif.message.toLowerCase().includes(searchLower);
-    
-    // 3. Filter Date
-    let matchDate = true;
-    if (appliedStartDate && dateOnly < appliedStartDate) matchDate = false;
-    if (appliedEndDate && dateOnly > appliedEndDate) matchDate = false;
-
-    return matchCategory && matchSearch && matchDate;
-  });
 
   // Date Filter Modal Handlers
   const handleApplyFilter = () => {
@@ -222,52 +226,64 @@ export default function NotifikasiPage() {
             </div>
           ) : error ? (
             <p className="text-sm text-red-500 text-center py-6">{error}</p>
-          ) : filteredNotifications.length > 0 ? (
-            filteredNotifications.map((notif) => {
-              const { icon, bgIcon } = getIconAndCategory(notif.type);
-              const membershipInfo = parseMembershipNotification(notif.message, notif.type);
-              return (
-              <div
-                key={notif.id}
-                onClick={() => handleNotificationClick(notif)}
-                className={`border rounded-[20px] p-4 flex gap-4 items-start shadow-sm active:bg-gray-50 transition-colors cursor-pointer ${notif.is_read ? 'bg-white border-[#E5E7EB]' : 'bg-[#f4f7f5] border-[#356E3B]/20'}`}
-              >
+          ) : notifications.length > 0 ? (
+            <>
+              {notifications.map((notif) => {
+                const { icon, bgIcon } = getIconAndCategory(notif.type);
+                const membershipInfo = parseMembershipNotification(notif.message, notif.type);
+                return (
                 <div
-                  className={`w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 ${bgIcon}`}
+                  key={notif.id}
+                  onClick={() => handleNotificationClick(notif)}
+                  className={`border rounded-[20px] p-4 flex gap-4 items-start shadow-sm active:bg-gray-50 transition-colors cursor-pointer ${notif.is_read ? 'bg-white border-[#E5E7EB]' : 'bg-[#f4f7f5] border-[#356E3B]/20'}`}
                 >
-                  {icon}
-                </div>
-                <div className="flex-1 flex flex-col justify-center gap-1">
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      {!notif.is_read && (
-                        <span className="w-2 h-2 rounded-full bg-[#EF4444] shrink-0" />
-                      )}
-                      <h3 className={`text-[14px] leading-tight ${notif.is_read ? 'text-[#4B5563] font-semibold' : 'text-[#111827] font-bold'}`}>
-                        {notif.title}
-                      </h3>
-                    </div>
-                    <span className="text-[#9CA3AF] text-[11px] whitespace-nowrap shrink-0">
-                      {getTimeAgo(notif.created_at)}
-                    </span>
+                  <div
+                    className={`w-[46px] h-[46px] rounded-full flex items-center justify-center shrink-0 ${bgIcon}`}
+                  >
+                    {icon}
                   </div>
-                  <div className="flex justify-between items-center gap-2 mt-0.5">
-                    <p className={`text-[13px] leading-snug line-clamp-2 ${notif.is_read ? 'text-[#9CA3AF]' : 'text-[#6B7280]'}`}>
-                      {cleanNotificationMessage(notif.message)}
-                    </p>
-                    <ChevronRight className="w-5 h-5 text-[#D1D5DB] shrink-0" />
-                  </div>
-                  {membershipInfo?.approverName && (
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className="text-[11px] font-semibold bg-[#eef5f0] text-[#356E3B] px-2 py-0.5 rounded-full border border-[#356E3B]/15 inline-flex items-center gap-1">
-                        <Check className="w-3 h-3 text-[#356E3B]" strokeWidth={2.5} />
-                        Disetujui oleh: {membershipInfo.approverName}
+                  <div className="flex-1 flex flex-col justify-center gap-1">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        {!notif.is_read && (
+                          <span className="w-2 h-2 rounded-full bg-[#EF4444] shrink-0" />
+                        )}
+                        <h3 className={`text-[14px] leading-tight ${notif.is_read ? 'text-[#4B5563] font-semibold' : 'text-[#111827] font-bold'}`}>
+                          {notif.title}
+                        </h3>
+                      </div>
+                      <span className="text-[#9CA3AF] text-[11px] whitespace-nowrap shrink-0">
+                        {getTimeAgo(notif.created_at)}
                       </span>
                     </div>
-                  )}
+                    <div className="flex justify-between items-center gap-2 mt-0.5">
+                      <p className={`text-[13px] leading-snug line-clamp-2 ${notif.is_read ? 'text-[#9CA3AF]' : 'text-[#6B7280]'}`}>
+                        {cleanNotificationMessage(notif.message)}
+                      </p>
+                      <ChevronRight className="w-5 h-5 text-[#D1D5DB] shrink-0" />
+                    </div>
+                    {membershipInfo?.approverName && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-[11px] font-semibold bg-[#eef5f0] text-[#356E3B] px-2 py-0.5 rounded-full border border-[#356E3B]/15 inline-flex items-center gap-1">
+                          <Check className="w-3 h-3 text-[#356E3B]" strokeWidth={2.5} />
+                          Disetujui oleh: {membershipInfo.approverName}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )})
+              )})}
+
+              <Pagination
+                total={totalNotifications}
+                limit={limit}
+                offset={offset}
+                onPageChange={setOffset}
+                isLoading={isLoading}
+                label="notifikasi"
+                className="mt-2"
+              />
+            </>
           ) : (
             <p className="text-sm text-gray-500 text-center py-6">
               {appliedStartDate || appliedEndDate || searchQuery || activeCategory !== "Semua"

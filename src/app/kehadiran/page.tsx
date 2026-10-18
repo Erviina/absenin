@@ -12,6 +12,7 @@ import * as XLSX from "xlsx";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate, formatDateWithDay, formatDateRange } from "@/lib/dateUtils";
+import { Pagination } from "@/components/Pagination";
 
 let cachedAttendances: any[] = [];
 let cachedAttendancesCompanyId: string | null = null;
@@ -32,28 +33,40 @@ export default function KehadiranPage() {
   const [appliedEndDate, setAppliedEndDate] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [attendances, setAttendances] = useState<any[]>(() => {
-    return cachedAttendancesCompanyId === activeCompanyId ? cachedAttendances : [];
-  });
-  const [isLoading, setIsLoading] = useState(() => {
-    return cachedAttendancesCompanyId === activeCompanyId ? cachedAttendances.length === 0 : true;
-  });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [limit] = useState(10);
+  const [total, setTotal] = useState(0);
+
+  const [attendances, setAttendances] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setOffset(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const handleApplyFilter = () => {
     setAppliedStartDate(startDate);
     setAppliedEndDate(endDate);
+    setOffset(0);
     setIsFilterOpen(false);
   };
 
   const handleReset = () => {
     setStartDate("");
     setEndDate("");
+    setAppliedStartDate("");
+    setAppliedEndDate("");
+    setOffset(0);
     setActiveCalendar(null);
   };
 
   const openFilter = () => {
-    // Sync current applied state to modal inputs when opening
     setStartDate(appliedStartDate);
     setEndDate(appliedEndDate);
     setActiveCalendar(null);
@@ -75,13 +88,13 @@ export default function KehadiranPage() {
 
   const fetchAttendances = async (silent = false) => {
     if (!activeCompanyId) {
-      cachedAttendances = [];
       setAttendances([]);
+      setTotal(0);
       setIsLoading(false);
       setError(null);
       return;
     }
-    if (!silent && attendances.length === 0) {
+    if (!silent) {
       setIsLoading(true);
     }
     setError(null);
@@ -96,6 +109,10 @@ export default function KehadiranPage() {
       const queryParams = new URLSearchParams();
       if (appliedStartDate) queryParams.append("start_date", appliedStartDate);
       if (appliedEndDate) queryParams.append("end_date", appliedEndDate);
+      if (debouncedSearch.trim()) queryParams.append("search", debouncedSearch.trim());
+      queryParams.append("limit", String(limit));
+      queryParams.append("offset", String(offset));
+
       const qString = queryParams.toString();
       if (qString) url += `?${qString}`;
       
@@ -106,19 +123,16 @@ export default function KehadiranPage() {
         headers["x-company-id"] = activeCompanyId;
       }
 
-      const res = await fetch(url, {
-        headers
-      });
-      
+      const res = await fetch(url, { headers });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || data.error || "Gagal mengambil data kehadiran");
       }
       
       const list = data.data || [];
-      cachedAttendances = list;
-      cachedAttendancesCompanyId = activeCompanyId;
+      const totalCount = Number(data.pagination?.total ?? data.meta?.total ?? list.length);
       setAttendances(list);
+      setTotal(totalCount);
     } catch (err: any) {
       if (attendances.length === 0) {
         setError(err.message || "Terjadi kesalahan sistem");
@@ -129,19 +143,8 @@ export default function KehadiranPage() {
   };
 
   useEffect(() => {
-    fetchAttendances(attendances.length > 0);
-  }, [appliedStartDate, appliedEndDate, activeCompanyId]);
-
-  const searchedAttendances = attendances.filter(item => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    const dateStr = formatDate(item.check_in_time).toLowerCase();
-    const mode = (item.work_mode || "").toLowerCase();
-    const addressIn = (item.check_in_address || "").toLowerCase();
-    const addressOut = (item.check_out_address || "").toLowerCase();
-    
-    return dateStr.includes(q) || mode.includes(q) || addressIn.includes(q) || addressOut.includes(q);
-  });
+    fetchAttendances(false);
+  }, [appliedStartDate, appliedEndDate, activeCompanyId, debouncedSearch, offset]);
 
   const getDayName = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -156,16 +159,39 @@ export default function KehadiranPage() {
     return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).replace(/\./g, ':');
   };
 
-  const handleDownloadPDF = () => {
+  const fetchAllForExport = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token || !activeCompanyId) return attendances;
+      const queryParams = new URLSearchParams();
+      if (appliedStartDate) queryParams.append("start_date", appliedStartDate);
+      if (appliedEndDate) queryParams.append("end_date", appliedEndDate);
+      if (debouncedSearch.trim()) queryParams.append("search", debouncedSearch.trim());
+      queryParams.append("limit", "500");
+      queryParams.append("offset", "0");
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+        "x-company-id": activeCompanyId
+      };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances?${queryParams.toString()}`, { headers });
+      const data = await res.json();
+      return data.data || [];
+    } catch {
+      return attendances;
+    }
+  };
+
+  const handleDownloadPDF = async () => {
     setIsDownloadOpen(false);
     if (!activeCompanyId) {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
       return;
     }
+    const exportList = await fetchAllForExport();
     const doc = new jsPDF();
     doc.text("Rekap Kehadiran", 14, 15);
     
-    const tableData = searchedAttendances.map((item, idx) => [
+    const tableData = exportList.map((item: any, idx: number) => [
       idx + 1,
       formatDate(item.check_in_time),
       item.work_mode,
@@ -184,13 +210,14 @@ export default function KehadiranPage() {
     showToast("Rekap kehadiran PDF berhasil diunduh!", "success");
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     setIsDownloadOpen(false);
     if (!activeCompanyId) {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
       return;
     }
-    const excelData = searchedAttendances.map((item, idx) => ({
+    const exportList = await fetchAllForExport();
+    const excelData = exportList.map((item: any, idx: number) => ({
       No: idx + 1,
       Tanggal: formatDate(item.check_in_time),
       "Tipe": item.work_mode,
@@ -301,14 +328,14 @@ export default function KehadiranPage() {
                 <RefreshCcw className="w-3.5 h-3.5" /> Coba Lagi
               </button>
             </div>
-          ) : searchedAttendances.length === 0 ? (
+          ) : attendances.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-6">
-              {appliedStartDate || appliedEndDate || searchQuery
+              {appliedStartDate || appliedEndDate || debouncedSearch
                 ? "Tidak ada riwayat kehadiran yang sesuai."
                 : "Belum ada riwayat kehadiran."}
             </p>
           ) : (
-            searchedAttendances.map((item) => (
+            attendances.map((item) => (
               <div 
                 key={item.id} 
                 onClick={() => router.push(`/kehadiran/${item.id}`)}
@@ -330,12 +357,17 @@ export default function KehadiranPage() {
                     <div className="w-10 h-10 rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
                       <CheckCircle2 className="w-6 h-6 text-[#2D5A3F]" strokeWidth={2} />
                     </div>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col items-start">
                       <span className="text-[#9CA3AF] text-[12px] font-medium mb-0.5">Jam Masuk</span>
                       <div className="flex items-baseline gap-1">
                         <span className="text-[#111827] font-bold text-[16px]">{extractTime(item.check_in_time)}</span>
                         <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
                       </div>
+                      {item.is_terlambat && (
+                        <span className="mt-1 bg-amber-50 text-amber-700 border border-amber-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          Terlambat
+                        </span>
+                      )}
                     </div>
                   </div>
                   
@@ -349,13 +381,20 @@ export default function KehadiranPage() {
                         <XCircle className="w-6 h-6 text-[#D1D5DB]" strokeWidth={2} />
                       )}
                     </div>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col items-start">
                       <span className="text-[#9CA3AF] text-[12px] font-medium mb-0.5">Jam Keluar</span>
                       {item.check_out_time ? (
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-[#111827] font-bold text-[16px]">{extractTime(item.check_out_time)}</span>
-                          <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
-                        </div>
+                        <>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-[#111827] font-bold text-[16px]">{extractTime(item.check_out_time)}</span>
+                            <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
+                          </div>
+                          {item.is_pulang_cepat && (
+                            <span className="mt-1 bg-orange-50 text-orange-700 border border-orange-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              Pulang Cepat
+                            </span>
+                          )}
+                        </>
                       ) : (
                         <span className="text-[#D1D5DB] font-bold text-[16px]">—</span>
                       )}
@@ -368,12 +407,22 @@ export default function KehadiranPage() {
 
         </div>
 
+        {/* Pagination Component */}
+        <Pagination
+          total={total}
+          limit={limit}
+          offset={offset}
+          onPageChange={(newOffset) => setOffset(newOffset)}
+          label="riwayat"
+          isLoading={isLoading}
+        />
+
         {/* Footer Text */}
-        {searchedAttendances.length > 0 && (
-          <p className="text-center text-[#9CA3AF] text-[13px] font-medium mt-6 mb-2">
+        {attendances.length > 0 && (
+          <p className="text-center text-[#9CA3AF] text-[13px] font-medium mt-2 mb-2">
             {appliedStartDate && appliedEndDate 
               ? `Menampilkan riwayat periode ${formatDateRange(appliedStartDate, appliedEndDate)}`
-              : "Menampilkan semua riwayat kehadiran"}
+              : "Menampilkan riwayat kehadiran"}
           </p>
         )}
 

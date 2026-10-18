@@ -66,16 +66,16 @@ export function CustomTimePicker({
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, "0"));
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative min-w-0 ${className}`}>
       {/* Input Display Button */}
       <div 
         onClick={() => setIsOpen(true)}
-        className={`w-full border rounded-[14px] pl-10 pr-4 py-3.5 flex items-center cursor-pointer transition-all bg-white relative ${
+        className={`w-full min-w-0 h-[46px] sm:h-[48px] border rounded-[14px] pl-9 sm:pl-10 pr-3 sm:pr-4 flex items-center cursor-pointer transition-all bg-white select-none relative ${
           isOpen ? "border-[#356E3B] ring-1 ring-[#356E3B]" : "border-[#E5E7EB] hover:border-[#356E3B]"
         }`}
       >
-        <Clock className="w-[18px] h-[18px] text-[#356E3B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2.5} />
-        <span className={`text-[14px] font-medium ${value ? "text-[#111827]" : "text-[#9CA3AF]"}`}>
+        <Clock className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-[#356E3B] absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 pointer-events-none shrink-0" strokeWidth={2.5} />
+        <span className={`truncate text-[13px] sm:text-[14px] font-medium leading-none ${value ? "text-[#111827]" : "text-[#9CA3AF]"}`}>
           {value || placeholder}
         </span>
       </div>

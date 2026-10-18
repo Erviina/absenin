@@ -2,7 +2,8 @@ import { Router, Request, Response } from "express";
 import { authenticate } from "../middleware/auth";
 import { db } from "../db";
 import { notifications } from "../db/schema";
-import { eq, desc, count, and } from "drizzle-orm";
+import { eq, desc, count, and, sql } from "drizzle-orm";
+import { parsePaginationParams, buildPaginationMeta } from "../utils/pagination";
 
 const router = Router();
 
@@ -41,26 +42,89 @@ router.get("/unread-count", authenticate, async (req: Request, res: Response): P
 router.get("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
+    const { limit, offset } = parsePaginationParams(req.query, 10, 100);
+    const { search, category, type, start_date, end_date } = req.query;
 
-    const results = await db.select({
-      id: notifications.id,
-      company_id: notifications.company_id,
-      type: notifications.type,
-      title: notifications.title,
-      message: notifications.message,
-      reference_id: notifications.reference_id,
-      is_read: notifications.is_read,
-      created_at: notifications.created_at,
-    })
-    .from(notifications)
-    .where(eq(notifications.recipient_id, user.id))
-    .orderBy(desc(notifications.created_at))
-    .limit(20);
+    let searchCond = sql``;
+    if (search && typeof search === "string" && search.trim()) {
+      const q = `%${search.trim()}%`;
+      searchCond = sql`AND (title ILIKE ${q} OR message ILIKE ${q})`;
+    }
+
+    let categoryCond = sql``;
+    if (category && typeof category === "string" && category !== "Semua") {
+      if (category === "Absensi") {
+        categoryCond = sql`AND type IN ('ATTENDANCE_REMINDER', 'AGENDA_UPCOMING')`;
+      } else if (category === "Izin & Cuti") {
+        categoryCond = sql`AND type IN ('LEAVE_PENDING', 'LEAVE_APPROVED', 'LEAVE_REJECTED')`;
+      } else if (category === "Sistem") {
+        categoryCond = sql`AND type IN ('JOIN_REQUEST_PENDING', 'JOIN_REQUEST_APPROVED', 'JOIN_REQUEST_REJECTED', 'NEW_ANNOUNCEMENT')`;
+      }
+    } else if (type && typeof type === "string") {
+      categoryCond = sql`AND type = ${type}`;
+    }
+
+    let dateCond = sql``;
+    if (start_date && typeof start_date === "string") {
+      dateCond = sql`${dateCond} AND (DATE(created_at AT TIME ZONE 'Asia/Jakarta') >= ${start_date}::date)`;
+    }
+    if (end_date && typeof end_date === "string") {
+      dateCond = sql`${dateCond} AND (DATE(created_at AT TIME ZONE 'Asia/Jakarta') <= ${end_date}::date)`;
+    }
+
+    // 1. Total count
+    const countRes = await db.execute(sql`
+      SELECT COUNT(*) as total
+      FROM notifications
+      WHERE recipient_id = ${user.id}
+        ${searchCond}
+        ${categoryCond}
+        ${dateCond}
+    `);
+    const total = parseInt(countRes.rows[0]?.total as string, 10) || 0;
+
+    // 2. Fetch paginated records
+    const resultsRes = await db.execute(sql`
+      SELECT 
+        id,
+        company_id,
+        type,
+        title,
+        message,
+        reference_id,
+        is_read,
+        created_at
+      FROM notifications
+      WHERE recipient_id = ${user.id}
+        ${searchCond}
+        ${categoryCond}
+        ${dateCond}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `);
+
+    const results = resultsRes.rows.map((row: any) => ({
+      id: row.id,
+      company_id: row.company_id,
+      type: row.type,
+      title: row.title,
+      message: row.message,
+      reference_id: row.reference_id,
+      is_read: Boolean(row.is_read),
+      created_at: row.created_at,
+    }));
 
     return res.status(200).json({
       success: true,
       message: "Berhasil mengambil notifikasi",
       data: results,
+      pagination: buildPaginationMeta(total, limit, offset),
+      meta: {
+        total,
+        limit,
+        offset,
+      }
     });
   } catch (error: any) {
     console.error("Get notifications error:", error);

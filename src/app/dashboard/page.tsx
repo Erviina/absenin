@@ -17,7 +17,7 @@ import {
   ChevronRight,
   Plus,
   CheckCircle2
-} from "lucide-react";
+, Loader2 } from "lucide-react";
 import { sanitizeText, truncateText } from "@/lib/sanitize";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -34,6 +34,7 @@ import {
   CompanyScheduleData 
 } from "@/lib/schedule";
 import { Badge } from "@/components/Badge";
+import { ViewAllButton } from "@/components/ViewAllButton";
 import { getAgendaCategoryColor } from "@/app/agenda/page";
 
 export default function DashboardPage() {
@@ -129,7 +130,7 @@ export default function DashboardPage() {
 
         const [authRes, newsRes, attendRes, notifRes, tasksRes, agendasRes] = await Promise.all([
           fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", { headers }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/news", { headers }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/news?limit=2", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/attendances/today", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications/unread-count", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", { headers }),
@@ -275,8 +276,11 @@ export default function DashboardPage() {
     return todayTasks.filter((t) => !t.completed).length;
   }, [todayTasks]);
 
+  const [togglingTaskIds, setTogglingTaskIds] = useState<string[]>([]);
+
   const handleToggleTask = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (togglingTaskIds.includes(taskId)) return;
     if (!activeCompanyId) {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
       setIsContextDrawerOpen(true);
@@ -285,6 +289,7 @@ export default function DashboardPage() {
     const target = tasks.find((t) => t.id === taskId);
     if (!target) return;
 
+    setTogglingTaskIds((prev) => [...prev, taskId]);
     const nextCompleted = !target.completed;
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, completed: nextCompleted } : t)));
 
@@ -292,7 +297,7 @@ export default function DashboardPage() {
       const token = localStorage.getItem("accessToken");
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: "Bearer " + token,
       };
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
@@ -304,6 +309,8 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Failed to toggle task", err);
       setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, completed: target.completed } : t)));
+    } finally {
+      setTogglingTaskIds((prev) => prev.filter((id) => id !== taskId));
     }
   };
 
@@ -631,7 +638,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-3">
             {isTasksAgendasLoading ? (
               <div className="flex flex-col items-center justify-center py-8 text-gray-400 gap-2.5">
                 <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
@@ -645,7 +652,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="flex flex-col gap-4">
                   {/* Subheading Tugas */}
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2.5">
                     <div className="flex justify-between items-center px-0.5">
                       <div className="flex items-center gap-2">
                         <span className="text-[13.5px] font-bold text-[#1E4738]">Tugas</span>
@@ -655,13 +662,7 @@ export default function DashboardPage() {
                           </span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => router.push("/tugas")}
-                        className="text-[#356E3B] text-[11.5px] font-bold hover:underline cursor-pointer"
-                      >
-                        Lihat Semua
-                      </button>
+                      <ViewAllButton onClick={() => router.push("/tugas")} />
                     </div>
 
                     {todayTasks.length === 0 ? (
@@ -669,12 +670,12 @@ export default function DashboardPage() {
                         Semua tugas hari ini telah selesai!
                       </p>
                     ) : (
-                      <div className="flex flex-col gap-2.5">
+                      <div className="flex flex-col gap-3">
                         {todayTasks.slice(0, 3).map((task) => (
                           <div
                             key={`task-${task.id}`}
                             onClick={() => router.push(`/tugas/${task.id}`)}
-                            className="bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
+                            className="w-full bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
                           >
                             <div className="flex items-center gap-3.5 min-w-0 flex-1">
                               <button
@@ -689,7 +690,11 @@ export default function DashboardPage() {
                                 }`}
                                 title={task.completed ? "Tandai belum selesai" : "Tandai selesai"}
                               >
-                                {task.completed && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                                {togglingTaskIds.includes(task.id) ? (
+                                  <Loader2 className="w-3.5 h-3.5 text-[#356E3B] animate-spin" />
+                                ) : task.completed ? (
+                                  <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                                ) : null}
                               </button>
                               <div className="flex flex-col min-w-0 flex-1">
                                 <h3
@@ -719,7 +724,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Subheading Agenda */}
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2.5">
                     <div className="flex justify-between items-center px-0.5">
                       <div className="flex items-center gap-2">
                         <span className="text-[13.5px] font-bold text-[#1E4738]">Agenda</span>
@@ -729,13 +734,7 @@ export default function DashboardPage() {
                           </span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => router.push("/agenda")}
-                        className="text-[#356E3B] text-[11.5px] font-bold hover:underline cursor-pointer"
-                      >
-                        Lihat Semua
-                      </button>
+                      <ViewAllButton onClick={() => router.push("/agenda")} />
                     </div>
 
                     {todayAgendas.length === 0 ? (
@@ -743,18 +742,18 @@ export default function DashboardPage() {
                         Belum ada agenda untuk hari ini.
                       </p>
                     ) : (
-                      <div className="flex flex-col gap-2.5">
+                      <div className="flex flex-col gap-3">
                         {todayAgendas.slice(0, 3).map((agenda) => {
                           const catColor = getAgendaCategoryColor(agenda.category?.name || agenda.type);
                           return (
                             <div
                               key={`agenda-${agenda.id}`}
                               onClick={() => router.push(`/agenda/${agenda.id}`)}
-                              className={`bg-white rounded-[20px] p-4 pl-4.5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3`}
+                              className={`w-full bg-white rounded-[20px] p-4 pl-5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3.5`}
                             >
                               <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
-                              <div className="flex flex-col min-w-0 flex-1 pl-1">
-                                <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                                   <Badge variant={catColor.variant} size="xs" uppercase>
                                     {agenda.category?.name || agenda.type || "Kegiatan"}
                                   </Badge>
@@ -797,12 +796,12 @@ export default function DashboardPage() {
                   Semua tugas hari ini telah selesai dikerjakan!
                 </p>
               ) : (
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-3">
                   {todayTasks.slice(0, 6).map((task) => (
                     <div
                       key={`task-${task.id}`}
                       onClick={() => router.push(`/tugas/${task.id}`)}
-                      className="bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
+                      className="w-full bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
                     >
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
                         <button
@@ -817,7 +816,11 @@ export default function DashboardPage() {
                           }`}
                           title={task.completed ? "Tandai belum selesai" : "Tandai selesai"}
                         >
-                          {task.completed && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                          {togglingTaskIds.includes(task.id) ? (
+                            <Loader2 className="w-3.5 h-3.5 text-[#356E3B] animate-spin" />
+                          ) : task.completed ? (
+                            <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                          ) : null}
                         </button>
                         <div className="flex flex-col min-w-0 flex-1">
                           <h3
@@ -857,18 +860,18 @@ export default function DashboardPage() {
                   Belum ada agenda kegiatan untuk hari ini.
                 </p>
               ) : (
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-3">
                   {todayAgendas.slice(0, 6).map((agenda) => {
                     const catColor = getAgendaCategoryColor(agenda.category?.name || agenda.type);
                     return (
                       <div
                         key={`agenda-${agenda.id}`}
                         onClick={() => router.push(`/agenda/${agenda.id}`)}
-                        className={`bg-white rounded-[20px] p-4 pl-4.5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3`}
+                        className={`w-full bg-white rounded-[20px] p-4 pl-5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3.5`}
                       >
                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
-                        <div className="flex flex-col min-w-0 flex-1 pl-1">
-                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                             <Badge variant={catColor.variant} size="xs" uppercase>
                               {agenda.category?.name || agenda.type || "Kegiatan"}
                             </Badge>
@@ -914,21 +917,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Berita Terbaru */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           <div className="flex justify-between items-center">
-            <h2 className="text-[18px] font-bold text-[#1E4738]">Berita Terbaru</h2>
-            <button 
-              onClick={() => router.push("/berita")}
-              className="text-[#356E3B] text-[13px] font-medium flex items-center gap-1 hover:underline active:scale-95 transition-transform"
-            >
-              Lihat Semua
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
+            <h2 className="text-[17.5px] font-bold text-[#1E4738]">Berita Terbaru</h2>
+            <ViewAllButton onClick={() => router.push("/berita")} />
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-8 text-gray-400 gap-2.5">
                 <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
@@ -943,7 +938,7 @@ export default function DashboardPage() {
                 <div 
                   key={item.id || idx} 
                   onClick={() => router.push(`/berita/${item.id}?from=/dashboard`)}
-                  className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#dce9df] hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
+                  className="w-full bg-white rounded-[20px] p-4 flex items-center gap-3.5 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
                 >
                   {item.cover_image_url ? (
                     <img src={item.cover_image_url} alt={sanitizeText(item.title)} className="w-[72px] h-[72px] rounded-2xl shrink-0 object-cover" />
@@ -953,10 +948,10 @@ export default function DashboardPage() {
                     </div>
                   )}
                   <div className="flex flex-col justify-center flex-1 min-w-0 overflow-hidden">
-                    <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
+                    <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit mb-1.5">
                       {item.category?.name || "Pengumuman"}
                     </span>
-                    <h3 className="text-[#1E4738] group-hover:text-[#356E3B] transition-colors text-[13px] font-bold leading-snug mb-1 line-clamp-1 break-words [overflow-wrap:anywhere]">
+                    <h3 className="text-[#1E4738] group-hover:text-[#356E3B] transition-colors text-[13.5px] font-bold leading-snug mb-1 line-clamp-1 break-words [overflow-wrap:anywhere]">
                       {sanitizeText(item.title)}
                     </h3>
                     <p className="text-[#7d998c] text-[11px] line-clamp-1 break-words [overflow-wrap:anywhere]">

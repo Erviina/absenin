@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Check, QrCode, Copy, Share, Image as ImageIcon } from "lucide-react";
+import { ChevronLeft, Check, QrCode, Copy, Share, Image as ImageIcon, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -8,6 +8,7 @@ import { CustomSelect } from "@/components/CustomSelect";
 import { QRCodeSVG } from "qrcode.react";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
+import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
 
 export default function BuatPerusahaanPage() {
   const router = useRouter();
@@ -155,6 +156,7 @@ export default function BuatPerusahaanPage() {
   };
 
   const handleLanjutkan = async () => {
+    if (isLoading) return;
     // Basic validation
     if (!nama || !alamat) return;
     
@@ -205,70 +207,64 @@ export default function BuatPerusahaanPage() {
 
   if (isSuccess) {
     return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] px-6 py-10 relative items-center justify-center">
+      <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] px-5 sm:px-6 py-8 items-center justify-start overflow-y-auto">
         
         {/* Success Icon */}
-        <div className="w-[84px] h-[84px] bg-[#356E3B] rounded-full flex items-center justify-center shadow-[0_8px_24px_rgba(53,110,59,0.3)] mb-8">
-          <Check className="w-10 h-10 text-white" strokeWidth={3} />
+        <div className="w-[68px] h-[68px] bg-[#356E3B] rounded-full flex items-center justify-center shadow-[0_8px_24px_rgba(53,110,59,0.25)] mb-4 shrink-0">
+          <Check className="w-8 h-8 text-white" strokeWidth={3} />
         </div>
 
         {/* Text Content */}
-        <div className="text-center flex flex-col gap-2.5 mb-10 w-full max-w-sm">
-          <h1 className="text-[22px] font-bold text-[#1E293B] leading-tight">
+        <div className="text-center flex flex-col gap-1.5 mb-6 w-full max-w-sm">
+          <h1 className="text-[20px] sm:text-[22px] font-bold text-[#1E293B] leading-tight">
             Perusahaan Berhasil Dibuat!
           </h1>
-          <h2 className="text-[#356E3B] font-bold text-[15px]">
-            {nama}
-          </h2>
-          <p className="text-[#64748B] text-[13px] px-4 leading-relaxed">
+          <p className="text-[#64748B] text-[13px] px-2 leading-relaxed">
             Anda telah menjadi pengelola pertama dari perusahaan ini.
           </p>
         </div>
 
-        {/* QR Code Card */}
-        <div className="bg-white rounded-[24px] p-6 w-full max-w-[320px] shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-[#eef5f0] flex items-center gap-5 mb-8">
-          <div className="w-[80px] h-[80px] bg-[#f8faf9] rounded-[16px] flex items-center justify-center border border-gray-100 shrink-0">
-            <QRCodeSVG id="qr-code-svg" value={qrUrl} size={48} />
-          </div>
-          <div className="flex flex-col justify-center gap-1 flex-1">
-            <p className="text-[#64748B] text-[12px] font-medium">Kode Bergabung</p>
-            <div className="flex items-center justify-between">
-              <span className="text-[#1E293B] text-[24px] font-bold tracking-wider">{joinCode || "ABC123"}</span>
-              <button 
-                type="button"
-                onClick={handleSalinKode}
-                title="Salin Kode Perusahaan"
-                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                {isCopied ? <Check className="w-5 h-5 text-[#356E3B]" /> : <Copy className="w-5 h-5" />}
-              </button>
-            </div>
-          </div>
+        {/* QR Code Card - HERO Focus Element */}
+        <div className="w-full max-w-[340px] mb-5">
+          <CompanyQRCodeCard
+            id="qr-code-svg"
+            qrUrl={qrUrl}
+            joinCode={joinCode}
+            companyName={nama}
+            size={185}
+            showJoinCodeBox={true}
+            onCopy={handleSalinKode}
+            isCopied={isCopied}
+            instructionText="Pindai QR ini atau gunakan kode bergabung untuk mengundang anggota"
+          />
         </div>
 
-        {/* Actions */}
-        <div className="flex w-full max-w-[320px] gap-3 mb-16">
+        {/* Actions (Bagikan Undangan & Simpan QR) */}
+        <div className="flex w-full max-w-[340px] gap-2.5 mb-6">
           <button 
+            type="button"
             onClick={handleBagikanUndangan}
-            className="flex-1 bg-white border border-[#356E3B] text-[#356E3B] py-3.5 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#f4f9f6] transition-colors"
+            className="flex-1 bg-white border border-[#356E3B] text-[#356E3B] py-3 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#f4f9f6] active:scale-[0.98] transition-all shadow-sm"
           >
             <Share className="w-4 h-4" />
-            Bagikan Undangan
+            <span>Bagikan</span>
           </button>
           <button 
+            type="button"
             onClick={handleSimpanQR}
-            className="flex-1 bg-[#356E3B] text-white py-3.5 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 hover:bg-[#2b5930] shadow-[0_4px_12px_rgba(53,110,59,0.2)] transition-colors"
+            className="flex-1 bg-[#356E3B] hover:bg-[#2b5930] text-white py-3 rounded-full text-[13px] font-bold flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(53,110,59,0.2)] active:scale-[0.98] transition-all"
           >
             <ImageIcon className="w-4 h-4" />
-            Simpan QR
+            <span>Simpan QR</span>
           </button>
         </div>
 
-        {/* Bottom Button */}
-        <div className="absolute bottom-6 left-6 right-6 flex justify-center">
+        {/* Bottom Button to Dashboard */}
+        <div className="w-full max-w-[340px] pb-6">
           <button 
+            type="button"
             onClick={() => router.push("/admin/dashboard")}
-            className="w-full sm:max-w-md bg-[#356E3B] hover:bg-[#2b5930] text-white py-4 rounded-full text-[15px] font-bold transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] active:scale-[0.98]"
+            className="w-full bg-[#111827] hover:bg-[#1E293B] text-white py-3.5 rounded-full text-[14px] font-bold transition-all shadow-sm active:scale-[0.98]"
           >
             Mulai ke Beranda
           </button>
@@ -356,9 +352,22 @@ export default function BuatPerusahaanPage() {
         <button 
           onClick={handleLanjutkan}
           disabled={!nama || !alamat || isLoading}
-          className={`w-full pointer-events-auto py-4 rounded-[20px] text-[15px] font-bold flex items-center justify-center transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] ${nama && alamat && !isLoading ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' : 'bg-gray-300 text-gray-100 shadow-none'}`}
+          className={`w-full pointer-events-auto py-4 rounded-[20px] text-[15px] font-bold flex items-center justify-center gap-2 transition-all shadow-[0_4px_16px_rgba(53,110,59,0.2)] ${
+            nama && alamat && !isLoading 
+              ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' 
+              : isLoading
+                ? 'bg-[#356E3B]/90 text-white cursor-wait'
+                : 'bg-gray-300 text-gray-100 shadow-none cursor-not-allowed'
+          }`}
         >
-          {isLoading ? "Memproses..." : "Lanjutkan"}
+          {isLoading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Membuat Perusahaan...</span>
+            </>
+          ) : (
+            "Lanjutkan"
+          )}
         </button>
       </div>
 

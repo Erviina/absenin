@@ -2,9 +2,10 @@
 
 import { ChevronLeft, Search, Check, AlertCircle, XCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TopBar } from "@/components/TopBar";
 import { formatDateRange } from "@/lib/dateUtils";
+import { Pagination } from "@/components/Pagination";
 
 import { useCompany } from "@/context/CompanyContext";
 
@@ -31,6 +32,7 @@ export default function KelolaIzinPage() {
   const [activeFilter, setFilter] = useState<string>("Semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Modal and action states
   const [confirmApproveItem, setConfirmApproveItem] = useState<IzinRequest | null>(null);
@@ -46,10 +48,21 @@ export default function KelolaIzinPage() {
     type: "success" | "error";
   } | null>(null);
 
+  // Pagination states
+  const [offset, setOffset] = useState(0);
+  const [totalLeaves, setTotalLeaves] = useState(0);
+  const limit = 10;
+
+  // Reset offset on search or category filter change
+  useEffect(() => {
+    setOffset(0);
+  }, [searchQuery, activeFilter]);
+
   // Fetch Leaves
-  const fetchLeaves = async () => {
+  const fetchLeaves = useCallback(async () => {
     try {
       setIsLoading(true);
+      setFetchError(null);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
@@ -57,7 +70,13 @@ export default function KelolaIzinPage() {
       const companyId = activeCompanyId || localStorage.getItem("activeCompanyId");
       if (companyId) headers["x-company-id"] = companyId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/admin", {
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(offset));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (activeFilter && activeFilter !== "Semua") params.set("category", activeFilter);
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/leaves/admin?${params.toString()}`, {
         headers
       });
       const resData = await res.json();
@@ -74,17 +93,22 @@ export default function KelolaIzinPage() {
           rejection_reason: item.rejection_reason || undefined
         }));
         setData(mappedData);
+        const total = resData.pagination?.total ?? resData.meta?.total ?? mappedData.length;
+        setTotalLeaves(total);
+      } else {
+        setFetchError(resData.message || "Gagal memuat data izin");
       }
     } catch (e) {
       console.error(e);
+      setFetchError("Terjadi kendala jaringan saat memuat data izin.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeCompanyId, limit, offset, searchQuery, activeFilter]);
 
   useEffect(() => {
     fetchLeaves();
-  }, [activeCompanyId]);
+  }, [fetchLeaves]);
 
   const baseFilteredData = data.filter(item => {
     // 1. Search filter
@@ -326,9 +350,27 @@ export default function KelolaIzinPage() {
           ))}
         </div>
 
-        {/* Section: Permintaan Persetujuan */}
-        {pendingLeaves.length > 0 && (
-          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-5 flex flex-col gap-4 mt-2">
+        {/* Loading / Error / Data States */}
+        {isLoading ? (
+          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-10 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-[#356E3B]" />
+            <span className="text-[13px] font-medium text-gray-500">Memuat data permohonan izin...</span>
+          </div>
+        ) : fetchError ? (
+          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-8 flex flex-col items-center justify-center text-center gap-3">
+            <span className="text-[13px] text-red-500 font-medium">{fetchError}</span>
+            <button
+              onClick={fetchLeaves}
+              className="px-4 py-2 bg-[#356E3B] text-white rounded-full text-[12px] font-semibold active:scale-95 transition-all shadow-sm"
+            >
+              Coba Lagi
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Section: Permintaan Persetujuan */}
+            {pendingLeaves.length > 0 && (
+              <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-5 flex flex-col gap-4 mt-2">
             
             {/* Header */}
             <div className="flex flex-col gap-3">
@@ -499,6 +541,18 @@ export default function KelolaIzinPage() {
             )}
           </div>
         </div>
+
+        <Pagination
+          total={totalLeaves}
+          limit={limit}
+          offset={offset}
+          onPageChange={setOffset}
+          isLoading={isLoading}
+          label="permohonan izin"
+          className="mt-2"
+        />
+        </>
+        )}
       </div>
 
       {/* Modal Konfirmasi Persetujuan Satuan */}
@@ -532,7 +586,7 @@ export default function KelolaIzinPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Memproses...</span>
+                    <span>Menyetujui...</span>
                   </>
                 ) : (
                   "Ya, Setujui"
@@ -574,7 +628,7 @@ export default function KelolaIzinPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Memproses...</span>
+                    <span>Menyetujui...</span>
                   </>
                 ) : (
                   "Ya, Setujui"
@@ -646,7 +700,7 @@ export default function KelolaIzinPage() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Memproses...</span>
+                    <span>Menolak...</span>
                   </>
                 ) : (
                   "Konfirmasi Penolakan"

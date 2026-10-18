@@ -59,7 +59,7 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<void>
     }
 
     const tenant = await resolveTenant(req, profileId);
-    const companyId = tenant?.companyId || (req.headers["x-company-id"] as string) || null;
+    const companyId = tenant?.companyId || null;
 
     // Filter tasks based on company:
     // If companyId is present, strictly fetch tasks for this active company.
@@ -317,7 +317,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<void
     }
 
     const tenant = await resolveTenant(req, profileId);
-    const targetCompanyId = tenant?.companyId || (req.headers["x-company-id"] as string) || req.body.company_id || null;
+    const targetCompanyId = tenant?.companyId || null;
 
     const taskType = type === "group" ? "group" : "personal";
 

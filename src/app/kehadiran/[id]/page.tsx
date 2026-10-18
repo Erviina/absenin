@@ -198,6 +198,20 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 <span className="text-[#111827] text-[14px] sm:text-[15px] font-bold leading-tight truncate">
                   {data.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
                 </span>
+                {(data.is_terlambat || data.is_pulang_cepat) && (
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    {data.is_terlambat && (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-full">
+                        Terlambat
+                      </span>
+                    )}
+                    {data.is_pulang_cepat && (
+                      <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200/60 px-2 py-0.5 rounded-full">
+                        Pulang Cepat
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             
@@ -222,10 +236,15 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 <span className="text-[#9CA3AF] text-[11px] font-bold">WIB</span>
               </div>
 
-              <div className="flex items-center">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[10.5px] font-bold text-[#15803D] bg-[#DCFCE7]/70 px-2.5 py-0.5 rounded-full">
                   Tercatat
                 </span>
+                {data.is_terlambat && (
+                  <span className="text-[10.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200/60 px-2.5 py-0.5 rounded-full">
+                    Terlambat
+                  </span>
+                )}
               </div>
             </div>
             
@@ -244,10 +263,15 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                   <span className="text-[#9CA3AF] text-[11px] font-bold">WIB</span>
                 </div>
 
-                <div className="flex items-center">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[10.5px] font-bold text-[#EA580C] bg-[#FFEDD5]/80 px-2.5 py-0.5 rounded-full">
                     Selesai
                   </span>
+                  {data.is_pulang_cepat && (
+                    <span className="text-[10.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/60 px-2.5 py-0.5 rounded-full">
+                      Pulang Cepat
+                    </span>
+                  )}
                 </div>
               </div>
             ) : (

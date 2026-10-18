@@ -281,7 +281,10 @@ export default function TugasDetailPage() {
             }`}
           >
             {isToggling ? (
-              <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <>
+                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+                <span>{task.completed ? "Membatalkan..." : "Menyelesaikan..."}</span>
+              </>
             ) : task.completed ? (
               <>
                 <RotateCcw className="w-4 h-4 text-[#1E4738]" strokeWidth={2.5} />

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Eye } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Eye, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
+import { Pagination } from "@/components/Pagination";
 
 type NewsItem = {
   id: string;
@@ -27,34 +28,54 @@ export default function KelolaBeritaPage() {
   const { showConfirm, showToast } = useDialog();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Semua");
 
-  const fetchNews = async () => {
+  // Pagination states
+  const [offset, setOffset] = useState(0);
+  const [totalNews, setTotalNews] = useState(0);
+  const limit = 10;
+
+  // Reset offset when filter or search changes
+  useEffect(() => {
+    setOffset(0);
+  }, [searchQuery, activeFilter]);
+
+  const fetchNews = useCallback(async () => {
     try {
+      setIsLoading(true);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news", {
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(offset));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (activeFilter && activeFilter !== "Semua") params.set("category", activeFilter);
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/news?${params.toString()}`, {
         headers
       });
       const data = await res.json();
       if (data.success) {
-        setNews(data.data);
+        setNews(data.data || []);
+        const total = data.pagination?.total ?? data.meta?.total ?? (data.data?.length || 0);
+        setTotalNews(total);
       }
     } catch (error) {
       console.error("Error fetching news:", error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeCompanyId, limit, offset, searchQuery, activeFilter]);
 
   useEffect(() => {
     fetchNews();
-  }, [activeCompanyId]);
+  }, [fetchNews]);
 
   const handleOpenCreate = () => {
     router.push("/admin/buat-berita");
@@ -65,6 +86,7 @@ export default function KelolaBeritaPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (isDeletingId) return;
     const confirmed = await showConfirm({
       title: "Hapus Berita?",
       message: "Apakah Anda yakin ingin menghapus berita ini? Tindakan ini tidak dapat dibatalkan.",
@@ -75,6 +97,7 @@ export default function KelolaBeritaPage() {
     });
     if (!confirmed) return;
 
+    setIsDeletingId(id);
     try {
       const token = localStorage.getItem("accessToken");
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
@@ -92,16 +115,10 @@ export default function KelolaBeritaPage() {
       }
     } catch (error) {
       showToast("Error jaringan saat menghapus berita", "error");
+    } finally {
+      setIsDeletingId(null);
     }
   };
-
-  const filteredNews = news.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          item.content.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (activeFilter === "Semua") return matchesSearch;
-    return matchesSearch && item.category?.name.toLowerCase() === activeFilter.toLowerCase();
-  });
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-8">
@@ -157,73 +174,91 @@ export default function KelolaBeritaPage() {
               <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
               <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
             </div>
-          ) : filteredNews.length === 0 ? (
+          ) : news.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-6">
               Belum ada berita yang diterbitkan.
             </p>
           ) : (
-            filteredNews.map(item => (
-              <div key={item.id} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#dce9df]">
-                <div 
-                  onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                  className="cursor-pointer shrink-0 group/img"
-                  title="Klik untuk langsung melihat berita"
-                >
-                  {item.cover_image_url ? (
-                    <img 
-                      src={item.cover_image_url} 
-                      alt={item.title} 
-                      className="w-[80px] h-[80px] rounded-[16px] object-cover group-hover/img:opacity-90 transition-opacity" 
-                      style={{ objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div className="w-[80px] h-[80px] bg-[#f4f9f6] rounded-[16px] flex items-center justify-center border border-[#eef5f0]">
-                      <ImageIcon className="w-6 h-6 text-[#7d998c]" />
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex flex-col flex-1 justify-center min-w-0">
-                  {item.category?.name && (
-                    <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
-                      {item.category.name}
-                    </span>
-                  )}
-                  <h3 
+            <>
+              {news.map(item => (
+                <div key={item.id} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#dce9df]">
+                  <div 
                     onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                    className="text-[#1E4738] hover:text-[#356E3B] hover:underline cursor-pointer text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors"
+                    className="cursor-pointer shrink-0 group/img"
                     title="Klik untuk langsung melihat berita"
                   >
-                    {sanitizeText(item.title)}
-                  </h3>
-                  <p className="text-[#7d998c] text-[11px] font-medium line-clamp-1 mb-2">
-                    {formatDate(item.created_at)}
-                  </p>
+                    {item.cover_image_url ? (
+                      <img 
+                        src={item.cover_image_url} 
+                        alt={item.title} 
+                        className="w-[80px] h-[80px] rounded-[16px] object-cover group-hover/img:opacity-90 transition-opacity" 
+                        style={{ objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div className="w-[80px] h-[80px] bg-[#f4f9f6] rounded-[16px] flex items-center justify-center border border-[#eef5f0]">
+                        <ImageIcon className="w-6 h-6 text-[#7d998c]" />
+                      </div>
+                    )}
+                  </div>
                   
-                  <div className="flex gap-2 mt-auto flex-wrap">
-                    <button 
+                  <div className="flex flex-col flex-1 justify-center min-w-0">
+                    {item.category?.name && (
+                      <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
+                        {item.category.name}
+                      </span>
+                    )}
+                    <h3 
                       onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                      className="text-[#1E4738] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
-                      title="Lihat Berita"
+                      className="text-[#1E4738] hover:text-[#356E3B] hover:underline cursor-pointer text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors"
+                      title="Klik untuk langsung melihat berita"
                     >
-                      <Eye className="w-3 h-3 text-[#1E4738]" /> Lihat
-                    </button>
-                    <button 
-                      onClick={() => handleOpenEdit(item)}
-                      className="text-[#356E3B] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
-                    >
-                      <Edit2 className="w-3 h-3" /> Edit
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(item.id)}
-                      className="text-[#e11d48] text-[11px] font-bold bg-[#ffe4e6] hover:bg-[#fecdd3] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
-                    >
-                      <Trash2 className="w-3 h-3" /> Hapus
-                    </button>
+                      {sanitizeText(item.title)}
+                    </h3>
+                    <p className="text-[#7d998c] text-[11px] font-medium line-clamp-1 mb-2">
+                      {formatDate(item.created_at)}
+                    </p>
+                    
+                    <div className="flex gap-2 mt-auto flex-wrap">
+                      <button 
+                        onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
+                        className="text-[#1E4738] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
+                        title="Lihat Berita"
+                      >
+                        <Eye className="w-3 h-3 text-[#1E4738]" /> Lihat
+                      </button>
+                      <button 
+                        onClick={() => handleOpenEdit(item)}
+                        className="text-[#356E3B] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
+                      >
+                        <Edit2 className="w-3 h-3" /> Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(item.id)}
+                        disabled={isDeletingId === item.id}
+                        className="text-[#e11d48] text-[11px] font-bold bg-[#ffe4e6] hover:bg-[#fecdd3] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isDeletingId === item.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3 h-3" />
+                        )}
+                        {isDeletingId === item.id ? "Menghapus..." : "Hapus"}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              ))}
+
+              <Pagination
+                total={totalNews}
+                limit={limit}
+                offset={offset}
+                onPageChange={setOffset}
+                isLoading={isLoading}
+                label="berita"
+                className="mt-2"
+              />
+            </>
           )}
         </div>
       </div>

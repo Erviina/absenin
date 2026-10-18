@@ -8,6 +8,7 @@ import { companies, profiles } from "../db/schema";
 import multer from "multer";
 import { uploadCompanyPhoto } from "../utils/storage";
 import { resolveTenant } from "../utils/tenant";
+import { parsePaginationParams, buildPaginationMeta } from "../utils/pagination";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -198,10 +199,23 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
 
     // Use transaction
     const result = await db.transaction(async (tx) => {
-      // 1. Insert company
+      // 1. Insert company with standard operational hours default (08:00 - 17:00, Senin-Jumat)
       const newCompanyRes = await tx.execute(sql`
-        INSERT INTO companies (id, name, address, join_code, category_id, created_by)
-        VALUES (gen_random_uuid(), ${name}, ${address}, ${joinCode}, ${targetCategoryId || null}, ${user.id})
+        INSERT INTO companies (
+          id, name, address, join_code, category_id, created_by,
+          work_start_time, work_end_time, work_days
+        )
+        VALUES (
+          gen_random_uuid(), 
+          ${name}, 
+          ${address}, 
+          ${joinCode}, 
+          ${targetCategoryId || null}, 
+          ${user.id},
+          '08:00:00'::time,
+          '17:00:00'::time,
+          ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]
+        )
         RETURNING *
       `);
       const newCompany = newCompanyRes.rows[0];
@@ -304,6 +318,11 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
       message: "Berhasil mendapatkan data perusahaan",
       data: {
         ...company,
+        work_start_time: company.work_start_time || "08:00",
+        work_end_time: company.work_end_time || "17:00",
+        work_days: (Array.isArray(company.work_days) && company.work_days.length > 0)
+          ? company.work_days
+          : ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
         role: tenant.role,
         memberCount,
       }
@@ -379,8 +398,45 @@ router.get("/employees", authenticate, async (req: Request, res: Response): Prom
     }
 
     const companyId = tenant.companyId;
+    const { limit, offset } = parsePaginationParams(req.query, 10, 100);
+    const { search, role } = req.query;
 
-    // Fetch members from company_members where deleted_at IS NULL
+    let searchCondition = sql``;
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const s = `%${search.trim().toLowerCase()}%`;
+      searchCondition = sql`AND (
+        LOWER(p.full_name) LIKE ${s}
+        OR LOWER(p.email) LIKE ${s}
+        OR LOWER(cm.role) LIKE ${s}
+      )`;
+    }
+
+    let roleCondition = sql``;
+    if (role && typeof role === 'string' && role.trim() !== '' && role.toLowerCase() !== 'semua') {
+      const r = role.trim().toLowerCase();
+      if (r === 'admin') {
+        roleCondition = sql`AND cm.role IN ('owner', 'admin')`;
+      } else if (r === 'manajemen' || r === 'manager') {
+        roleCondition = sql`AND cm.role = 'manager'`;
+      } else if (r === 'karyawan' || r === 'employee' || r === 'member') {
+        roleCondition = sql`AND cm.role = 'member'`;
+      }
+    }
+
+    // 1. Total count query
+    const countRes = await db.execute(sql`
+      SELECT count(*)::int as total
+      FROM company_members cm
+      JOIN profiles p ON p.id = cm.profile_id
+      WHERE cm.company_id = ${companyId}
+        AND cm.status = 'active'
+        AND cm.deleted_at IS NULL
+        ${searchCondition}
+        ${roleCondition}
+    `);
+    const total = Number(countRes.rows[0]?.total || 0);
+
+    // 2. Fetch members with LIMIT & OFFSET and stable order
     const membersRes = await db.execute(sql`
       SELECT 
         p.id, 
@@ -395,7 +451,10 @@ router.get("/employees", authenticate, async (req: Request, res: Response): Prom
       WHERE cm.company_id = ${companyId}
         AND cm.status = 'active'
         AND cm.deleted_at IS NULL
-      ORDER BY cm.joined_at ASC
+        ${searchCondition}
+        ${roleCondition}
+      ORDER BY cm.joined_at ASC, p.id ASC
+      LIMIT ${limit} OFFSET ${offset}
     `);
     
     const employees = membersRes.rows.map((row: any) => {
@@ -421,13 +480,14 @@ router.get("/employees", authenticate, async (req: Request, res: Response): Prom
       };
     });
 
+    const pagination = buildPaginationMeta(total, limit, offset);
+
     return res.status(200).json({
       success: true,
       message: "Berhasil mengambil daftar karyawan",
       data: employees,
-      meta: {
-        total: employees.length
-      }
+      pagination,
+      meta: pagination
     });
 
   } catch (error: any) {
@@ -557,6 +617,23 @@ router.patch("/me", authenticate, async (req: Request, res: Response): Promise<a
   try {
     const user = (req as any).user;
 
+    // 1. Resolve tenant & check authorization first
+    const tenant = await resolveTenant(req, user.id);
+    if (!tenant) {
+      return res.status(404).json({
+        success: false,
+        message: "Perusahaan tidak ditemukan atau Anda belum bergabung dengan perusahaan",
+      });
+    }
+
+    if (!tenant.isManagement || (tenant.role !== "owner" && tenant.role !== "admin")) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Hanya Owner atau Admin yang dapat mengubah pengaturan perusahaan",
+      });
+    }
+
+    // 2. Validate request body
     const parseResult = updateCompanySchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({
@@ -574,21 +651,6 @@ router.patch("/me", authenticate, async (req: Request, res: Response): Promise<a
     }
     if (work_end_time) {
       work_end_time = work_end_time.split(':').slice(0, 2).join(':');
-    }
-
-    const tenant = await resolveTenant(req, user.id);
-    if (!tenant) {
-      return res.status(404).json({
-        success: false,
-        message: "Perusahaan tidak ditemukan atau Anda belum bergabung dengan perusahaan",
-      });
-    }
-
-    if (!tenant.isManagement || tenant.role === "member") {
-      return res.status(403).json({
-        success: false,
-        message: "Forbidden: Anda tidak memiliki akses untuk mengubah pengaturan perusahaan",
-      });
     }
 
     const companyId = tenant.companyId;
@@ -773,20 +835,19 @@ router.patch("/employees/:employeeId/roles", authenticate, async (req: Request, 
 router.post("/avatar", authenticate, upload.single("avatar"), async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
-    const file = req.file;
-
-    if (!file) {
-      return res.status(400).json({ success: false, message: "File foto tidak ditemukan." });
-    }
-
-    // 1. Resolve tenant & check authorization
+    // 1. Resolve tenant & check authorization first
     const tenant = await resolveTenant(req, user.id);
     if (!tenant) {
       return res.status(404).json({ success: false, message: "Anda tidak terhubung ke perusahaan manapun" });
     }
 
-    if (!tenant.isManagement) {
-      return res.status(403).json({ success: false, message: "Forbidden: Hanya Pemilik, Admin, atau Manager yang dapat mengubah foto perusahaan" });
+    if (!tenant.isManagement || (tenant.role !== "owner" && tenant.role !== "admin")) {
+      return res.status(403).json({ success: false, message: "Forbidden: Hanya Pemilik atau Admin yang dapat mengubah foto perusahaan" });
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, message: "File foto tidak ditemukan." });
     }
 
     const companyId = tenant.companyId;

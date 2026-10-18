@@ -10,7 +10,7 @@ import {
   LogOut, 
   ChevronRight,
   ArrowLeftRight
-} from "lucide-react";
+, Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
@@ -125,6 +125,7 @@ export default function ProfilPage() {
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isUploadingAvatar) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -216,7 +217,11 @@ export default function ProfilPage() {
               className="absolute bottom-0 right-0 w-[26px] h-[26px] bg-[#1E4738] rounded-full border-[3px] border-white flex items-center justify-center cursor-pointer hover:bg-[#153428] transition-colors"
               onClick={() => !isUploadingAvatar && fileInputRef.current?.click()}
             >
-              <Camera className="w-3.5 h-3.5 text-white" />
+              {isUploadingAvatar ? (
+                <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+              ) : (
+                <Camera className="w-3.5 h-3.5 text-white" />
+              )}
             </div>
 
             {/* Loading Overlay for Avatar */}

@@ -1,13 +1,16 @@
 "use client";
 
-import { ChevronLeft, Search, Check, ChevronRight, ListFilter, QrCode, Building2, Copy, Users, Clock, UserPlus, Calendar, User, X, Trash2, AlertTriangle, LogOut, MessageSquare, CheckCircle2, XCircle, UserMinus } from "lucide-react";
+import { ChevronLeft, Search, Check, ChevronRight, ListFilter, QrCode, Building2, Copy, Users, Clock, UserPlus, Calendar, User, X, Trash2, AlertTriangle, LogOut, MessageSquare, CheckCircle2, XCircle, UserMinus, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useMemo, useEffect } from "react";
 import { TopBar } from "@/components/TopBar";
+import { ViewAllButton } from "@/components/ViewAllButton";
 import { QRCodeSVG } from "qrcode.react";
+import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
+import { Pagination } from "@/components/Pagination";
 
 export default function KelolaKaryawanPage() {
   const router = useRouter();
@@ -133,6 +136,9 @@ function AdminKaryawanView() {
 
   // Exit Requests State
   const [exitRequests, setExitRequests] = useState<any[]>([]);
+  const [exitRequestsTotal, setExitRequestsTotal] = useState(0);
+  const [exitRequestsOffset, setExitRequestsOffset] = useState(0);
+  const [exitRequestsLimit] = useState(10);
   const [isLoadingExitRequests, setIsLoadingExitRequests] = useState(true);
   const [exitRequestsError, setExitRequestsError] = useState("");
 
@@ -145,20 +151,39 @@ function AdminKaryawanView() {
   // Karyawan State
   const [employees, setEmployees] = useState<any[]>([]);
   const [totalEmployees, setTotalEmployees] = useState(0);
+  const [employeeOffset, setEmployeeOffset] = useState(0);
+  const [employeeLimit] = useState(10);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
   const [employeeError, setEmployeeError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const [isSavingRole, setIsSavingRole] = useState(false);
   const [saveRoleError, setSaveRoleError] = useState("");
   const [roleFilter, setRoleFilter] = useState<"Semua" | "Karyawan" | "Manajemen" | "Admin">("Semua");
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
-  const fetchEmployeesData = async (token: string) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setEmployeeOffset(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const fetchEmployeesData = async () => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
     setIsLoadingEmployees(true);
     try {
       const activeCompanyId = localStorage.getItem("activeCompanyId");
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/employees", {
+      const queryParams = new URLSearchParams();
+      if (debouncedSearch.trim()) queryParams.append("search", debouncedSearch.trim());
+      if (roleFilter !== "Semua") queryParams.append("role", roleFilter);
+      queryParams.append("limit", String(employeeLimit));
+      queryParams.append("offset", String(employeeOffset));
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/employees?${queryParams.toString()}`, {
         headers: { 
           "Authorization": `Bearer ${token}`,
           ...(activeCompanyId ? { "x-company-id": activeCompanyId } : {})
@@ -166,8 +191,8 @@ function AdminKaryawanView() {
       });
       const data = await res.json();
       if (data.success) {
-        setEmployees(data.data);
-        setTotalEmployees(data.meta?.total || data.data.length);
+        setEmployees(data.data || []);
+        setTotalEmployees(Number(data.pagination?.total ?? data.meta?.total ?? (data.data || []).length));
       } else {
         setEmployeeError(data.message || "Gagal mengambil daftar karyawan");
       }
@@ -178,7 +203,9 @@ function AdminKaryawanView() {
     }
   };
 
-  const fetchExitRequestsData = async (token: string) => {
+  const fetchExitRequestsData = async () => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
     setIsLoadingExitRequests(true);
     setExitRequestsError("");
     try {
@@ -186,12 +213,17 @@ function AdminKaryawanView() {
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/exit-requests", {
+      const queryParams = new URLSearchParams();
+      queryParams.append("limit", String(exitRequestsLimit));
+      queryParams.append("offset", String(exitRequestsOffset));
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests?${queryParams.toString()}`, {
         headers
       });
       const data = await res.json();
       if (data.success) {
         setExitRequests(data.data || []);
+        setExitRequestsTotal(Number(data.pagination?.total ?? data.meta?.total ?? (data.data || []).length));
       } else {
         setExitRequestsError(data.message || "Gagal memuat permohonan keluar");
       }
@@ -229,9 +261,9 @@ function AdminKaryawanView() {
 
       if (data.success) {
         setSelectedExitReqForAction(null);
-        fetchExitRequestsData(token);
+        fetchExitRequestsData();
         if (exitActionType === "approve") {
-          fetchEmployeesData(token);
+          fetchEmployeesData();
         }
         showToast(exitActionType === "approve" ? "Permohonan keluar berhasil disetujui" : "Permohonan keluar telah ditolak", "info");
       } else {
@@ -264,7 +296,7 @@ function AdminKaryawanView() {
       if (data.success) {
         setIsDeleteConfirmOpen(false);
         setSelectedEmployeeForRole(null);
-        fetchEmployeesData(token);
+        fetchEmployeesData();
         showToast("Karyawan berhasil dikeluarkan dari perusahaan", "success");
       } else {
         setDeleteMemberError(data.message || "Gagal mengeluarkan anggota");
@@ -279,6 +311,10 @@ function AdminKaryawanView() {
 
   const handleSimpanRole = async () => {
     if (!selectedEmployeeForRole || isSavingRole) return;
+    if (activeRole !== "owner" && activeRole !== "admin") {
+      setSaveRoleError("Hanya Admin atau Owner yang dapat mengubah hak akses.");
+      return;
+    }
     
     const token = localStorage.getItem("accessToken");
     if (!token) return;
@@ -306,7 +342,7 @@ function AdminKaryawanView() {
       const data = await res.json();
       if (data.success) {
         setSelectedEmployeeForRole(null);
-        fetchEmployeesData(token);
+        fetchEmployeesData();
         await refreshMemberships();
         showToast("Hak akses berhasil disimpan", "success");
       } else {
@@ -320,83 +356,14 @@ function AdminKaryawanView() {
   };
 
   const filteredEmployees = useMemo(() => {
-    let result = employees;
-
-    if (roleFilter !== "Semua") {
-      result = result.filter(e => {
-        const roles = e.roles || [];
-        if (roleFilter === "Admin") return roles.includes("Admin");
-        if (roleFilter === "Manajemen") return roles.includes("Manager");
-        if (roleFilter === "Karyawan") return roles.includes("Employee") && !roles.includes("Manager") && !roles.includes("Admin");
-        return true;
-      });
-    }
-
-    if (!searchQuery) return result;
-    const q = searchQuery.toLowerCase();
-    return result.filter(e => 
-      (e.full_name && e.full_name.toLowerCase().includes(q)) || 
-      (e.email && e.email.toLowerCase().includes(q))
-    );
-  }, [employees, searchQuery, roleFilter]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      const token = localStorage.getItem("accessToken");
-      if (!token) return;
-
-      setIsLoadingCompany(true);
-
-      // Fetch Employees
-      fetchEmployeesData(token);
-
-      // Fetch Company
-      const compHeaders: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (activeCompanyId) compHeaders["x-company-id"] = activeCompanyId;
-
-      fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
-        headers: compHeaders
-      }).then(res => res.json()).then(data => {
-        if (data.success) {
-          setCompanyData(data.data);
-        }
-      }).catch(console.error)
-        .finally(() => setIsLoadingCompany(false));
-
-      // Fetch Join Requests
-      fetchRequestsData(token);
-
-      // Fetch Exit Requests
-      fetchExitRequestsData(token);
-    };
-    fetchData();
-  }, [activeCompanyId]);
-
-  const fetchRequestsData = async (token: string) => {
-    setIsLoadingRequests(true);
-    setRequestsError("");
-    try {
-      const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
-
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", {
-        headers
-      });
-      const data = await res.json();
-      if (data.success) {
-        setJoinRequests(data.data);
-      } else {
-        setRequestsError(data.message || "Gagal");
-      }
-    } catch (err) {
-      setRequestsError("Terjadi kesalahan");
-    } finally {
-      setIsLoadingRequests(false);
-    }
-  };
+    return employees;
+  }, [employees]);
 
   // State untuk Permintaan Bergabung
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
+  const [joinRequestsTotal, setJoinRequestsTotal] = useState(0);
+  const [joinRequestsOffset, setJoinRequestsOffset] = useState(0);
+  const [joinRequestsLimit] = useState(10);
   const [isLoadingRequests, setIsLoadingRequests] = useState(true);
   const [requestsError, setRequestsError] = useState("");
   const [isProcessingReq, setIsProcessingReq] = useState(false);
@@ -409,6 +376,68 @@ function AdminKaryawanView() {
   const [companyData, setCompanyData] = useState<any>(null);
   const [isLoadingCompany, setIsLoadingCompany] = useState(true);
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
+
+  const fetchRequestsData = async () => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+    setIsLoadingRequests(true);
+    setRequestsError("");
+    try {
+      const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+
+      const queryParams = new URLSearchParams();
+      queryParams.append("limit", String(joinRequestsLimit));
+      queryParams.append("offset", String(joinRequestsOffset));
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests?${queryParams.toString()}`, {
+        headers
+      });
+      const data = await res.json();
+      if (data.success) {
+        setJoinRequests(data.data || []);
+        setJoinRequestsTotal(Number(data.pagination?.total ?? data.meta?.total ?? (data.data || []).length));
+      } else {
+        setRequestsError(data.message || "Gagal");
+      }
+    } catch (err) {
+      setRequestsError("Terjadi kesalahan");
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  };
+
+  useEffect(() => {
+    setEmployeeOffset(0);
+    setExitRequestsOffset(0);
+    setJoinRequestsOffset(0);
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    fetchEmployeesData();
+  }, [activeCompanyId, debouncedSearch, roleFilter, employeeOffset]);
+
+  useEffect(() => {
+    fetchExitRequestsData();
+  }, [activeCompanyId, exitRequestsOffset]);
+
+  useEffect(() => {
+    fetchRequestsData();
+  }, [activeCompanyId, joinRequestsOffset]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    if (!token || !activeCompanyId) return;
+    setIsLoadingCompany(true);
+    const compHeaders: Record<string, string> = { "Authorization": `Bearer ${token}`, "x-company-id": activeCompanyId };
+    fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", { headers: compHeaders })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setCompanyData(data.data);
+      })
+      .catch(console.error)
+      .finally(() => setIsLoadingCompany(false));
+  }, [activeCompanyId]);
 
   const toggleSelectAllReq = () => {
     if (selectedRequests.length === joinRequests.length && joinRequests.length > 0) {
@@ -449,10 +478,8 @@ function AdminKaryawanView() {
         }
       }
       setSelectedRequests(prev => prev.filter(id => !targetIds.includes(id)));
-      fetchRequestsData(token);
-      
-      // Refetch employees to update list
-      fetchEmployeesData(token);
+      fetchRequestsData();
+      fetchEmployeesData();
       showToast("Permintaan bergabung berhasil disetujui", "success");
 
     } catch (err: any) {
@@ -489,7 +516,7 @@ function AdminKaryawanView() {
         const rejectedId = selectedJoinReqForReject.id;
         setSelectedJoinReqForReject(null);
         setSelectedRequests(prev => prev.filter(id => id !== rejectedId));
-        fetchRequestsData(token);
+        fetchRequestsData();
         showToast("Permintaan bergabung berhasil ditolak", "info");
       } else {
         setRejectJoinReqError(data.message || "Gagal menolak permintaan bergabung");
@@ -772,6 +799,15 @@ function AdminKaryawanView() {
                 ))
               )}
             </div>
+
+            <Pagination
+              total={exitRequestsTotal}
+              limit={exitRequestsLimit}
+              offset={exitRequestsOffset}
+              onPageChange={setExitRequestsOffset}
+              label="permohonan keluar"
+              isLoading={isLoadingExitRequests}
+            />
           </div>
         )}
 
@@ -797,12 +833,19 @@ function AdminKaryawanView() {
                  <span className="text-[12px] text-[#111827] font-medium" onClick={toggleSelectAllReq}>Pilih Semua</span>
                </label>
                <button 
-                 onClick={() => handleTerimaReq()}
-                 disabled={selectedRequests.length === 0 || isProcessingReq || isProcessingRejectReq}
-                 className={`text-white text-[11px] font-bold px-4 py-1.5 rounded-full transition-all ${selectedRequests.length > 0 && !isProcessingReq && !isProcessingRejectReq ? 'bg-[#356E3B] active:scale-95' : 'bg-gray-300 cursor-not-allowed'}`}
-               >
-                 {isProcessingReq ? "Memproses..." : `Terima (${selectedRequests.length})`}
-               </button>
+                onClick={() => handleTerimaReq()}
+                disabled={selectedRequests.length === 0 || isProcessingReq || isProcessingRejectReq}
+                className={`text-white text-[11px] font-bold px-4 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+                  selectedRequests.length > 0 && !isProcessingReq && !isProcessingRejectReq 
+                    ? 'bg-[#356E3B] active:scale-95' 
+                    : isProcessingReq 
+                      ? 'bg-[#356E3B]/90 cursor-wait' 
+                      : 'bg-gray-300 cursor-not-allowed'
+                }`}
+              >
+                {isProcessingReq && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isProcessingReq ? "Memproses..." : `Terima (${selectedRequests.length})`}</span>
+              </button>
             </div>
           </div>
           
@@ -864,20 +907,33 @@ function AdminKaryawanView() {
                        Tolak
                      </button>
                      <button
-                       type="button"
-                       onClick={() => handleTerimaReq([item.id])}
-                       disabled={isProcessingReq || isProcessingRejectReq}
-                       className="px-3.5 py-1.5 bg-[#356E3B] hover:bg-[#2b5930] text-white rounded-full text-[11px] font-bold transition-all active:scale-95 shadow-sm shadow-[#356E3B]/20 flex items-center gap-1 disabled:opacity-50"
-                     >
-                       <Check className="w-3.5 h-3.5" />
-                       <span>Terima</span>
-                     </button>
+                      type="button"
+                      onClick={() => handleTerimaReq([item.id])}
+                      disabled={isProcessingReq || isProcessingRejectReq}
+                      className="px-3.5 py-1.5 bg-[#356E3B] hover:bg-[#2b5930] text-white rounded-full text-[11px] font-bold transition-all active:scale-95 shadow-sm shadow-[#356E3B]/20 flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {isProcessingReq ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isProcessingReq ? "Memproses..." : "Terima"}</span>
+                    </button>
                    </div>
                  </div>
                </div>
               ))
             )}
           </div>
+
+          <Pagination
+            total={joinRequestsTotal}
+            limit={joinRequestsLimit}
+            offset={joinRequestsOffset}
+            onPageChange={setJoinRequestsOffset}
+            label="permintaan gabung"
+            isLoading={isLoadingRequests}
+          />
         </div>
         )}
 
@@ -889,11 +945,9 @@ function AdminKaryawanView() {
                <div className="w-7 h-7 bg-[#f4f9f6] rounded-lg flex items-center justify-center shrink-0">
                  <Users className="w-4 h-4 text-[#356E3B]" />
                </div>
-               <span className="text-[#111827] text-[13px] font-bold">Daftar Karyawan</span>
+               <span className="text-[#111827] text-[15px] font-bold">Daftar Karyawan</span>
             </div>
-            <span className="text-[#356E3B] text-[11px] font-bold cursor-pointer hover:underline">
-               Lihat Semua &gt;
-            </span>
+            <ViewAllButton onClick={() => setActiveTab("karyawan")} />
           </div>
 
           <div className="flex flex-col gap-2">
@@ -973,6 +1027,15 @@ function AdminKaryawanView() {
               })
             )}
           </div>
+
+          <Pagination
+            total={totalEmployees}
+            limit={employeeLimit}
+            offset={employeeOffset}
+            onPageChange={setEmployeeOffset}
+            label="karyawan"
+            isLoading={isLoadingEmployees}
+          />
         </div>
         )}
 
@@ -1021,47 +1084,22 @@ function AdminKaryawanView() {
                   Bagikan kode QR ini kepada karyawan untuk bergabung ke perusahaan Anda secara instan.
                 </p>
 
-                {/* QR Code Container */}
-                <div className="bg-[#f7fbf8] border border-[#eef5f0] w-full max-w-[280px] rounded-[24px] flex flex-col items-center py-8 mb-8 shadow-[0_2px_16px_rgba(0,0,0,0.02)]">
-                  <div className="w-[180px] h-[180px] bg-white rounded-[16px] shadow-sm flex items-center justify-center mb-6">
-                    {isLoadingCompany ? (
-                      <div className="text-gray-400 text-[13px]">Memuat...</div>
-                    ) : joinCode ? (
-                      <QRCodeSVG value={qrUrl} size={140} />
-                    ) : (
-                      <QrCode className="w-24 h-24 text-[#356E3B]" strokeWidth={1} />
-                    )}
-                  </div>
-                  <div className="bg-[#e6f0ea] px-4 py-1.5 rounded-full">
-                    <span className="text-[#356E3B] text-[11px] font-bold tracking-wide">
-                      {companyName}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="flex items-center gap-4 w-full mb-6">
-                  <div className="h-[1px] bg-gray-100 flex-1"></div>
-                  <span className="text-gray-400 text-[11px] font-medium">atau via kode</span>
-                  <div className="h-[1px] bg-gray-100 flex-1"></div>
-                </div>
-
-                {/* Input Salin Kode */}
-                <div className="w-full flex items-center justify-between border border-gray-200 rounded-[12px] p-2 bg-white transition-colors focus-within:border-[#356E3B]">
-                  <span className="text-gray-400 font-mono text-[14px] pl-3 tracking-widest">
-                    {joinCode || "------"}
-                  </span>
-                  <button 
-                    onClick={() => {
+                {/* QR Code Container & Join Code */}
+                <div className="w-full max-w-[320px]">
+                  <CompanyQRCodeCard
+                    qrUrl={qrUrl}
+                    joinCode={joinCode}
+                    companyName={companyName}
+                    size={190}
+                    showJoinCodeBox={true}
+                    onCopy={() => {
                       if (joinCode) {
                         navigator.clipboard.writeText(joinCode);
                         showToast("Kode berhasil disalin!", "success");
                       }
                     }}
-                    className="bg-[#356E3B] hover:bg-[#2b5930] text-white text-[12px] font-bold px-5 py-2.5 rounded-[8px] transition-colors active:scale-95"
-                  >
-                    Salin
-                  </button>
+                    instructionText="Arahkan kamera ke kode QR untuk bergabung instan"
+                  />
                 </div>
 
               </div>
@@ -1071,7 +1109,7 @@ function AdminKaryawanView() {
       })()}
 
       {/* Modal Edit Role Karyawan */}
-      {selectedEmployeeForRole && (
+      {selectedEmployeeForRole && (activeRole === "owner" || activeRole === "admin") && (
         <div className="fixed inset-0 z-[100] flex justify-end flex-col sm:justify-center sm:items-center bg-black/60">
           <div className="w-full sm:max-w-md bg-white rounded-t-[24px] sm:rounded-[24px] p-6 flex flex-col gap-4 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0">
             <div className="flex justify-between items-center mb-2">
@@ -1164,9 +1202,16 @@ function AdminKaryawanView() {
               <button 
                 onClick={handleSimpanRole}
                 disabled={isSavingRole}
-                className="w-full py-3.5 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-full font-bold text-[14px] active:scale-[0.98] transition-all shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3.5 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-full font-bold text-[14px] active:scale-[0.98] transition-all shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {isSavingRole ? "Menyimpan..." : "Simpan Perubahan Role"}
+                {isSavingRole ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>Menyimpan Perubahan...</span>
+                  </>
+                ) : (
+                  "Simpan Perubahan Role"
+                )}
               </button>
 
               {/* Opsi Keluarkan Karyawan */}
@@ -1222,9 +1267,16 @@ function AdminKaryawanView() {
               <button 
                 onClick={handleSoftDeleteMember}
                 disabled={isDeletingMember}
-                className="flex-1 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
+                className="flex-1 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isDeletingMember ? "Mengeluarkan..." : "Ya, Keluarkan Karyawan"}
+                {isDeletingMember ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>Mengeluarkan...</span>
+                  </>
+                ) : (
+                  "Ya, Keluarkan Karyawan"
+                )}
               </button>
             </div>
           </div>
@@ -1284,15 +1336,20 @@ function AdminKaryawanView() {
               <button 
                 onClick={handleConfirmExitRequest}
                 disabled={isProcessingExitReq}
-                className={`flex-1 py-3 rounded-full text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md disabled:opacity-50 ${
+                className={`flex-1 py-3 rounded-full text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2 ${
                   exitActionType === 'approve' 
                     ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20' 
                     : 'bg-gray-800 hover:bg-gray-900 shadow-gray-800/20'
                 }`}
               >
-                {isProcessingExitReq 
-                  ? "Memproses..." 
-                  : (exitActionType === "approve" ? "Ya, Keluarkan" : "Tolak Permohonan")}
+                {isProcessingExitReq ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>{exitActionType === "approve" ? "Mengeluarkan..." : "Menolak..."}</span>
+                  </>
+                ) : (
+                  exitActionType === "approve" ? "Ya, Keluarkan" : "Tolak Permohonan"
+                )}
               </button>
             </div>
           </div>
@@ -1333,9 +1390,16 @@ function AdminKaryawanView() {
               <button 
                 onClick={handleConfirmRejectJoinRequest}
                 disabled={isProcessingRejectReq}
-                className="flex-1 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
+                className="flex-1 py-3 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-[13px] active:scale-95 transition-all shadow-md shadow-red-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isProcessingRejectReq ? "Memproses..." : "Ya, Tolak Permintaan"}
+                {isProcessingRejectReq ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>Menolak...</span>
+                  </>
+                ) : (
+                  "Ya, Tolak Permintaan"
+                )}
               </button>
             </div>
           </div>

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  ChevronLeft, RefreshCcw, ArrowRight, 
+import {
+  ChevronLeft, RefreshCcw, ArrowRight,
   MapPin, Check, CheckCircle2, AlertTriangle, Info, SwitchCamera
 } from "lucide-react";
 import dynamic from 'next/dynamic';
@@ -15,7 +15,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { evaluateSchedule, getNextCheckInSchedule, calculateServerOffsetMs, CompanyScheduleData } from "@/lib/schedule";
 import { formatDateTime } from "@/lib/dateUtils";
-const LeafletMap = dynamic(() => import('@/components/MapLocation'), { 
+const LeafletMap = dynamic(() => import('@/components/MapLocation'), {
   ssr: false,
   loading: () => <div className="w-full h-full bg-[#e6eedc] animate-pulse" />
 });
@@ -133,7 +133,7 @@ export default function CheckinPage() {
         videoRef.current.srcObject = stream;
         try {
           await videoRef.current.play();
-        } catch {}
+        } catch { }
       }
 
       // Periksa facingMode aktual dari track bila didukung browser
@@ -273,18 +273,18 @@ export default function CheckinPage() {
 
   useEffect(() => {
     fetchLocation();
-    
+
     const fetchUser = async () => {
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) throw new Error("Token tidak ditemukan");
-        
+
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
           headers: {
             "Authorization": `Bearer ${token}`
           }
         });
-        
+
         if (!res.ok) throw new Error("Gagal mengambil data user");
         const data = await res.json();
         setUserData({
@@ -360,6 +360,7 @@ export default function CheckinPage() {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     const token = localStorage.getItem("accessToken");
     if (!token) {
       router.push("/login");
@@ -431,11 +432,10 @@ export default function CheckinPage() {
   };
 
   const renderStepper = (isOverlay = false) => (
-    <div className={`flex items-center justify-between ${
-      isOverlay 
-        ? 'px-4 sm:px-6 py-2 bg-black/40 backdrop-blur-md rounded-2xl mx-4 border border-white/10' 
+    <div className={`flex items-center justify-between ${isOverlay
+        ? 'px-4 sm:px-6 py-2 bg-black/40 backdrop-blur-md rounded-2xl mx-4 border border-white/10'
         : 'px-10 py-5 bg-[#fbfdfc] border-b border-[#eef5f0]'
-    }`}>
+      }`}>
       {[
         { num: 1, label: "Titik Lokasi" },
         { num: 2, label: "Bukti Foto" },
@@ -443,31 +443,28 @@ export default function CheckinPage() {
       ].map((s, i) => {
         const isActive = step >= s.num;
         const isCurrent = step === s.num;
-        
+
         return (
           <div key={s.num} className="flex flex-col items-center relative z-10 w-full">
             {/* Connecting Line */}
             {i < 2 && (
-              <div className={`absolute ${isOverlay ? 'top-3.5' : 'top-4'} left-[60%] w-[80%] h-[3px] -z-10 ${
-                step > s.num ? (isOverlay ? 'bg-white/50' : 'bg-[#356E3B]') : (isOverlay ? 'bg-white/10' : 'bg-[#dce9df]')
-              }`} />
+              <div className={`absolute ${isOverlay ? 'top-3.5' : 'top-4'} left-[60%] w-[80%] h-[3px] -z-10 ${step > s.num ? (isOverlay ? 'bg-white/50' : 'bg-[#356E3B]') : (isOverlay ? 'bg-white/10' : 'bg-[#dce9df]')
+                }`} />
             )}
-            
+
             {/* Circle */}
-            <div className={`${isOverlay ? 'w-7 h-7 text-[12px] mb-1' : 'w-8 h-8 text-[13px] mb-2'} rounded-full flex items-center justify-center font-bold transition-colors ${
-              isCurrent 
-                ? 'bg-[#356E3B] text-white shadow-md shadow-[#356E3B]/20' 
-                : isActive 
+            <div className={`${isOverlay ? 'w-7 h-7 text-[12px] mb-1' : 'w-8 h-8 text-[13px] mb-2'} rounded-full flex items-center justify-center font-bold transition-colors ${isCurrent
+                ? 'bg-[#356E3B] text-white shadow-md shadow-[#356E3B]/20'
+                : isActive
                   ? (isOverlay ? 'bg-white text-[#356E3B]' : 'bg-[#356E3B] text-white')
                   : (isOverlay ? 'bg-white/20 text-white' : 'bg-[#dce9df] text-[#5C786C]')
-            }`}>
+              }`}>
               {isActive && s.num < step ? <Check className={isOverlay ? "w-4 h-4" : "w-5 h-5"} strokeWidth={3} /> : s.num}
             </div>
-            
+
             {/* Label */}
-            <span className={`text-[10px] font-bold whitespace-nowrap ${
-              isOverlay ? 'text-white' : (isCurrent ? 'text-[#1E4738]' : 'text-[#5C786C]')
-            }`}>
+            <span className={`text-[10px] font-bold whitespace-nowrap ${isOverlay ? 'text-white' : (isCurrent ? 'text-[#1E4738]' : 'text-[#5C786C]')
+              }`}>
               {s.label}
             </span>
           </div>
@@ -543,7 +540,7 @@ export default function CheckinPage() {
             </strong>
             .
           </p>
-          <button 
+          <button
             onClick={() => router.push("/dashboard")}
             className="w-full max-w-[200px] h-12 bg-[#356E3B] hover:bg-[#153428] text-white rounded-full font-bold text-[14px] transition-colors shadow-sm"
           >
@@ -555,6 +552,7 @@ export default function CheckinPage() {
   }
 
   const handleTriggerSubmit = () => {
+    if (isSubmitting) return;
     if (!location || !location.lat || !location.lng) {
       setSubmitError("Titik lokasi belum tersedia.");
       return;
@@ -575,12 +573,12 @@ export default function CheckinPage() {
 
   return (
     <div className="flex flex-col min-h-[100dvh] w-full bg-[#fbfdfc] relative">
-      
+
       {/* Header (Hidden in Step 2 because it's full screen camera) */}
       {step !== 2 && (
-        <TopBar 
-          title={isCheckOutMode ? "Rekam Keluar" : "Rekam Kehadiran"} 
-          onBack={handleBack} 
+        <TopBar
+          title={isCheckOutMode ? "Rekam Keluar" : "Rekam Kehadiran"}
+          onBack={handleBack}
         />
       )}
 
@@ -593,8 +591,8 @@ export default function CheckinPage() {
           {/* Leaflet Map */}
           <div className="absolute inset-0 z-0">
             {location ? (
-              <LeafletMap 
-                center={[location.lat, location.lng]} 
+              <LeafletMap
+                center={[location.lat, location.lng]}
                 showControls={true}
                 showRecenter={true}
                 onRecenter={fetchLocation}
@@ -611,12 +609,12 @@ export default function CheckinPage() {
           </div>
 
           {/* Bottom Sheet */}
-          <div 
+          <div
             ref={bottomDrawerRef}
             className="absolute bottom-0 left-0 w-full bg-white rounded-t-[32px] shadow-[0_-8px_30px_rgba(0,0,0,0.06)] p-6 pt-3 pb-8 z-20"
           >
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6" />
-            
+
             {isLocating ? (
               <div className="flex flex-col items-center justify-center py-6">
                 <div className="w-8 h-8 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-3"></div>
@@ -629,8 +627,11 @@ export default function CheckinPage() {
                 </div>
                 <p className="text-red-500 font-bold text-[14px] mb-2">Lokasi Gagal Didapatkan</p>
                 <p className="text-[#5C786C] text-[12px] px-4 mb-4">{locationError}</p>
-                <PrimaryButton 
+                <PrimaryButton
                   onClick={fetchLocation}
+                  disabled={isLocating}
+                  isLoading={isLocating}
+                  loadingText="Mencari Lokasi..."
                   size="sm"
                   icon={<RefreshCcw className="w-4 h-4" />}
                 >
@@ -676,14 +677,15 @@ export default function CheckinPage() {
                 )}
 
                 <div className="flex gap-3">
-                  <button 
+                  <button
                     onClick={fetchLocation}
-                    className="flex-1 max-w-[140px] h-14 rounded-full border-[1.5px] border-[#a1d6b2] text-[#356E3B] font-bold text-[14px] flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+                    disabled={isLocating}
+                    className="flex-1 max-w-[140px] h-14 rounded-full border-[1.5px] border-[#a1d6b2] text-[#356E3B] font-bold text-[14px] flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <RefreshCcw className="w-4 h-4" strokeWidth={2.5} />
-                    Refresh
+                    <RefreshCcw className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} strokeWidth={2.5} />
+                    {isLocating ? "Mencari..." : "Refresh"}
                   </button>
-                  <PrimaryButton 
+                  <PrimaryButton
                     onClick={() => setStep(2)}
                     disabled={isCheckInBlocked}
                     rightIcon={<ArrowRight className="w-4 h-4" strokeWidth={3} />}
@@ -707,7 +709,7 @@ export default function CheckinPage() {
               <AlertTriangle className="w-12 h-12 text-red-500 mb-4 opacity-80" />
               <p className="text-white font-bold text-lg mb-2">Kamera Gagal</p>
               <p className="text-gray-400 text-sm mb-6">{cameraError}</p>
-              <PrimaryButton 
+              <PrimaryButton
                 onClick={() => startCamera(facingMode)}
                 icon={<RefreshCcw className="w-4 h-4" />}
               >
@@ -715,10 +717,10 @@ export default function CheckinPage() {
               </PrimaryButton>
             </div>
           ) : (
-            <video 
+            <video
               ref={videoRef}
-              autoPlay 
-              playsInline 
+              autoPlay
+              playsInline
               muted
               className="absolute inset-0 w-full h-full object-cover"
               style={{ transform: facingMode === "user" ? 'scaleX(-1) scale(1.02)' : 'scale(1.02)' }}
@@ -729,8 +731,8 @@ export default function CheckinPage() {
 
           {/* Top Controls */}
           <div className="relative z-10 pt-[max(0.75rem,env(safe-area-inset-top,0.75rem))] px-4 sm:px-6 flex justify-between items-center shrink-0 mb-1.5 sm:mb-2">
-            <button 
-              onClick={() => setStep(1)} 
+            <button
+              onClick={() => setStep(1)}
               aria-label="Kembali"
               className="w-10 h-10 rounded-full bg-black/50 border border-white/20 flex items-center justify-center backdrop-blur-md hover:bg-black/70 active:scale-95 transition-all text-white shrink-0"
             >
@@ -752,13 +754,13 @@ export default function CheckinPage() {
               <div className="absolute -top-[1px] -right-[1px] w-5 h-5 sm:w-6 sm:h-6 border-t-[3px] border-r-[3px] border-[#a1d6b2] rounded-tr-[16px]" />
               <div className="absolute -bottom-[1px] -left-[1px] w-5 h-5 sm:w-6 sm:h-6 border-b-[3px] border-l-[3px] border-[#a1d6b2] rounded-bl-[20px]" />
               <div className="absolute -bottom-[1px] -right-[1px] w-5 h-5 sm:w-6 sm:h-6 border-b-[3px] border-r-[3px] border-[#a1d6b2] rounded-br-[20px]" />
-              
+
               {/* Eye Guide */}
               <div className="absolute top-[38%] left-1/2 -translate-x-1/2 w-14 sm:w-16 h-7 sm:h-8 border border-white/40 rounded-[50%] flex items-center justify-center">
                 <div className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-white/40" />
               </div>
             </div>
-            
+
             <p className="text-white text-[13px] sm:text-[14px] font-medium mt-2.5 sm:mt-3 drop-shadow-md text-center shrink-0">
               {facingMode === "user" ? "Tempatkan wajah Anda pada Area Oval" : "Arahkan kamera ke bukti kehadiran Anda"}
             </p>
@@ -770,8 +772,8 @@ export default function CheckinPage() {
             <div className="w-12 h-12 shrink-0" />
 
             {/* Shutter Button (Center) */}
-            <button 
-              onClick={takePhoto} 
+            <button
+              onClick={takePhoto}
               disabled={!!cameraError}
               aria-label="Ambil Foto"
               className="w-[68px] h-[68px] sm:w-[72px] sm:h-[72px] rounded-full border-[4px] border-[#a1d6b2] p-1 flex items-center justify-center transition-transform active:scale-90 disabled:opacity-50 disabled:active:scale-100 shrink-0 shadow-lg cursor-pointer"
@@ -783,9 +785,9 @@ export default function CheckinPage() {
 
             {/* Right: Switch Camera Button */}
             {hasMultipleCameras ? (
-              <button 
+              <button
                 type="button"
-                onClick={toggleCamera} 
+                onClick={toggleCamera}
                 disabled={!!cameraError || isSwitchingCamera}
                 aria-label="Ganti Kamera"
                 className="w-12 h-12 rounded-full bg-black/50 border border-white/20 flex items-center justify-center backdrop-blur-md hover:bg-black/70 active:scale-90 transition-all text-white shrink-0 shadow-lg cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
@@ -803,16 +805,16 @@ export default function CheckinPage() {
       {/* STEP 3: Tinjau Data */}
       {step === 3 && (
         <div className="flex-1 flex flex-col p-6 overflow-y-auto pb-32">
-          
+
           {/* Details Card */}
           <div className="bg-white rounded-[24px] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.03)] border border-[#f3f7f4] flex flex-col mb-6">
-            
+
             {/* Foto Kehadiran di dalam Card */}
             <div className="w-full aspect-[4/3] rounded-[20px] overflow-hidden bg-gray-100 shadow-xs">
               {photoUrl ? (
-                <img 
-                  src={photoUrl} 
-                  alt="Hasil Foto" 
+                <img
+                  src={photoUrl}
+                  alt="Hasil Foto"
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -822,7 +824,7 @@ export default function CheckinPage() {
 
             {/* Tombol Ambil Ulang Foto */}
             <div className="flex justify-center -mt-5 mb-3 z-10">
-              <button 
+              <button
                 type="button"
                 onClick={() => setStep(2)}
                 className="bg-[#eff6f2] hover:bg-white border border-[#dce9df] text-[#1E4738] font-bold text-[12.5px] px-5 py-2.5 rounded-full flex items-center gap-2 shadow-md active:scale-95 transition-all whitespace-nowrap cursor-pointer"
@@ -852,14 +854,14 @@ export default function CheckinPage() {
                 <div className="flex justify-between items-center border-t border-gray-100 pt-4">
                   <span className="text-[13px] text-[#9ca3af] font-medium">Mode Kerja</span>
                   <div className="bg-[#f5f8f6] p-1 rounded-full flex gap-1 border border-gray-100">
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setWorkMode("WFO")}
                       className={`px-4 py-1.5 rounded-full text-[11px] font-bold transition-all ${workMode === 'WFO' ? 'bg-white text-[#1E4738] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                       WFO
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setWorkMode("WFH")}
                       className={`px-4 py-1.5 rounded-full text-[11px] font-bold transition-all ${workMode === 'WFH' ? 'bg-white text-[#1E4738] shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
@@ -877,14 +879,14 @@ export default function CheckinPage() {
                   {reviewTime ? formatDateTime(reviewTime) : "-"}
                 </span>
               </div>
-              
+
               {/* Lokasi Absensi */}
               <div className="border-t border-dashed border-gray-200 pt-5 relative">
                 <div className="flex flex-col gap-3">
                   <div className="flex justify-between items-center">
                     <span className="text-[13px] font-bold text-[#1E4738]">Lokasi Absensi</span>
                   </div>
-                  
+
                   <div className="bg-[#f5f8f6] border border-[#e8f1ec] rounded-[16px] p-3 flex gap-3 items-start">
                     <div className="bg-white w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 shadow-sm mt-0.5">
                       <MapPin className="w-4 h-4 text-[#1E4738]" strokeWidth={2.5} />
@@ -932,7 +934,7 @@ export default function CheckinPage() {
               <span>{scheduleEval.reason}</span>
             </div>
           )}
-          <PrimaryButton 
+          <PrimaryButton
             onClick={handleTriggerSubmit}
             disabled={isSubmitting || isCheckInBlocked}
             isLoading={isSubmitting}
@@ -961,13 +963,17 @@ export default function CheckinPage() {
             <div className="flex w-full gap-3">
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setShowEarlyCheckoutModal(false)}
-                className="flex-1 py-3.5 px-4 rounded-full border border-gray-200 text-[#4B5563] font-bold text-[14px] hover:bg-gray-50 transition-colors"
+                className="flex-1 py-3.5 px-4 rounded-full border border-gray-200 text-[#4B5563] font-bold text-[14px] hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Batal
               </button>
               <PrimaryButton
                 type="button"
+                disabled={isSubmitting}
+                isLoading={isSubmitting}
+                loadingText="Menyimpan..."
                 onClick={() => {
                   setShowEarlyCheckoutModal(false);
                   handleSubmit();
@@ -1000,6 +1006,9 @@ export default function CheckinPage() {
             <div className="flex flex-col w-full gap-2.5">
               <PrimaryButton
                 type="button"
+                disabled={isLocating || isSubmitting}
+                isLoading={isLocating}
+                loadingText="Mencari Lokasi..."
                 onClick={() => {
                   setShowLowAccuracyModal(false);
                   setStep(1);
@@ -1012,7 +1021,9 @@ export default function CheckinPage() {
               </PrimaryButton>
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => {
+                  if (isSubmitting) return;
                   setShowLowAccuracyModal(false);
                   setLowAccuracyConfirmed(true);
                   if (isCheckOutMode && scheduleEval.isEarlyCheckout) {
@@ -1021,7 +1032,7 @@ export default function CheckinPage() {
                     handleSubmit();
                   }
                 }}
-                className="w-full py-3 px-4 rounded-full border border-gray-200 text-[#4B5563] font-semibold text-[13px] hover:bg-gray-50 transition-colors"
+                className="w-full py-3 px-4 rounded-full border border-gray-200 text-[#4B5563] font-semibold text-[13px] hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Tetap Lanjutkan ({titleText})
               </button>

@@ -32,7 +32,7 @@ function LoginForm() {
   }, [redirectParam, router]);
 
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
-    if (!credentialResponse.credential) return;
+    if (isLoading || !credentialResponse.credential) return;
 
     setIsLoading(true);
     try {
@@ -107,7 +107,7 @@ function LoginForm() {
             </p>
           </div>
 
-          <div className="flex justify-center w-full mt-2">
+          <div className={`flex justify-center w-full mt-2 ${isLoading ? "pointer-events-none opacity-50" : ""}`}>
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={() => {

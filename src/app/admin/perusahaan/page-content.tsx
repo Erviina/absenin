@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, Target, Calendar, UserPlus, QrCode, AlignLeft, Send, Copy, Camera, Users, Trash2, Phone, ExternalLink, Plus, Minus } from "lucide-react";
+import { ChevronLeft, Building2, Pencil, Clock, ChevronRight, MapPin, X, Save, Target, Calendar, UserPlus, QrCode, AlignLeft, Send, Copy, Camera, Users, Trash2, Phone, ExternalLink, Plus, Minus , Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { useState, useEffect, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -8,6 +8,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { CustomSelect } from "@/components/CustomSelect";
 import { CustomTimePicker } from "@/components/CustomTimePicker";
 import { QRCodeSVG } from "qrcode.react";
+import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -224,7 +225,7 @@ async function reverseGeocodeCoord(lat: number, lon: number): Promise<string | n
 export default function KelolaPerusahaanPage() {
   const router = useRouter();
   const { showToast, showConfirm } = useDialog();
-  const { refreshMemberships } = useCompany();
+  const { refreshMemberships, activeRole, isLoading: isCompanyLoading } = useCompany();
 
   const [initialData, setInitialData] = useState({ name: "", phone: "", address: "", latitude: -6.9175, longitude: 107.6191 });
   const [companyData, setCompanyData] = useState({ 
@@ -340,6 +341,15 @@ export default function KelolaPerusahaanPage() {
   }, []);
 
   useEffect(() => {
+    if (!isCompanyLoading && activeRole) {
+      if (activeRole !== "owner" && activeRole !== "admin") {
+        showToast("Akses ditolak: Hanya Admin yang dapat mengelola pengaturan perusahaan.", "error");
+        router.replace("/admin/dashboard");
+      }
+    }
+  }, [activeRole, isCompanyLoading, router, showToast]);
+
+  useEffect(() => {
     const fetchCompany = async () => {
       try {
         const token = localStorage.getItem("accessToken");
@@ -408,6 +418,7 @@ export default function KelolaPerusahaanPage() {
   }, [router, showToast]);
 
   const handleSimpanPerusahaan = async () => {
+    if (isSaving) return;
     if (!companyData.name) {
       showToast("Nama perusahaan tidak boleh kosong", "warning");
       return;
@@ -464,6 +475,7 @@ export default function KelolaPerusahaanPage() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isUploadingImage) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -536,6 +548,7 @@ export default function KelolaPerusahaanPage() {
   };
 
   const handleSaveInfo = async () => {
+    if (isSaving) return;
     if (!infoForm.name.trim()) {
       showToast("Nama perusahaan tidak boleh kosong", "warning");
       return;
@@ -617,6 +630,7 @@ export default function KelolaPerusahaanPage() {
   const [isTambahKaryawanOpen, setIsTambahKaryawanOpen] = useState(false);
 
   const handleSaveJadwal = async () => {
+    if (isSaving) return;
     const confirmed = await showConfirm({
       title: "Simpan Jam Kerja?",
       message: "Apakah Anda yakin ingin menerapkan hari dan jam operasional baru untuk perusahaan?",
@@ -675,6 +689,7 @@ export default function KelolaPerusahaanPage() {
   };
 
   const handleSimpan = async () => {
+    if (isSaving) return;
     const confirmed = await showConfirm({
       title: "Simpan Lokasi Kantor?",
       message: "Apakah Anda yakin ingin memperbarui titik koordinat dan alamat kantor perusahaan ini?",
@@ -735,6 +750,29 @@ export default function KelolaPerusahaanPage() {
       setIsSaving(false);
     }
   };
+
+  if (!isCompanyLoading && activeRole && activeRole !== "owner" && activeRole !== "admin") {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative">
+        <TopBar title="Kelola Perusahaan" onBack={() => router.push("/admin/dashboard")} />
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-1">
+            <X className="w-6 h-6 stroke-[2.5]" />
+          </div>
+          <h2 className="text-[#111827] text-[16px] font-bold">Akses Ditolak</h2>
+          <p className="text-gray-500 text-[13px] max-w-xs leading-relaxed">
+            Hanya Admin atau Pemilik perusahaan yang memiliki hak akses untuk mengubah profil perusahaan, jam operasional, dan lokasi kantor.
+          </p>
+          <button
+            onClick={() => router.push("/admin/dashboard")}
+            className="mt-2 px-5 py-2.5 bg-[#356E3B] text-white rounded-full text-[13px] font-bold active:scale-95 transition-all shadow-sm cursor-pointer"
+          >
+            Kembali ke Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative">
@@ -1086,9 +1124,14 @@ export default function KelolaPerusahaanPage() {
                   type="button"
                   onClick={handleSaveInfo}
                   disabled={isSaving}
-                  className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[14px] py-3.5 rounded-[16px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-sm cursor-pointer"
+                  className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[14px] py-3.5 rounded-[16px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-sm cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {isSaving ? "Menyimpan..." : (
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
                     <>
                       <Save className="w-4 h-4" />
                       <span>Simpan Perubahan</span>
@@ -1397,41 +1440,17 @@ export default function KelolaPerusahaanPage() {
                 Bagikan kode QR ini kepada karyawan untuk bergabung ke perusahaan Anda secara instan.
               </p>
 
-              {/* QR Code Container */}
-              <div className="bg-[#f7fbf8] border border-[#eef5f0] w-full max-w-[280px] rounded-[24px] flex flex-col items-center py-8 mb-8 shadow-[0_2px_16px_rgba(0,0,0,0.02)]">
-                <div className="w-[180px] h-[180px] bg-white rounded-[16px] shadow-sm flex items-center justify-center mb-6">
-                  {companyData.join_code ? (
-                    <QRCodeSVG value={qrUrl} size={140} />
-                  ) : (
-                    <QrCode className="w-24 h-24 text-[#356E3B]" strokeWidth={1} />
-                  )}
-                </div>
-                <div className="bg-[#e6f0ea] px-4 py-1.5 rounded-full">
-                  <span className="text-[#356E3B] text-[11px] font-bold tracking-wide">{companyData.name}</span>
-                </div>
-              </div>
-
-              {/* Divider */}
-              <div className="flex items-center gap-4 w-full mb-6">
-                <div className="h-[1px] bg-gray-100 flex-1"></div>
-                <span className="text-gray-400 text-[11px] font-medium">atau via kode</span>
-                <div className="h-[1px] bg-gray-100 flex-1"></div>
-              </div>
-
-              {/* Input Salin Kode */}
-              <div className="w-full flex items-center justify-between border border-gray-200 rounded-[12px] p-2 bg-white transition-colors focus-within:border-[#356E3B]">
-                <span className="text-gray-400 font-mono text-[14px] pl-3 tracking-widest">
-                  {companyData.join_code || "------"}
-                </span>
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(companyData.join_code);
-                    showToast("Kode berhasil disalin!", "success");
-                  }}
-                  className="bg-[#356E3B] hover:bg-[#2b5930] text-white text-[12px] font-bold px-5 py-2.5 rounded-[8px] transition-colors active:scale-95"
-                >
-                  Salin
-                </button>
+              {/* QR Code Container & Join Code */}
+              <div className="w-full max-w-[320px]">
+                <CompanyQRCodeCard
+                  qrUrl={qrUrl}
+                  joinCode={companyData.join_code}
+                  companyName={companyData.name}
+                  size={190}
+                  showJoinCodeBox={true}
+                  onCopy={() => showToast("Kode bergabung berhasil disalin!", "success")}
+                  instructionText="Arahkan kamera ke kode QR untuk bergabung instan"
+                />
               </div>
 
             </div>

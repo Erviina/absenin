@@ -29,6 +29,7 @@ import { useDialog } from "@/context/DialogContext";
 import { shareContent } from "@/lib/shareUtils";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Badge } from "@/components/Badge";
+import { AgendaCardSchedule, AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
 
 // Tipe Data untuk Agenda
 type AgendaItem = {
@@ -463,6 +464,7 @@ function AgendaPageContent() {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     setSubmitError("");
     if (!activeCompanyId) {
       setSubmitError("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.");
@@ -537,6 +539,7 @@ function AgendaPageContent() {
   };
 
   const handleDeleteAgenda = async (agendaId: string) => {
+    if (isSubmitting) return;
     if (!activeCompanyId) {
       showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.", "warning");
       return;
@@ -847,10 +850,12 @@ function AgendaPageContent() {
                         </div>
 
                         <div className="flex flex-col gap-2 pl-2">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
-                            <span className="text-[#4B5563] text-[12px] font-medium">{agenda.time}</span>
-                          </div>
+                          <AgendaCardSchedule 
+                            startTime={agenda.start_time}
+                            endTime={agenda.end_time}
+                            isAllDay={agenda.is_all_day}
+                            fallbackTime={agenda.time}
+                          />
                           {agenda.link_or_location ? (
                             isAgendaUrl(agenda.link_or_location) ? (
                               <div className="flex items-center gap-2 min-w-0">
@@ -955,13 +960,22 @@ function AgendaPageContent() {
           <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => setSelectedAgendaDetail(null)} />
           <div className="relative w-full max-w-sm bg-white rounded-[24px] shadow-xl z-10 p-6 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
-              <Badge 
-                variant={getAgendaCategoryColor(selectedAgendaDetail.type).variant}
-                size="sm"
-                uppercase
-              >
-                {selectedAgendaDetail.type}
-              </Badge>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge 
+                  variant={getAgendaCategoryColor(selectedAgendaDetail.type).variant}
+                  size="sm"
+                  uppercase
+                >
+                  {selectedAgendaDetail.type}
+                </Badge>
+                <Badge
+                  variant={selectedAgendaDetail.scope === "COMPANY" ? "company" : "personal"}
+                  size="xs"
+                  uppercase
+                >
+                  {selectedAgendaDetail.scope === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
+                </Badge>
+              </div>
               <div className="relative">
                 <button
                   onClick={(e) => {
@@ -1022,10 +1036,12 @@ function AgendaPageContent() {
             <h2 className="text-[20px] font-bold text-[#111827] mb-4 leading-tight">{selectedAgendaDetail.title}</h2>
             
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">
-                <Clock className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
-                <span className="text-[#374151] text-[14px] font-medium">{selectedAgendaDetail.time}</span>
-              </div>
+              <AgendaDetailSchedule
+                startTime={selectedAgendaDetail.start_time}
+                endTime={selectedAgendaDetail.end_time}
+                isAllDay={selectedAgendaDetail.is_all_day}
+                fallbackTime={selectedAgendaDetail.time}
+              />
               
               {selectedAgendaDetail.link_or_location && (
                 <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">
@@ -1210,6 +1226,7 @@ function AgendaPageContent() {
                     <DateTimeRollerPicker 
                       value={startTime}
                       isAllDay={isAllDay}
+                      agendasMap={agendasMap}
                       onChange={(newDate) => {
                         if (isAllDay) {
                           newDate.setHours(0, 0, 0, 0);
@@ -1249,6 +1266,7 @@ function AgendaPageContent() {
                     <DateTimeRollerPicker 
                       value={endTime}
                       isAllDay={isAllDay}
+                      agendasMap={agendasMap}
                       onChange={(newDate) => {
                         if (isAllDay) {
                           newDate.setHours(23, 59, 59, 999);

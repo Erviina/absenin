@@ -376,6 +376,13 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
                           }`}>
                             {item.is_terlambat ? "Terlambat" : "Tepat Waktu"}
                           </span>
+
+                          {/* Status Pulang Cepat */}
+                          {item.is_pulang_cepat && (
+                            <span className="bg-orange-50 text-orange-700 border border-orange-200/60 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                              Pulang Cepat
+                            </span>
+                          )}
                         </div>
                       </div>
 

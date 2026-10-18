@@ -14,14 +14,20 @@ router.get("/attendance-stats", authenticate, async (req: Request, res: Response
     if (!tenant) {
       return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
     }
+    if (!tenant.isManagement) {
+      return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses statistik kehadiran" });
+    }
     const companyId = tenant.companyId;
 
     // Get company info
     const companyRes = await db.execute(sql`
-      SELECT work_start_time, work_days FROM companies WHERE id = ${companyId}
+      SELECT 
+        COALESCE(work_start_time, '08:00:00'::time) as work_start_time, 
+        COALESCE(NULLIF(work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]) as work_days 
+      FROM companies WHERE id = ${companyId}
     `);
     const companyRow = companyRes.rows[0] as { work_start_time?: string | null; work_days?: string[] | null } | undefined;
-    const workStartTime = companyRow?.work_start_time || null;
+    const workStartTime = companyRow?.work_start_time || "08:00";
     const workDaysConfig = (companyRow?.work_days as string[]) || ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
 
     // Date calculations for Jakarta
@@ -46,7 +52,10 @@ router.get("/attendance-stats", authenticate, async (req: Request, res: Response
     // 2. Query today's attendance stats
     const statsQuery = await db.execute(sql`
       WITH company_info AS (
-        SELECT work_start_time FROM companies WHERE id = ${companyId}
+        SELECT 
+          COALESCE(work_start_time, '08:00:00'::time) as work_start_time,
+          COALESCE(NULLIF(work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]) as work_days
+        FROM companies WHERE id = ${companyId}
       ),
       active_members AS (
         SELECT profile_id as id 
@@ -57,7 +66,14 @@ router.get("/attendance-stats", authenticate, async (req: Request, res: Response
         SELECT 
           a.profile_id,
           (
-            CASE WHEN c.work_start_time IS NOT NULL AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > c.work_start_time THEN 'Terlambat'
+            CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time)
+              AND (
+                CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+                  WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+                  WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+                END
+              ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
+            THEN 'Terlambat'
             ELSE 'Hadir' END
           ) as status
         FROM attendances a
@@ -93,7 +109,14 @@ router.get("/attendance-stats", authenticate, async (req: Request, res: Response
     const monthlyAttRes = await db.execute(sql`
       SELECT 
         count(a.id) as total_hadir,
-        count(CASE WHEN ${workStartTime}::time IS NOT NULL AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${workStartTime}::time THEN 1 END) as total_terlambat
+        count(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${workStartTime}::time 
+          AND (
+            CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(ARRAY[${sql.join(workDaysConfig.map((d: string) => sql`${d}`), sql`, `)}]::text[])
+        THEN 1 END) as total_terlambat
       FROM attendances a
       WHERE a.company_id = ${companyId}
         AND a.deleted_at IS NULL
@@ -163,6 +186,9 @@ router.get("/leave-stats", authenticate, async (req: Request, res: Response): Pr
     if (!tenant) {
       return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
     }
+    if (!tenant.isManagement) {
+      return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses statistik izin" });
+    }
     const companyId = tenant.companyId;
 
     const leavesRes = await db.execute(sql`
@@ -217,6 +243,9 @@ router.get("/badge-counts", authenticate, async (req: Request, res: Response): P
 
     if (!tenant) {
       return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+    }
+    if (!tenant.isManagement) {
+      return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses badge counts" });
     }
     const companyId = tenant.companyId;
 
@@ -275,6 +304,9 @@ router.get("/activities", authenticate, async (req: Request, res: Response): Pro
 
     if (!tenant) {
       return res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+    }
+    if (!tenant.isManagement) {
+      return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses aktivitas dashboard" });
     }
     const companyId = tenant.companyId;
 

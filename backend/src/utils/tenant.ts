@@ -15,7 +15,10 @@ export async function resolveTenant(
   const headerCompanyId = req.headers["x-company-id"] as string | undefined;
   const queryCompanyId = req.query.company_id as string | undefined;
   const bodyCompanyId = req.body?.company_id as string | undefined;
-  const requestedCompanyId = headerCompanyId || queryCompanyId || bodyCompanyId;
+  const rawRequested = headerCompanyId || queryCompanyId || bodyCompanyId;
+  const requestedCompanyId = (rawRequested && rawRequested !== "undefined" && rawRequested !== "null" && rawRequested.trim() !== "") 
+    ? rawRequested.trim() 
+    : undefined;
 
   // 1. If explicit companyId is specified, check membership in company_members
   if (requestedCompanyId) {
@@ -42,6 +45,21 @@ export async function resolveTenant(
         isManagement: ["owner", "admin", "manager"].includes(role),
       };
     }
+
+    // Check if user is the company creator (legacy support)
+    const ownerCheck = await db.execute(sql`
+      SELECT id FROM companies WHERE id = ${requestedCompanyId} AND created_by = ${userId} AND deleted_at IS NULL LIMIT 1
+    `);
+    if (ownerCheck.rows.length > 0) {
+      return {
+        companyId: requestedCompanyId,
+        role: "owner",
+        isManagement: true,
+      };
+    }
+
+    // If explicit company was requested but user is not an active member, deny cross-tenant access
+    return null;
   }
 
   // 2. Look for user's primary/active membership in company_members

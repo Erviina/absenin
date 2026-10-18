@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { 
   ChevronLeft, 
   Building2, 
-  MapPin,
+  MapPin, 
   Users, 
   CalendarCheck, 
   FileText, 
@@ -14,11 +14,15 @@ import {
   Megaphone, 
   ClipboardList, 
   User, 
-  ChevronRight,
-  Check,
-  Bell
+  ChevronRight, 
+  Check, 
+  Bell,
+  AlertCircle,
+  RefreshCw,
+  Loader2
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
+import { ViewAllButton } from "@/components/ViewAllButton";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
@@ -30,6 +34,7 @@ export default function AdminDashboardPage() {
   
   const [company, setCompany] = useState<{ name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   
   const [attendanceStats, setAttendanceStats] = useState<{
     hadir: number;
@@ -49,6 +54,7 @@ export default function AdminDashboardPage() {
     };
   } | null>(null);
   const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
   
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   
@@ -63,6 +69,7 @@ export default function AdminDashboardPage() {
   const [activities, setActivities] = useState<any[]>([]);
   const [isLeaveStatsLoading, setIsLeaveStatsLoading] = useState(true);
   const [isActivitiesLoading, setIsActivitiesLoading] = useState(true);
+  const [activitiesError, setActivitiesError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState("Semua");
   const [pendingLeavesCount, setPendingLeavesCount] = useState<number>(0);
   const [karyawanBadgeCount, setKaryawanBadgeCount] = useState<number>(0);
@@ -88,6 +95,7 @@ export default function AdminDashboardPage() {
   const fetchAttendanceStatsForDate = async (targetDate: Date) => {
     try {
       setIsStatsLoading(true);
+      setStatsError(null);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
@@ -98,12 +106,17 @@ export default function AdminDashboardPage() {
       const resStats = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/attendance-stats?month=${m}&year=${y}`, {
         headers
       });
+      if (!resStats.ok) throw new Error(`HTTP ${resStats.status}`);
       const dataStats = await resStats.json();
-      if (dataStats.success) {
+      if (dataStats.success && dataStats.data) {
         setAttendanceStats(dataStats.data);
+        setStatsError(null);
+      } else {
+        setStatsError("Gagal memuat data statistik kehadiran");
       }
     } catch (e) {
       console.error("Failed to fetch attendance stats:", e);
+      setStatsError("Gagal memuat data statistik kehadiran");
     } finally {
       setIsStatsLoading(false);
     }
@@ -121,75 +134,96 @@ export default function AdminDashboardPage() {
     fetchAttendanceStatsForDate(next);
   };
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const token = localStorage.getItem("accessToken");
-        if (!token) {
-          router.push("/login");
-          return;
-        }
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      setDashboardError(null);
 
-        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        if (activeCompanyId) {
-          headers["x-company-id"] = activeCompanyId;
-        }
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
 
-        const resCompany = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
-          headers
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (activeCompanyId) {
+        headers["x-company-id"] = activeCompanyId;
+      }
+
+      const m = selectedDate.getMonth() + 1;
+      const y = selectedDate.getFullYear();
+
+      // Parallel fetching using Promise.allSettled so that one endpoint failure doesn't block the rest
+      const [resCompanySettled, resStatsSettled, resLeaveSettled, resActSettled, resBadgeSettled] = await Promise.allSettled([
+        fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", { headers }).then(async r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        }),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/attendance-stats?month=${m}&year=${y}`, { headers }).then(async r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        }),
+        fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/leave-stats", { headers }).then(async r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        }),
+        fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications", { headers }).then(async r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        }),
+        fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/badge-counts", { headers }).then(async r => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        }),
+      ]);
+
+      let hadSuccess = false;
+
+      // 1. Company Data
+      if (resCompanySettled.status === "fulfilled" && resCompanySettled.value?.success && resCompanySettled.value.data) {
+        setCompany({
+          name: resCompanySettled.value.data.name || "",
+          address: resCompanySettled.value.data.address || "",
+          memberCount: resCompanySettled.value.data.memberCount || 0,
+          avatar_company_url: resCompanySettled.value.data.avatar_company_url,
         });
-        const dataCompany = await resCompany.json();
-        if (dataCompany.success) {
-          setCompany({
-            name: dataCompany.data.name,
-            address: dataCompany.data.address,
-            memberCount: dataCompany.data.memberCount,
-            avatar_company_url: dataCompany.data.avatar_company_url,
-          });
-        }
-        setIsLoading(false);
+        hadSuccess = true;
+      }
 
-        const m = selectedDate.getMonth() + 1;
-        const y = selectedDate.getFullYear();
-        const resStats = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/attendance-stats?month=${m}&year=${y}`, {
-          headers
-        });
-        const dataStats = await resStats.json();
-        if (dataStats.success) {
-          setAttendanceStats(dataStats.data);
-        }
-        setIsStatsLoading(false);
+      // 2. Attendance Stats
+      if (resStatsSettled.status === "fulfilled" && resStatsSettled.value?.success && resStatsSettled.value.data) {
+        setAttendanceStats(resStatsSettled.value.data);
+        setStatsError(null);
+        hadSuccess = true;
+      } else {
+        setStatsError("Gagal memuat data kehadiran");
+      }
+      setIsStatsLoading(false);
 
-        const resLeave = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/leave-stats", {
-          headers
-        });
-        const dataLeave = await resLeave.json();
-        if (dataLeave.success) {
-          setLeaveStats(dataLeave.data);
-        }
-        setIsLeaveStatsLoading(false);
+      // 3. Leave Stats
+      if (resLeaveSettled.status === "fulfilled" && resLeaveSettled.value?.success && resLeaveSettled.value.data) {
+        setLeaveStats(resLeaveSettled.value.data);
+        hadSuccess = true;
+      }
+      setIsLeaveStatsLoading(false);
 
-        const resAct = await fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications", {
-          headers
-        });
-        const dataAct = await resAct.json();
-        if (dataAct.success) {
-          setActivities(dataAct.data);
-        }
-        setIsActivitiesLoading(false);
+      // 4. Notifications / Activities
+      if (resActSettled.status === "fulfilled" && resActSettled.value?.success && Array.isArray(resActSettled.value.data)) {
+        setActivities(resActSettled.value.data);
+        setActivitiesError(null);
+        hadSuccess = true;
+      } else {
+        setActivitiesError("Gagal memuat aktivitas terbaru");
+      }
+      setIsActivitiesLoading(false);
 
-        // Fetch badge counts (Perizinan pending and Karyawan join/exit requests)
+      // 5. Badges
+      if (resBadgeSettled.status === "fulfilled" && resBadgeSettled.value?.success && resBadgeSettled.value.data) {
+        setPendingLeavesCount(resBadgeSettled.value.data.pendingLeaves || 0);
+        setKaryawanBadgeCount(resBadgeSettled.value.data.karyawanBadge || 0);
+      } else {
+        // Fallback to direct endpoints if badge-counts is not available
         try {
-          const resBadge = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/badge-counts", { headers });
-          const dataBadge = await resBadge.json();
-          if (dataBadge.success && dataBadge.data) {
-            setPendingLeavesCount(dataBadge.data.pendingLeaves || 0);
-            setKaryawanBadgeCount(dataBadge.data.karyawanBadge || 0);
-          } else {
-            throw new Error("Fallback to direct endpoints");
-          }
-        } catch {
-          // Fallback if /dashboard/badge-counts is not available
           const [resLeavesAdmin, resJoin, resExit] = await Promise.allSettled([
             fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/admin", { headers }).then(r => r.json()),
             fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", { headers }).then(r => r.json()),
@@ -210,32 +244,36 @@ export default function AdminDashboardPage() {
             exitCount = resExit.value.data.length;
           }
           setKaryawanBadgeCount(joinCount + exitCount);
-        }
-
-      } catch (error) {
-        console.error("Failed to fetch dashboard data", error);
-        setIsStatsLoading(false);
-        setIsLeaveStatsLoading(false);
-        setIsActivitiesLoading(false);
-      } finally {
-        setIsLoading(false);
+        } catch {}
       }
-    };
+
+      if (!hadSuccess && !activeCompany) {
+        setDashboardError("Koneksi gagal atau server tidak merespons. Silakan periksa jaringan Anda.");
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard data", error);
+      setDashboardError("Terjadi kesalahan saat memuat data dashboard.");
+      setIsStatsLoading(false);
+      setIsLeaveStatsLoading(false);
+      setIsActivitiesLoading(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDashboardData();
   }, [router, activeCompanyId]);
 
-  // Dynamic calculation for working days in month
-  const calcWorkingDays = (y: number, m: number) => {
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    let count = 0;
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dayOfWeek = new Date(y, m, day).getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
-    }
-    return count;
-  };
+  // Fallback company if /companies/me is loading or failed but activeCompany is available
+  const displayCompany = company || (activeCompany ? {
+    name: activeCompany.name,
+    address: "",
+    memberCount: 0,
+    avatar_company_url: activeCompany.avatar_company_url || undefined,
+  } : null);
 
-  const totalEmployees = attendanceStats?.total || company?.memberCount || 1;
+  const totalEmployees = attendanceStats?.total || displayCompany?.memberCount || 1;
   const onTimeCount = attendanceStats?.hadir || 0;
   const lateCount = attendanceStats?.terlambat || 0;
   const leaveCount = attendanceStats?.izin || 0;
@@ -247,7 +285,8 @@ export default function AdminDashboardPage() {
   const latePercent = Math.min(100 - onTimePercent, Math.round((lateCount / totalSlots) * 100));
   const leavePercent = Math.min(100 - onTimePercent - latePercent, Math.round((leaveCount / totalSlots) * 100));
 
-  const unreadNotifCount = activities.filter(a => !a.is_read).length;
+  const safeActivities = Array.isArray(activities) ? activities : [];
+  const unreadNotifCount = safeActivities.filter(a => a && !a.is_read).length;
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
@@ -276,14 +315,20 @@ export default function AdminDashboardPage() {
         
         {/* Company Card */}
         <div 
-          onClick={() => router.push("/admin/perusahaan")}
+          onClick={() => {
+            if (activeRole === "owner" || activeRole === "admin") {
+              router.push("/admin/perusahaan");
+            } else {
+              router.push("/perusahaan");
+            }
+          }}
           className="bg-white rounded-[20px] p-4 flex gap-4 items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] cursor-pointer active:scale-[0.98] transition-transform"
         >
           <div className="w-[52px] h-[52px] bg-[#F3F4F6] rounded-full flex items-center justify-center shrink-0 border-[2.5px] border-[#356E3B]/20 ring-2 ring-[#356E3B]/10 shadow-sm overflow-hidden">
-            {(company?.avatar_company_url || activeCompany?.avatar_company_url) ? (
+            {(displayCompany?.avatar_company_url || activeCompany?.avatar_company_url) ? (
               <img 
-                src={company?.avatar_company_url || activeCompany?.avatar_company_url || ""} 
-                alt={company?.name || activeCompany?.name || "Company"} 
+                src={displayCompany?.avatar_company_url || activeCompany?.avatar_company_url || ""} 
+                alt={displayCompany?.name || activeCompany?.name || "Company"} 
                 className="w-full h-full object-cover" 
               />
             ) : (
@@ -291,46 +336,88 @@ export default function AdminDashboardPage() {
             )}
           </div>
           <div className="flex flex-col flex-1 overflow-hidden">
-            {isLoading ? (
+            {isLoading && !displayCompany ? (
               <div className="animate-pulse flex flex-col gap-2">
                 <div className="h-4 bg-gray-200 rounded w-3/4"></div>
                 <div className="h-3 bg-gray-200 rounded w-1/2"></div>
               </div>
-            ) : company ? (
+            ) : displayCompany ? (
               <>
-                <h2 className="text-[#1E4738] text-[15px] font-bold truncate">{company.name}</h2>
+                <h2 className="text-[#1E4738] text-[15px] font-bold truncate">{displayCompany.name}</h2>
                 <div className="flex items-center gap-3 mt-1.5">
-                  <div className="flex items-center gap-1.5 text-[#5C786C] text-[12px] font-medium min-w-0">
-                    <MapPin className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
-                    <span className="truncate max-w-[90px]">{company.address}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[#5C786C] text-[12px] font-medium whitespace-nowrap">
-                    <Users className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
-                    <span>{company.memberCount} anggota</span>
-                  </div>
+                  {displayCompany.address ? (
+                    <div className="flex items-center gap-1.5 text-[#5C786C] text-[12px] font-medium min-w-0">
+                      <MapPin className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
+                      <span className="truncate max-w-[120px]">{displayCompany.address}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-[#5C786C] text-[12px] font-medium min-w-0">
+                      <Building2 className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
+                      <span className="truncate">Kelola Perusahaan</span>
+                    </div>
+                  )}
+                  {displayCompany.memberCount > 0 && (
+                    <div className="flex items-center gap-1.5 text-[#5C786C] text-[12px] font-medium whitespace-nowrap">
+                      <Users className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
+                      <span>{displayCompany.memberCount} anggota</span>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
-              <h2 className="text-[#1E4738] text-[15px] font-bold">Belum ada data</h2>
+              <h2 className="text-[#1E4738] text-[15px] font-bold">Data Perusahaan</h2>
             )}
           </div>
           <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
         </div>
 
+        {/* Global Dashboard Error Banner if critical load failed */}
+        {dashboardError && !displayCompany && (
+          <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-red-100 flex flex-col items-center justify-center text-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-50 text-red-500 flex items-center justify-center">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <h3 className="text-[#1E4738] text-[14px] font-bold">Gagal Memuat Data Dashboard</h3>
+              <p className="text-[#5C786C] text-[12px]">{dashboardError}</p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchDashboardData}
+              className="mt-1 px-4 py-1.5 bg-[#356E3B] text-white text-[12px] font-bold rounded-full hover:bg-[#2A582F] transition-colors active:scale-95"
+            >
+              Coba Lagi
+            </button>
+          </div>
+        )}
+
         {/* Kehadiran Karyawan Hari Ini (100% = total karyawan) */}
         <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col gap-4">
           {/* Header Row */}
-          <div className="flex items-center gap-2">
-            <CalendarCheck className="w-4 h-4 text-[#356E3B]" />
-            <h2 className="text-[15px] font-bold text-[#1E4738] tracking-tight">
-              Kehadiran Karyawan Hari Ini
-            </h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarCheck className="w-4 h-4 text-[#356E3B]" />
+              <h2 className="text-[15px] font-bold text-[#1E4738] tracking-tight">
+                Kehadiran Karyawan Hari Ini
+              </h2>
+            </div>
+            {statsError && !isStatsLoading && (
+              <button
+                type="button"
+                onClick={() => fetchAttendanceStatsForDate(selectedDate)}
+                className="text-[11px] font-bold text-[#356E3B] hover:underline cursor-pointer"
+              >
+                Muat Ulang
+              </button>
+            )}
           </div>
 
           {/* Multi-Color Progress Bar */}
           <div className="h-3 w-full bg-[#E5E7EB] rounded-full flex overflow-hidden">
             {isStatsLoading ? (
               <div className="h-full w-full bg-gray-200 animate-pulse rounded-full" />
+            ) : statsError ? (
+              <div className="h-full w-full bg-amber-100 rounded-full" title="Gagal memuat data statistik" />
             ) : (
               <>
                 <div 
@@ -414,14 +501,11 @@ export default function AdminDashboardPage() {
         {/* Aktivitas Terbaru */}
         <div className="flex flex-col gap-4 mt-3">
           <div className="flex justify-between items-center px-1">
-            <h2 className="text-[16px] font-bold text-[#1E4738]">Aktivitas Terbaru</h2>
-            <button 
-              onClick={() => router.push("/notifikasi")}
-              className="text-[#356E3B] text-[12px] font-semibold flex items-center gap-0.5 hover:underline active:opacity-70"
-            >
-              Lihat Semua
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-[#356E3B]" />
+              <h2 className="text-[15px] font-bold text-[#1E4738] tracking-tight">Aktivitas Terbaru</h2>
+            </div>
+            <ViewAllButton onClick={() => router.push("/notifikasi")} />
           </div>
 
           {/* Tabs */}
@@ -445,16 +529,32 @@ export default function AdminDashboardPage() {
           <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col overflow-hidden min-h-[120px]">
             
             {(() => {
-              const filteredActivities = activities.filter(act => {
+              const filteredActivities = safeActivities.filter(act => {
+                if (!act) return false;
                 if (activeFilter === "Semua") return true;
-                if (activeFilter === "Perizinan") return act.type.startsWith("LEAVE");
-                if (activeFilter === "Karyawan") return act.type.startsWith("JOIN_REQUEST");
-                if (activeFilter === "Pengumuman") return act.type === "NEW_ANNOUNCEMENT";
+                const type = (act.type || "").toUpperCase();
+                if (activeFilter === "Perizinan") return type.startsWith("LEAVE");
+                if (activeFilter === "Karyawan") return type.startsWith("JOIN_REQUEST") || type.startsWith("EXIT_REQUEST");
+                if (activeFilter === "Pengumuman") return type === "NEW_ANNOUNCEMENT";
                 return true;
               }).slice(0, 5);
 
               if (isActivitiesLoading) {
                 return <div className="p-8 text-center text-[#7d998c] text-[13px] font-medium animate-pulse flex items-center justify-center h-full">Memuat aktivitas...</div>;
+              }
+              if (activitiesError) {
+                return (
+                  <div className="p-8 text-center text-amber-700 text-[13px] font-medium flex flex-col items-center justify-center gap-2 h-full">
+                    <span>Gagal memuat aktivitas terbaru</span>
+                    <button
+                      type="button"
+                      onClick={fetchDashboardData}
+                      className="text-[12px] font-bold text-[#356E3B] underline hover:opacity-80 cursor-pointer"
+                    >
+                      Coba Lagi
+                    </button>
+                  </div>
+                );
               }
               if (filteredActivities.length === 0) {
                 return <div className="p-8 text-center text-[#7d998c] text-[13px] font-medium flex items-center justify-center h-full">Belum ada aktivitas terbaru.</div>;
@@ -463,20 +563,21 @@ export default function AdminDashboardPage() {
               return filteredActivities.map((act, idx) => {
                 let icon = <ClipboardList className="w-[22px] h-[22px] text-[#D97706]" strokeWidth={1.5} />;
                 let bgIcon = "bg-[#fdf5e6]";
-                let title = act.title;
-                let desc = cleanNotificationMessage(act.message);
+                let title = act.title || "Pemberitahuan";
+                let desc = cleanNotificationMessage(act.message || "");
 
-                if (act.type.startsWith('LEAVE')) {
+                const normType = (act.type || "").toUpperCase();
+                if (normType.startsWith('LEAVE')) {
                   icon = <ClipboardList className="w-[22px] h-[22px] text-[#D97706]" strokeWidth={1.5} />;
                   bgIcon = "bg-[#fdf5e6]";
-                } else if (act.type.startsWith('JOIN_REQUEST')) {
+                } else if (normType.startsWith('JOIN_REQUEST') || normType.startsWith('EXIT_REQUEST')) {
                   icon = <User className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.5} />;
                   bgIcon = "bg-[#e6f0ea]";
-                } else if (act.type === 'NEW_ANNOUNCEMENT') {
+                } else if (normType === 'NEW_ANNOUNCEMENT') {
                   icon = <Megaphone className="w-[22px] h-[22px] text-[#9333EA]" strokeWidth={1.5} />;
                   bgIcon = "bg-[#f3e8ff]";
                 }
-                const membershipInfo = parseMembershipNotification(act.message, act.type);
+                const membershipInfo = parseMembershipNotification(act.message || "", act.type || "");
 
                 return (
                   <div 
@@ -495,7 +596,7 @@ export default function AdminDashboardPage() {
                           )}
                           <h3 className="text-[#1E4738] text-[14px] font-bold leading-tight truncate">{title}</h3>
                         </div>
-                        <span className="text-[10px] text-gray-400 whitespace-nowrap mt-0.5 shrink-0">{formatRelativeTime(act.created_at)}</span>
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap mt-0.5 shrink-0">{formatRelativeTime(act.created_at || new Date().toISOString())}</span>
                       </div>
                       <p className="text-[#7d998c] text-[12px] leading-[1.35] pr-2 line-clamp-2">{desc}</p>
                       {membershipInfo?.approverName && (

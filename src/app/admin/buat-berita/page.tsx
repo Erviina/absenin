@@ -104,6 +104,7 @@ function BuatBeritaForm() {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!title || !content) {
       showToast("Judul dan Isi Berita wajib diisi", "warning");
       return;
@@ -197,17 +198,6 @@ function BuatBeritaForm() {
       <TopBar 
         title={editingId ? "Edit Berita" : "Buat Berita"} 
         onBack={() => router.push("/admin/berita")}
-        rightAction={
-          <button
-            type="button"
-            onClick={() => setIsPreviewOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[12px] font-semibold transition-all active:scale-95"
-            title="Pratinjau Berita Langsung"
-          >
-            <Eye className="w-4 h-4" />
-            <span>Pratinjau</span>
-          </button>
-        }
       />
 
       <div className="flex-1 px-5 py-5 flex flex-col z-10 pb-32">
@@ -303,7 +293,7 @@ function BuatBeritaForm() {
           onClick={handleSubmit}
           disabled={isSubmitting || !title || !content}
           isLoading={isSubmitting}
-          loadingText="Menyimpan..."
+          loadingText={editingId ? "Menyimpan Perubahan..." : "Mengunggah..."}
           icon={<CheckCircle2 className="w-5 h-5" />}
           className="flex-[1.5]"
         >

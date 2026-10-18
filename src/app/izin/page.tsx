@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ChevronLeft, Plus, Calendar, ChevronDown, Clock, Trash2, FileText, Send, UploadCloud, Paperclip, ExternalLink, XCircle, CheckCircle2, CircleDot, Circle, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
@@ -9,6 +9,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { Badge } from "@/components/Badge";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { CustomSelect } from "@/components/CustomSelect";
+import { Pagination } from "@/components/Pagination";
 import { createClient } from "@supabase/supabase-js";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
@@ -58,18 +59,51 @@ export default function IzinPage() {
   const [filterDate, setFilterDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("Semua Kategori");
 
+  // Pagination states
+  const [offset, setOffset] = useState(0);
+  const [totalLeaves, setTotalLeaves] = useState(0);
+  const limit = 10;
+
   const [categories, setCategories] = useState<any[]>([]);
   const [pengajuanList, setPengajuanList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch categories and leaves
-  const fetchCategoriesAndLeaves = async () => {
+  // Reset offset on filter change
+  useEffect(() => {
+    setOffset(0);
+  }, [filterCategory, filterDate]);
+
+  // Fetch categories once
+  useEffect(() => {
+    const fetchCategories = async () => {
+      if (!activeCompanyId) return;
+      try {
+        const token = localStorage.getItem("accessToken");
+        if (!token) return;
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+        const catRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/categories", { headers });
+        const catData = await catRes.json();
+        if (catData.success) {
+          setCategories(catData.data);
+          if (catData.data.length > 0) setKategori(catData.data[0].id);
+        }
+      } catch (err) {
+        console.error("Error fetching categories:", err);
+      }
+    };
+    fetchCategories();
+  }, [activeCompanyId]);
+
+  // Fetch paginated leaves
+  const fetchLeaves = useCallback(async () => {
     if (!activeCompanyId) {
-      setCategories([]);
       setPengajuanList([]);
+      setTotalLeaves(0);
       return;
     }
     try {
+      setIsLoading(true);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
@@ -81,28 +115,33 @@ export default function IzinPage() {
         headers["x-company-id"] = activeCompanyId;
       }
 
-      // Fetch Categories
-      const catRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/categories", { headers });
-      const catData = await catRes.json();
-      if (catData.success) {
-        setCategories(catData.data);
-        if (catData.data.length > 0) setKategori(catData.data[0].id);
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(offset));
+      if (filterCategory && filterCategory !== "Semua Kategori") {
+        params.set("category", filterCategory);
+      }
+      if (filterDate) {
+        params.set("start_date", filterDate);
       }
 
-      // Fetch Leaves
-      const leaveRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves", { headers });
+      const leaveRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/leaves?${params.toString()}`, { headers });
       const leaveData = await leaveRes.json();
       if (leaveData.success) {
-        setPengajuanList(leaveData.data);
+        setPengajuanList(leaveData.data || []);
+        const total = leaveData.pagination?.total ?? leaveData.meta?.total ?? (leaveData.data?.length || 0);
+        setTotalLeaves(total);
       }
     } catch (error) {
       console.error("Error fetching leaves data:", error);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [activeCompanyId, limit, offset, filterCategory, filterDate]);
 
   useEffect(() => {
-    fetchCategoriesAndLeaves();
-  }, [activeCompanyId]);
+    fetchLeaves();
+  }, [fetchLeaves]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -191,7 +230,7 @@ export default function IzinPage() {
       const data = await res.json();
       if (res.ok && data.success) {
         // Refresh data
-        await fetchCategoriesAndLeaves();
+        await fetchLeaves();
         showToast("Pengajuan izin berhasil dikirim", "success");
         
         // Reset Form
@@ -320,26 +359,6 @@ export default function IzinPage() {
 
   const selectedIzin = pengajuanList.find(req => req.id === selectedIzinId);
 
-  const filteredList = pengajuanList.filter(req => {
-    let matchCat = true;
-    const catName = categories.find(c => c.id === req.leave_category_id)?.name || "Lainnya";
-    
-    if (filterCategory !== "Semua Kategori") {
-      matchCat = catName.toLowerCase().includes(filterCategory.toLowerCase());
-    }
-    
-    let matchDate = true;
-    if (filterDate) {
-      const fd = new Date(filterDate);
-      if (!isNaN(fd.getTime())) {
-        const reqDate = new Date(req.start_date);
-        matchDate = reqDate.toDateString() === fd.toDateString();
-      }
-    }
-    
-    return matchCat && matchDate;
-  });
-
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
       {/* Header */}
@@ -382,23 +401,23 @@ export default function IzinPage() {
 
             {/* Card 2: Tanggal */}
             <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
-              <div className="flex gap-3">
-                <div className="flex flex-col gap-2 flex-1">
+              <div className="flex gap-2.5 sm:gap-3">
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
                   <label className="text-[13px] font-bold text-[#374151]">
                     Mulai <span className="text-[#EF4444]">*</span>
                   </label>
-                  <div className="flex w-full">
+                  <div className="flex w-full min-w-0">
                     <CustomDatePicker 
                       value={startDate}
                       onChange={setStartDate}
                     />
                   </div>
                 </div>
-                <div className="flex flex-col gap-2 flex-1">
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
                   <label className="text-[13px] font-bold text-[#374151]">
                     Sampai <span className="text-[#EF4444]">*</span>
                   </label>
-                  <div className="flex w-full">
+                  <div className="flex w-full min-w-0">
                     <CustomDatePicker 
                       value={endDate}
                       onChange={setEndDate}
@@ -765,8 +784,8 @@ export default function IzinPage() {
           <div className="flex flex-col gap-6">
 
             {/* Filters */}
-            <div className="flex gap-3">
-              <div className="flex-1 relative">
+            <div className="flex gap-2.5 sm:gap-3">
+              <div className="flex-1 min-w-0 relative">
                 <CustomSelect 
                   value={filterCategory}
                   onChange={setFilterCategory}
@@ -777,7 +796,7 @@ export default function IzinPage() {
                 />
               </div>
               
-              <div className="flex-1 flex">
+              <div className="flex-1 min-w-0">
                 <CustomDatePicker 
                   value={filterDate}
                   onChange={setFilterDate}
@@ -800,47 +819,60 @@ export default function IzinPage() {
                   )}
                 </div>
                 <Badge variant="company" size="sm">
-                  {filteredList.length} Pengajuan
+                  {totalLeaves} Pengajuan
                 </Badge>
               </div>
 
               <div className="flex flex-col gap-4">
                 
-                {filteredList.length === 0 ? (
+                {pengajuanList.length === 0 ? (
                   <p className="text-sm text-gray-500 text-center py-6">
                     Belum ada pengajuan izin.
                   </p>
                 ) : (
-                  filteredList.map((req) => {
-                    const catName = categories.find(c => c.id === req.leave_category_id)?.name || req.category_name || "Lainnya";
-                    
-                    const dateStr = formatDateRange(req.start_date, req.end_date);
-                    
-                    return (
-                    <div 
-                      key={req.id} 
-                      onClick={() => setSelectedIzinId(req.id)}
-                      className="bg-white rounded-[20px] shadow-sm border border-[#F3F4F6] p-5 flex flex-col gap-3 cursor-pointer hover:border-[#356E3B] transition-colors"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex flex-col gap-1">
-                          <h3 className="text-[#111827] text-[16px] font-bold">{catName}</h3>
-                          <span className="text-[#6B7280] text-[13px]">{req.description}</span>
+                  <>
+                    {pengajuanList.map((req) => {
+                      const catName = categories.find(c => c.id === req.leave_category_id)?.name || req.category_name || "Lainnya";
+                      
+                      const dateStr = formatDateRange(req.start_date, req.end_date);
+                      
+                      return (
+                      <div 
+                        key={req.id} 
+                        onClick={() => setSelectedIzinId(req.id)}
+                        className="bg-white rounded-[20px] shadow-sm border border-[#F3F4F6] p-5 flex flex-col gap-3 cursor-pointer hover:border-[#356E3B] transition-colors"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex flex-col gap-1">
+                            <h3 className="text-[#111827] text-[16px] font-bold">{catName}</h3>
+                            <span className="text-[#6B7280] text-[13px]">{req.description}</span>
+                          </div>
+                          <Badge 
+                            variant={req.status === "Menunggu" ? "warning" : req.status === "Disetujui" ? "success" : "danger"} 
+                            size="sm" 
+                          >
+                            {req.status}
+                          </Badge>
                         </div>
-                        <Badge 
-                          variant={req.status === "Menunggu" ? "warning" : req.status === "Disetujui" ? "success" : "danger"} 
-                          size="sm" 
-                        >
-                          {req.status}
-                        </Badge>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Calendar className="w-4 h-4 text-[#6EA874]" strokeWidth={2.5} />
+                          <span className="text-[#6B7280] text-[13px] font-medium">{dateStr}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Calendar className="w-4 h-4 text-[#6EA874]" strokeWidth={2.5} />
-                        <span className="text-[#6B7280] text-[13px] font-medium">{dateStr}</span>
-                      </div>
-                    </div>
-                  );
-                }))}
+                    );
+                    })}
+
+                    <Pagination
+                      total={totalLeaves}
+                      limit={limit}
+                      offset={offset}
+                      onPageChange={setOffset}
+                      isLoading={isLoading}
+                      label="pengajuan izin"
+                      className="mt-2"
+                    />
+                  </>
+                )}
 
               </div>
             </div>
