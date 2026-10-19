@@ -2,12 +2,12 @@
 # ABSENIN PLATFORM ADMIN
 ## Platform Growth Analytics & Internal Administration Dashboard
 
-**Versi:** 3.0  
-**Status:** Proposed — Ready for Repository Audit  
+**Versi:** 3.1  
+**Status:** Audited & Synchronized with Repository Codebase  
 **Produk:** Absenin  
 **Modul:** Platform Owner Dashboard  
-**Deployment:** Existing Vercel Project  
-**Authentication:** Google OAuth dengan email allowlist  
+**Deployment:** Vercel Monorepo (Next.js 16 App Router + Express 5 Backend Service)  
+**Authentication:** Google OAuth + Server-side JWT & Email Allowlist  
 **Target Pengguna:** Platform Owner yang terotorisasi
 
 ---
@@ -79,15 +79,13 @@ URL tersebut merupakan rancangan routing yang harus diimplementasikan dan diuji 
 
 ## 2.2 Shared Infrastructure
 
-Platform Admin menggunakan kembali:
+Platform Admin menggunakan kembali infrastruktur riil yang telah berjalan pada repository:
 
-- Frontend Vue 3 + Vite yang sudah ada.
-- Backend Fastify 5 yang sudah ada.
-- Database MySQL yang sudah ada.
-- Sistem autentikasi yang sudah ada, apabila mendukung integrasi Google OAuth dengan aman.
-- Data perusahaan, pengguna, keanggotaan, absensi, task, dan kalender yang sudah ada.
-
-Stack dan implementasi aktual harus diverifikasi melalui repository sebelum perubahan dilakukan.
+- **Frontend:** Next.js 16.3 (App Router), React 19, TypeScript, Tailwind CSS v4, Lucide React.
+- **Backend:** Node.js Express 5.2 (TypeScript), berjalan sebagai service backend dengan rewrite Vercel `/api/(.*)`.
+- **Database:** PostgreSQL (Supabase) via Drizzle ORM (`drizzle-orm`) & Pool connection `pg`.
+- **Sistem Autentikasi:** Google OAuth (`@react-oauth/google` di frontend & `google-auth-library` di backend) yang menerbitkan JWT terverifikasi.
+- **Data Multi-Tenant:** Tabel `companies`, `profiles`, `company_members`, `attendances`, `tasks`, `agendas`, `leave_requests`, `news`, dan `notifications`.
 
 ## 2.3 Separation of Concerns
 
@@ -95,11 +93,11 @@ Walaupun frontend berada dalam proyek yang sama, kode dan antarmuka Platform Adm
 
 Platform Admin harus memiliki:
 
-- Layout khusus.
-- Navigation sidebar khusus.
-- Routing khusus.
-- Authorization guard khusus.
-- Service API analytics khusus.
+- Layout khusus (`src/app/platform-admin/layout.tsx`).
+- Navigation sidebar khusus (`PlatformAdminSidebar`).
+- Routing khusus Next.js App Router (`src/app/platform-admin/*`).
+- Authorization guard khusus berbasis server check (`/api/platform/me`).
+- Service API analytics khusus (`/api/platform/*`).
 - Halaman overview dan analytics tersendiri.
 - Penanganan sesi serta akses yang sesuai dengan kebijakan Platform Owner.
 
@@ -107,15 +105,12 @@ Jangan menambahkan menu Platform Admin ke dashboard karyawan, manager, atau pemi
 
 ## 2.4 Deployment Implications
 
-Karena frontend berada dalam proyek Vercel yang sama:
+Karena frontend dan backend berada dalam satu repository (arsitektur Vercel Monorepo via `vercel.json`):
 
-- Deployment frontend akan memperbarui aplikasi utama dan area Platform Admin sesuai build yang sama.
-- Tidak diperlukan deployment frontend kedua.
-- Backend tetap dapat di-deploy sesuai proses yang sekarang.
-- Database tidak perlu dipisahkan.
-- Deep-link seperti `/platform-admin/overview` harus tetap berfungsi ketika URL dibuka langsung atau halaman di-refresh.
-
-Periksa konfigurasi SPA fallback dan routing Vercel agar URL nested tidak menghasilkan 404 akibat konfigurasi server yang tidak sesuai.
+- Deployment frontend Next.js akan memperbarui aplikasi utama dan area Platform Admin dalam build yang sama.
+- Backend Express (`backend/`) di-deploy sebagai Vercel backend service yang menerima seluruh rewrite path `/api/*`.
+- Deep-link seperti `/platform-admin/overview` berjalan secara native pada Next.js App Router (SSR & client navigation) tanpa risiko 404.
+- Database PostgreSQL terpusat di Supabase, diakses oleh Express backend tanpa duplikasi database.
 
 ---
 
@@ -199,9 +194,9 @@ Nilai finalnya menggunakan empat email yang tercantum di bagian 3.2.
 Ketentuan:
 
 - Jangan memasukkan allowlist sebagai sumber otorisasi yang hanya tersedia di frontend.
-- Jangan memakai prefix `VITE_` untuk konfigurasi rahasia atau kontrol akses yang harus tetap berada di server.
-- Jangan menyimpan kredensial Google OAuth yang bersifat rahasia dalam kode frontend.
-- Jika daftar email berubah, perbarui konfigurasi pada lingkungan backend yang sesuai dan ikuti proses deployment atau reload yang diperlukan.
+- Gunakan environment variable backend `PLATFORM_OWNER_EMAILS` di server Express (bukan di frontend atau client bundle dengan prefix `NEXT_PUBLIC_`).
+- Jangan mengekspos kredensial rahasia server (seperti `SUPABASE_SERVICE_ROLE_KEY` atau `JWT_SECRET`) ke kode client frontend.
+- Jika daftar email berubah, perbarui konfigurasi environment backend pada Vercel/server.
 
 ---
 
@@ -557,38 +552,50 @@ Semua endpoint wajib memvalidasi autentikasi dan kewenangan Platform Owner secar
 
 # 10. FRONTEND STRUCTURE
 
-Platform Admin tetap berada dalam proyek frontend Absenin yang ada.
+Platform Admin dikembangkan secara native menggunakan arsitektur **Next.js 16 App Router**:
 
-Struktur konseptual:
+Struktur arsitektur aktual:
 
 ```text
 src/
-├── layouts/
-│   └── PlatformAdminLayout.vue
-├── views/
+├── app/
 │   └── platform-admin/
-│       ├── LoginView.vue
-│       ├── OverviewView.vue
-│       ├── GrowthAnalyticsView.vue
-│       ├── CompaniesView.vue
-│       ├── UsersView.vue
-│       ├── FeatureAnalyticsView.vue
-│       ├── SystemHealthView.vue
-│       ├── AuditLogsView.vue
-│       └── SettingsView.vue
+│       ├── layout.tsx                # Layout Platform Admin (Sidebar, Header, Client Auth Guard)
+│       ├── page.tsx                  # Root redirector (ke /overview atau /login)
+│       ├── login/
+│       │   └── page.tsx              # Halaman Login Google Platform Admin
+│       ├── overview/
+│       │   └── page.tsx              # KPI Cards, Chart Pertumbuhan, & Ringkasan Event
+│       ├── analytics/
+│       │   ├── growth/
+│       │   │   └── page.tsx          # Analitik Pertumbuhan Perusahaan & Pengguna
+│       │   └── features/
+│       │       └── page.tsx          # Adopsi Fitur (Absensi, Tugas, Agenda, Izin)
+│       ├── companies/
+│       │   ├── page.tsx              # Direktori Perusahaan (Search, Filter, Pagination)
+│       │   └── [id]/
+│       │       └── page.tsx          # Detail & Ringkasan Aktivitas Perusahaan
+│       ├── users/
+│       │   └── page.tsx              # Direktori Pengguna Global & Metrik User
+│       ├── system-health/
+│       │   └── page.tsx              # Monitoring DB Health, API Metrics, & Error Logs
+│       ├── audit-logs/
+│       │   └── page.tsx              # Audit Log Aktivitas Administratif Platform
+│       └── settings/
+│           └── page.tsx              # Pengaturan Tampilan & Pelaporan Platform Admin
 ├── components/
 │   └── platform-admin/
-│       ├── KpiCard.vue
-│       ├── GrowthChart.vue
-│       ├── DateRangeFilter.vue
-│       └── DataTable.vue
-├── router/
-├── services/
-│   └── platformAdminService.js
-└── stores/
+│       ├── PlatformAdminSidebar.tsx  # Sidebar navigasi khusus Platform Owner
+│       ├── PlatformAdminHeader.tsx   # Header profil admin, search bar, & switch quick actions
+│       ├── KpiCard.tsx               # Komponen kartu KPI responsif
+│       ├── GrowthChart.tsx           # Visualisasi chart tren berbasis SVG/Canvas
+│       ├── DateRangeFilter.tsx       # Filter rentang waktu terpadu (7D, 30D, 90D, Custom)
+│       └── DataTable.tsx             # Tabel data dengan sorting, filtering, & pagination
+└── lib/
+    └── platformAdminApi.ts           # Service API client khusus endpoint /api/platform/*
 ```
 
-Struktur aktual harus mengikuti pola repository yang ada. Jangan menduplikasi router, store, atau service jika sistem sekarang menyediakan mekanisme yang dapat diperluas dengan aman.
+Struktur ini mengikuti konvensi Next.js App Router dan Tailwind CSS v4 yang sudah digunakan di seluruh proyek Absenin.
 
 ---
 
@@ -662,57 +669,65 @@ Dashboard tidak boleh menampilkan data dummy sebagai statistik produksi.
 
 # 13. IMPLEMENTATION PHASES
 
-## Phase 0 — Repository Audit
+## Phase 0 — Repository Audit (Selesai Dilakukan)
 
-- Periksa struktur Vue, router, dan layout.
-- Periksa autentikasi Google yang sudah ada.
-- Audit mekanisme sesi dan role.
-- Audit backend dan database.
-- Identifikasi sumber data analytics.
-- Tentukan kebutuhan perubahan API.
+- Verifikasi arsitektur Next.js 16 App Router, Express.js 5 backend, dan PostgreSQL Supabase.
+- Audit alur autentikasi Google OAuth (`google-auth-library` + JWT).
+- Audit isolasi hak akses (Multi-tenant company vs Platform Owner allowlist).
+- Identifikasi sumber data tabel (`companies`, `profiles`, `attendances`, dll.).
+- Sinkronisasi dokumen PRD dengan codebase riil.
 
-**Output:** laporan audit dan rencana implementasi.
+**Output:** Laporan Audit Teknis Komprehensif dan PRD yang telah diselaraskan.
 
-## Phase 1 — Platform Admin Access
+## Phase 1 — Platform Admin Access (Selesai Dilakukan)
 
 - Tambahkan route `/platform-admin`.
-- Buat layout khusus.
-- Integrasikan Google login.
-- Terapkan allowlist untuk empat email yang disetujui.
-- Tambahkan pemeriksaan hak akses backend.
+- Buat layout khusus (`PlatformAdminLayout`).
+- Integrasikan Google login dengan alur Platform Owner.
+- Terapkan allowlist untuk empat email yang disetujui di sisi backend (`authenticatePlatformOwner`).
+- Tambahkan endpoint pemeriksaan hak akses backend (`GET /api/platform/me`).
 - Uji skenario akses yang diizinkan dan ditolak.
 
 **Output:** area Platform Admin yang hanya dapat diakses akun berwenang.
 
-## Phase 2 — Overview and Growth MVP
+## Phase 2 — Overview and Growth MVP (Selesai Dilakukan)
 
-- KPI cards.
-- Filter tanggal.
-- Grafik pertumbuhan pengguna.
-- Grafik pertumbuhan perusahaan.
-- Direktori perusahaan.
-- Ringkasan data operasional yang tersedia.
+- KPI cards: Total Perusahaan, Pengguna Terdaftar, Perusahaan Aktif, dan Aktivitas Presensi.
+- Filter rentang tanggal interaktif (7D, 30D, 90D, dan Semua Waktu).
+- Grafik interaktif tren pertumbuhan pengguna, perusahaan, dan aktivitas presensi harian.
+- Funnel aktivasi onboarding perusahaan (Pendaftaran -> Setup -> Anggota -> Presensi Pertama -> Aktif 7D).
+- Direktori perusahaan lengkap dengan pencarian, jumlah anggota, rekaman presensi, dan pagination.
+- Ringkasan aktivitas presensi terbaru secara real-time dari database.
 
-**Output:** dashboard analytics pertama menggunakan data aktual.
+**Output:** Dashboard analytics pertama yang beroperasi menggunakan data aktual.
 
-## Phase 3 — Product Analytics
+## Phase 3 — Product & Feature Analytics / User Management (Selesai Dilakukan)
 
-- Feature analytics.
-- Aktivasi.
-- Event tracking.
-- Engagement metrics.
-- Retention setelah data mencukupi.
+- **Direktori Pengguna Global (`/platform-admin/users`)**: Pencarian nama & email pengguna, status afiliasi tenant perusahaan, role aktif, total presensi terakumulasi, timestamp aktivitas terakhir, dan pagination.
+- **Analitik Adopsi Fitur (`/platform-admin/analytics/features`)**:
+  - Presensi & Kehadiran: Total check-in, rasio WFO vs WFH, pengguna unik, dan tenant aktif.
+  - Manajemen Tugas: Total tugas terdistribusi, completed vs pending, completion rate (%), pembuat tugas unik.
+  - Kalender & Agenda: Total jadwal, agenda organisasi/perusahaan vs agenda catatan pribadi, pembuat agenda.
+  - Pengajuan Izin & Cuti: Status approval (disetujui, ditolak, menunggu), approval rate, pemohon unik.
+  - Komunikasi & Notifikasi: Berita perusahaan terbit, total notifikasi terkirim, dan status unread.
+- **Analitik Pertumbuhan Lanjutan (`/platform-admin/analytics/growth`)**: Trajectory tren harian multi-metrik dan funnel konversi aktivasi pengguna.
+- **Backend API Endpoints**:
+  - `GET /api/platform/users`: Listing pengguna dengan aggregasi afiliasi perusahaan dan kehadiran.
+  - `GET /api/platform/analytics/features`: Agregasi statistik adopsi fitur per rentang periode (7d, 30d, 90d, all).
 
-**Output:** insight tentang penggunaan produk.
+**Output:** Modul direktori pengguna global dan dasbor analitik adopsi fitur menyeluruh yang terhubung ke data aktual PostgreSQL.
 
-## Phase 4 — Platform Operations
+## Phase 4 — Platform Operations: System Health & Audit Logs (Selesai Dilakukan)
 
-- System health.
-- Error monitoring.
-- Audit log viewer.
-- Alert dan monitoring lanjutan jika diperlukan.
+- **System Health Monitoring (`/platform-admin/system-health`)**: Pemantauan status live database Supabase PostgreSQL (latensi koneksi ms), status runtime Express/Node.js, utilisasi memori (heap & RSS), uptime operasional, dan volume tabel aktual (perusahaan, akun, presensi, tugas, agenda, izin, notifikasi).
+- **Audit Logs Viewer (`/platform-admin/audit-logs`)**: Riwayat aktivitas administratif tersentralisasi di tabel `platform_audit_logs`, tracking login Google OAuth, inspeksi direktori, status operasi (sukses/gagal), filter kategori aksi, pencarian aktor, dan pagination.
+- **Pengaturan Platform Admin (`/platform-admin/settings`)**: Preferensi monitoring, sensitivitas peringatan latensi database, interval auto-refresh, informasi identitas akun terotorisasi, dan manajemen sesi.
+- **Backend API Endpoints**:
+  - `GET /api/platform/system-health`: Status diagnostik infrastruktur & pool database.
+  - `GET /api/platform/audit-logs`: Paginasi dan filtering log audit administratif.
+  - `POST /api/platform/audit-logs`: Pencatatan event administratif baru dengan metadata aktor & IP.
 
-**Output:** pengawasan platform yang lebih lengkap.
+**Output:** Pusat kendali operasional, pemantauan keandalan sistem, dan riwayat akuntabilitas administratif platform yang aman dan lengkap.
 
 ---
 

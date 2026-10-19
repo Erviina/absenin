@@ -81,6 +81,29 @@
   }
 }
 
+/* ==========================================================================
+   Platform Admin Full-Width Responsive Dashboard Override
+   Allows /platform-admin to expand across full desktop displays (100% width)
+   while preserving the mobile-frame PWA layout for the rest of AbsenIn.
+   ========================================================================== */
+@media (min-width: 640px) {
+  html:has(#platform-admin-root),
+  html.platform-admin-mode {
+    background-color: #F8FAF9 !important;
+  }
+
+  body:has(#platform-admin-root),
+  body.platform-admin-mode {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
 /* Hide all scrollbars across the entire app while keeping full scroll functionality */
 *,
 *::before,
