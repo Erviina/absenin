@@ -29,6 +29,10 @@ import { Badge } from "@/components/Badge";
 import { getAgendaCategoryColor, sortAgendaCategories, countWords, LocationPinIcon } from "@/app/agenda/page";
 import { shareContent } from "@/lib/shareUtils";
 import { AgendaCardSchedule, AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
+import { useCompany } from "@/context/CompanyContext";
+import { getActiveCompanyId } from "@/lib/api";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
 // Tipe Data untuk Agenda
 type AgendaItem = {
@@ -91,6 +95,7 @@ export function formatAgendaUrl(str: string): string {
 export default function AdminAgendaPage() {
   const router = useRouter();
   const { showConfirm, showToast } = useDialog();
+  const { activeCompanyId, isCompanyLoading } = useCompany();
   
   // State Navigasi Form Tambah/Ubah
   const [isAddingAgenda, setIsAddingAgenda] = useState(false);
@@ -112,6 +117,12 @@ export default function AdminAgendaPage() {
   const [isDetailMenuOpen, setIsDetailMenuOpen] = useState(false);
 
   const [categories, setCategories] = useState<any[]>([]);
+
+  // Reset on company change
+  useEffect(() => {
+    setAgendasMap({});
+    setCategories([]);
+  }, [activeCompanyId]);
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -135,28 +146,59 @@ export default function AdminAgendaPage() {
   const [formLink, setFormLink] = useState("");
 
   const fetchCategories = useCallback(async () => {
+    if (isCompanyLoading) return;
+    const compId = activeCompanyId || getActiveCompanyId();
     try {
+      if (!compId) {
+        setCategories([]);
+        return;
+      }
+
+      const catCacheKey = buildCacheKey("agenda_categories", compId);
+      const cachedCats = getCachedData<any[]>(catCacheKey);
+      if (cachedCats) {
+        setCategories(cachedCats.data);
+      }
+
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      const activeCompanyId = localStorage.getItem("activeCompanyId");
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(`${apiUrl}/agendas/categories`, { headers });
       const data = await res.json();
       if (data.success) {
-        setCategories(sortAgendaCategories(data.data));
+        const sorted = sortAgendaCategories(data.data);
+        setCategories(sorted);
+        setCachedData(catCacheKey, sorted);
       }
     } catch (err) {
       console.error("Fetch categories error:", err);
     }
-  }, []);
+  }, [activeCompanyId, isCompanyLoading]);
 
   const fetchAgendas = useCallback(async () => {
+    if (isCompanyLoading) return;
+    const compId = activeCompanyId || getActiveCompanyId();
     try {
-      setIsLoading(true);
+      if (!compId) {
+        setAgendasMap({});
+        setIsLoading(false);
+        setErrorMsg("");
+        return;
+      }
+
+      const cacheKey = buildCacheKey("agendas", compId);
+      const cached = getCachedData<Record<string, AgendaItem[]>>(cacheKey);
+      if (cached) {
+        setAgendasMap(cached.data);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
       setErrorMsg("");
+
       const token = localStorage.getItem("accessToken");
       if (!token) {
         router.push("/login");
@@ -167,8 +209,7 @@ export default function AdminAgendaPage() {
       if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      const activeCompanyId = localStorage.getItem("activeCompanyId");
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(`${apiUrl}/agendas`, { headers });
       const data = await res.json();
@@ -244,13 +285,14 @@ export default function AdminAgendaPage() {
       });
       
       setAgendasMap(newMap);
+      setCachedData(cacheKey, newMap);
     } catch (err: any) {
       console.error("Fetch agendas error:", err);
       setErrorMsg(err.message || "Terjadi kesalahan sistem");
     } finally {
       setIsLoading(false);
     }
-  }, [router]);
+  }, [router, activeCompanyId, isCompanyLoading]);
 
   useEffect(() => {
     fetchCategories();
@@ -369,8 +411,8 @@ export default function AdminAgendaPage() {
       if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      const activeCompanyId = localStorage.getItem("activeCompanyId");
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(`${apiUrl}/agendas/${id}`, {
         method: "DELETE",
@@ -382,6 +424,8 @@ export default function AdminAgendaPage() {
         throw new Error(data.message || "Gagal menghapus agenda");
       }
 
+      invalidateCache("agendas");
+      invalidateCache("dashboard_agendas");
       showToast("Agenda berhasil dihapus", "success");
       await fetchAgendas();
     } catch (err: any) {
@@ -428,8 +472,8 @@ export default function AdminAgendaPage() {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
       };
-      const activeCompanyId = localStorage.getItem("activeCompanyId");
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (compId) headers["x-company-id"] = compId;
 
       const payload: any = {
         title: formKegiatan,
@@ -463,6 +507,8 @@ export default function AdminAgendaPage() {
         throw new Error(data.message || "Gagal menyimpan agenda");
       }
 
+      invalidateCache("agendas");
+      invalidateCache("dashboard_agendas");
       await fetchAgendas();
 
       showToast(editingAgendaId ? "Agenda berhasil diperbarui" : "Agenda baru berhasil ditambahkan", "success");
@@ -758,12 +804,11 @@ export default function AdminAgendaPage() {
               {isSubmitting ? "Menyimpan..." : editingAgendaId ? "Simpan Perubahan" : "Simpan Agenda ke Semua"}
             </button>
           </div>
-        ) : isLoading ? (
-          <div className="flex flex-col items-center justify-center flex-1 py-12">
-            <div className="w-8 h-8 border-4 border-[#356E3B] border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-[#6B7280] text-[14px] font-medium">Memuat data agenda...</p>
+        ) : isLoading && Object.keys(agendasMap).length === 0 ? (
+          <div className="py-6 flex flex-col gap-4">
+            <CardListSkeleton count={3} type="agenda" />
           </div>
-        ) : errorMsg ? (
+        ) : errorMsg && Object.keys(agendasMap).length === 0 ? (
           <div className="flex flex-col items-center justify-center flex-1 py-12 px-4 text-center">
             <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-4">
               <Info className="w-6 h-6" />
@@ -771,7 +816,7 @@ export default function AdminAgendaPage() {
             <p className="text-[#EF4444] text-[14px] font-bold mb-2">Gagal Memuat Agenda</p>
             <p className="text-[#6B7280] text-[13px]">{errorMsg}</p>
             <button 
-              onClick={() => window.location.reload()}
+              onClick={() => fetchAgendas()}
               className="mt-4 px-6 py-2 bg-[#356E3B] text-white text-[13px] font-bold rounded-full hover:bg-[#2A582F] transition-colors"
             >
               Coba Lagi
@@ -1039,6 +1084,8 @@ export default function AdminAgendaPage() {
                     </div>
                 );
               })
+              ) : isLoading ? (
+                <CardListSkeleton count={2} type="agenda" />
               ) : (
                 <div className="flex flex-col items-center justify-center py-10 opacity-60">
                   <CalendarIcon className="w-12 h-12 text-[#9CA3AF] mb-3" strokeWidth={1.5} />

@@ -9,6 +9,7 @@ import { CustomSelect } from "@/components/CustomSelect";
 import { createClient } from "@supabase/supabase-js";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
+import { invalidateCache } from "@/lib/clientCache";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -175,6 +176,9 @@ function BuatBeritaForm() {
 
       const data = await res.json();
       if (data.success) {
+        invalidateCache("news");
+        invalidateCache("admin_news");
+        invalidateCache("dashboard_news");
         showToast(editingId ? "Berita berhasil diperbarui" : "Berita berhasil diterbitkan", "success");
         router.push("/admin/berita");
       } else {

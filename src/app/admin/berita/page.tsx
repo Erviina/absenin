@@ -60,7 +60,7 @@ export default function KelolaBeritaPage() {
       if (!token) return;
       
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (companyId) headers["x-company-id"] = companyId;
 
       const params = new URLSearchParams();
       params.set("limit", String(limit));
@@ -73,9 +73,11 @@ export default function KelolaBeritaPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setNews(data.data || []);
+        const items = data.data || [];
         const total = data.pagination?.total ?? data.meta?.total ?? (data.data?.length || 0);
+        setNews(items);
         setTotalNews(total);
+        setCachedData(cacheKey, items, total);
       }
     } catch (error) {
       console.error("Error fetching news:", error);
@@ -112,13 +114,17 @@ export default function KelolaBeritaPage() {
     try {
       const token = localStorage.getItem("accessToken");
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const companyId = activeCompanyId || getActiveCompanyId();
+      if (companyId) headers["x-company-id"] = companyId;
 
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/news/${id}`, {
         method: "DELETE",
         headers
       });
       if (res.ok) {
+        invalidateCache("news");
+        invalidateCache("admin_news");
+        invalidateCache("dashboard_news");
         setNews(news.filter(n => n.id !== id));
         showToast("Berita berhasil dihapus", "success");
       } else {
@@ -180,11 +186,8 @@ export default function KelolaBeritaPage() {
         </div>
 
         <div className="flex flex-col gap-4 mt-2">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
-              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-              <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
-            </div>
+          {isLoading && news.length === 0 ? (
+            <CardListSkeleton count={3} type="news" />
           ) : news.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-6">
               Belum ada berita yang diterbitkan.

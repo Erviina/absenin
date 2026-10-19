@@ -15,6 +15,8 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDateRange } from "@/lib/dateUtils";
 import { getActiveCompanyId } from "@/lib/api";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
 // Tipe Data untuk Pengajuan Izin
 type IzinRequest = {
@@ -98,17 +100,56 @@ export default function IzinPage() {
     fetchCategories();
   }, [activeCompanyId, isCompanyLoading]);
 
+  const activeFetchCompanyIdRef = useRef<string | null>(null);
+
+  // Reset leaves and offset when active company changes
+  useEffect(() => {
+    setPengajuanList([]);
+    setTotalLeaves(0);
+    setOffset(0);
+    setIsLoading(true);
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setPengajuanList([]);
+      setTotalLeaves(0);
+      setOffset(0);
+      setIsLoading(true);
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, []);
+
   // Fetch paginated leaves
   const fetchLeaves = useCallback(async () => {
     if (isCompanyLoading) return;
     const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
     if (!compId) {
       setPengajuanList([]);
       setTotalLeaves(0);
+      setIsLoading(false);
       return;
     }
-    try {
+
+    const cacheKey = buildCacheKey("leaves", compId, {
+      category: filterCategory,
+      start_date: filterDate,
+      limit,
+      offset,
+    });
+
+    const cached = getCachedData<any[]>(cacheKey);
+    if (cached?.data) {
+      setPengajuanList(cached.data);
+      if (cached.total !== undefined) setTotalLeaves(cached.total);
+      setIsLoading(false);
+    } else {
       setIsLoading(true);
+    }
+
+    try {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
@@ -132,15 +173,22 @@ export default function IzinPage() {
 
       const leaveRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/leaves?${params.toString()}`, { headers });
       const leaveData = await leaveRes.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
+
       if (leaveData.success) {
-        setPengajuanList(leaveData.data || []);
-        const total = leaveData.pagination?.total ?? leaveData.meta?.total ?? (leaveData.data?.length || 0);
+        const list = leaveData.data || [];
+        const total = leaveData.pagination?.total ?? leaveData.meta?.total ?? list.length;
+        setPengajuanList(list);
         setTotalLeaves(total);
+        setCachedData(cacheKey, list, total);
       }
     } catch (error) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
       console.error("Error fetching leaves data:", error);
     } finally {
-      setIsLoading(false);
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoading(false);
+      }
     }
   }, [activeCompanyId, isCompanyLoading, limit, offset, filterCategory, filterDate]);
 
@@ -831,7 +879,9 @@ export default function IzinPage() {
 
               <div className="flex flex-col gap-4">
                 
-                {pengajuanList.length === 0 ? (
+                {isLoading && pengajuanList.length === 0 ? (
+                  <CardListSkeleton count={3} type="leave" />
+                ) : pengajuanList.length === 0 ? (
                   <p className="text-sm text-gray-500 text-center py-6">
                     Belum ada pengajuan izin.
                   </p>
