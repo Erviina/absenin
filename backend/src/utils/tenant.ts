@@ -12,8 +12,8 @@ export async function resolveTenant(
   req: Request,
   userId: string
 ): Promise<TenantContext | null> {
-  const headerCompanyId = req.headers["x-company-id"] as string | undefined;
-  const queryCompanyId = req.query.company_id as string | undefined;
+  const headerCompanyId = req.headers ? (req.headers["x-company-id"] as string | undefined) : undefined;
+  const queryCompanyId = req.query?.company_id as string | undefined;
   const bodyCompanyId = req.body?.company_id as string | undefined;
   const rawRequested = headerCompanyId || queryCompanyId || bodyCompanyId;
   const requestedCompanyId = (rawRequested && rawRequested !== "undefined" && rawRequested !== "null" && rawRequested.trim() !== "") 
@@ -39,6 +39,11 @@ export async function resolveTenant(
       else if (rawRole === "admin") role = "admin";
       else if (rawRole === "manager") role = "manager";
 
+      // Keep profiles.company_id in sync with currently active verified company
+      db.execute(sql`
+        UPDATE profiles SET company_id = ${requestedCompanyId} WHERE id = ${userId} AND (company_id IS NULL OR company_id != ${requestedCompanyId})
+      `).catch(console.error);
+
       return {
         companyId: requestedCompanyId,
         role,
@@ -51,6 +56,10 @@ export async function resolveTenant(
       SELECT id FROM companies WHERE id = ${requestedCompanyId} AND created_by = ${userId} AND deleted_at IS NULL LIMIT 1
     `);
     if (ownerCheck.rows.length > 0) {
+      db.execute(sql`
+        UPDATE profiles SET company_id = ${requestedCompanyId} WHERE id = ${userId} AND (company_id IS NULL OR company_id != ${requestedCompanyId})
+      `).catch(console.error);
+
       return {
         companyId: requestedCompanyId,
         role: "owner",

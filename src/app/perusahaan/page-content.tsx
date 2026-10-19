@@ -35,6 +35,7 @@ import L from "leaflet";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
 import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
+import { getActiveCompanyId } from "@/lib/api";
 
 function MapControls({ 
   targetLat, 
@@ -152,7 +153,7 @@ const ALL_DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"
 export default function ProfilPerusahaanContent() {
   const router = useRouter();
   const { showToast, showConfirm } = useDialog();
-  const { activeCompany, activeRole, refreshMemberships } = useCompany();
+  const { activeCompanyId, activeCompany, activeRole, refreshMemberships } = useCompany();
 
   const [company, setCompany] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -168,6 +169,18 @@ export default function ProfilPerusahaanContent() {
   // Modal QR Code
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
 
+  const activeFetchCompIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setCompany(null);
+      setPendingExitRequest(null);
+      setIsLoading(true);
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, []);
+
   const fetchCompanyAndExitStatus = useCallback(async () => {
     try {
       const token = localStorage.getItem("accessToken");
@@ -176,10 +189,12 @@ export default function ProfilPerusahaanContent() {
         return;
       }
 
+      const compId = activeCompanyId || activeCompany?.id || getActiveCompanyId();
+      activeFetchCompIdRef.current = compId;
+
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      const activeCompanyId = localStorage.getItem("activeCompanyId") || activeCompany?.id;
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
 
       // 1. Fetch Company Profile
@@ -192,11 +207,13 @@ export default function ProfilPerusahaanContent() {
         return;
       }
 
+      if (activeFetchCompIdRef.current !== compId) return;
+
       if (compData.success && compData.data) {
         setCompany(compData.data);
 
         // 2. Fetch User's Pending Exit Request for this company
-        const targetId = compData.data.id || activeCompanyId;
+        const targetId = compData.data.id || compId;
         if (targetId) {
           try {
             const exitRes = await fetch(
@@ -204,10 +221,12 @@ export default function ProfilPerusahaanContent() {
               { headers }
             );
             const exitData = await exitRes.json();
-            if (exitData.success && exitData.data) {
-              setPendingExitRequest(exitData.data);
-            } else {
-              setPendingExitRequest(null);
+            if (activeFetchCompIdRef.current === compId) {
+              if (exitData.success && exitData.data) {
+                setPendingExitRequest(exitData.data);
+              } else {
+                setPendingExitRequest(null);
+              }
             }
           } catch (err) {
             console.error("Error fetching exit request status:", err);
@@ -220,9 +239,12 @@ export default function ProfilPerusahaanContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeCompany?.id, router, showToast]);
+  }, [activeCompanyId, activeCompany?.id, router, showToast]);
 
   useEffect(() => {
+    setCompany(null);
+    setPendingExitRequest(null);
+    setIsLoading(true);
     fetchCompanyAndExitStatus();
   }, [fetchCompanyAndExitStatus]);
 

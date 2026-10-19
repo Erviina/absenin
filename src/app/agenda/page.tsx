@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, Suspense, useRef } from "react";
 import { 
   ChevronLeft, 
   ChevronRight,
@@ -31,6 +31,8 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { getActiveCompanyId } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { AgendaCardSchedule, AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
 // Tipe Data untuk Agenda
 type AgendaItem = {
@@ -233,6 +235,12 @@ function AgendaPageContent() {
   const [formLink, setFormLink] = useState("");
   const [submitError, setSubmitError] = useState("");
 
+  // Reset on company change
+  useEffect(() => {
+    setAgendasMap({});
+    setCategories([]);
+  }, [activeCompanyId]);
+
   const fetchCategories = useCallback(async () => {
     if (isCompanyLoading) return;
     const compId = activeCompanyId || getActiveCompanyId();
@@ -241,6 +249,13 @@ function AgendaPageContent() {
         setCategories([]);
         return;
       }
+
+      const catCacheKey = buildCacheKey("agenda_categories", compId);
+      const cachedCats = getCachedData<any[]>(catCacheKey);
+      if (cachedCats) {
+        setCategories(cachedCats.data);
+      }
+
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -249,16 +264,35 @@ function AgendaPageContent() {
       const res = await fetch(`${apiUrl}/agendas/categories`, { headers });
       const data = await res.json();
       if (data.success) {
-        setCategories(sortAgendaCategories(data.data));
+        const sorted = sortAgendaCategories(data.data);
+        setCategories(sorted);
+        setCachedData(catCacheKey, sorted);
       }
     } catch (err) {
       console.error("Fetch categories error:", err);
     }
   }, [activeCompanyId, isCompanyLoading]);
 
+  const activeFetchCompanyIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setAgendasMap({});
+    setIsLoading(true);
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setAgendasMap({});
+      setIsLoading(true);
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, []);
+
   const fetchAgendas = useCallback(async () => {
     if (isCompanyLoading) return;
     const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
     try {
       if (!compId) {
         setAgendasMap({});
@@ -266,8 +300,17 @@ function AgendaPageContent() {
         setErrorMsg("");
         return;
       }
-      setIsLoading(true);
+
+      const cacheKey = buildCacheKey("agendas", compId);
+      const cached = getCachedData<Record<string, AgendaItem[]>>(cacheKey);
+      if (cached) {
+        setAgendasMap(cached.data);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
       setErrorMsg("");
+
       const token = localStorage.getItem("accessToken");
       if (!token) {
         const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/agenda";
@@ -283,6 +326,7 @@ function AgendaPageContent() {
 
       const res = await fetch(`${apiUrl}/agendas`, { headers });
       const data = await res.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
       
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Gagal mengambil data agenda");
@@ -355,11 +399,15 @@ function AgendaPageContent() {
       });
       
       setAgendasMap(newMap);
+      setCachedData(cacheKey, newMap);
     } catch (err: any) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
       console.error("Fetch agendas error:", err);
       setErrorMsg(err.message || "Terjadi kesalahan sistem");
     } finally {
-      setIsLoading(false);
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoading(false);
+      }
     }
   }, [router, activeCompanyId]);
 
@@ -535,6 +583,8 @@ function AgendaPageContent() {
       if (!res.ok || !data.success) throw new Error(data.message || "Gagal menyimpan agenda");
 
       setIsFormModalOpen(false);
+      invalidateCache("agendas");
+      invalidateCache("dashboard_agendas");
       showToast(formId ? "Agenda berhasil diperbarui" : "Agenda baru berhasil ditambahkan", "success");
       fetchAgendas();
     } catch (err: any) {
@@ -578,6 +628,8 @@ function AgendaPageContent() {
       if (!res.ok || !data.success) throw new Error(data.message || "Gagal menghapus agenda");
 
       setSelectedAgendaDetail(null);
+      invalidateCache("agendas");
+      invalidateCache("dashboard_agendas");
       showToast("Agenda berhasil dihapus", "success");
       fetchAgendas();
     } catch (err: any) {
@@ -675,12 +727,11 @@ function AgendaPageContent() {
       />
 
       <div className="px-6 pt-6 flex flex-col flex-1">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
-            <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-            <span className="text-[13px] font-medium text-[#7d998c]">Memuat data agenda...</span>
+        {isLoading && Object.keys(agendasMap).length === 0 ? (
+          <div className="py-6 flex flex-col gap-4">
+            <CardListSkeleton count={3} type="agenda" />
           </div>
-        ) : errorMsg ? (
+        ) : errorMsg && Object.keys(agendasMap).length === 0 ? (
           <div className="flex flex-col items-center justify-center flex-1 py-12 px-4 text-center">
             <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-4">
               <Info className="w-6 h-6" />
@@ -688,7 +739,7 @@ function AgendaPageContent() {
             <p className="text-[#EF4444] text-[14px] font-bold mb-2">Gagal Memuat Agenda</p>
             <p className="text-[#6B7280] text-[13px]">{errorMsg}</p>
             <button 
-              onClick={() => window.location.reload()}
+              onClick={() => fetchAgendas()}
               className="mt-4 px-6 py-2 bg-[#356E3B] text-white text-[13px] font-bold rounded-full hover:bg-[#2A582F] transition-colors"
             >
               Coba Lagi
@@ -949,6 +1000,8 @@ function AgendaPageContent() {
                     </div>
                 );
               })
+              ) : isLoading ? (
+                <CardListSkeleton count={2} type="agenda" />
               ) : (
                 <p className="text-sm text-gray-500 text-center py-6">
                   Belum ada agenda.

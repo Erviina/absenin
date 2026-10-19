@@ -39,6 +39,8 @@ import {
 import { Badge } from "@/components/Badge";
 import { ViewAllButton } from "@/components/ViewAllButton";
 import { getAgendaCategoryColor } from "@/app/agenda/page";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -111,18 +113,46 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Ref untuk melacak ID perusahaan yang sedang di-fetch guna mencegah race condition
+  const activeFetchCompanyIdRef = useRef<string | null>(null);
+
   // Close drawer whenever active company or active role changes
   useEffect(() => {
     setIsContextDrawerOpen(false);
   }, [activeCompanyId, activeRole]);
 
+  // Listener event pergantian perusahaan untuk mereset data lama seketika tanpa jeda
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setNews([]);
+      setTasks([]);
+      setAgendas([]);
+      setAttendanceStatus(null);
+      setCompanySchedule(null);
+      setAttendanceError(false);
+      setIsLoading(true);
+      setIsAttendanceLoading(true);
+      setIsTasksAgendasLoading(true);
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, []);
+
   useEffect(() => {
     // Tunggu hingga CompanyContext selesai memverifikasi membership dari backend.
-    // Ini mencegah cache lama (activeCompanyId dari localStorage) memblokir redirect
-    // ke /cek-perusahaan yang seharusnya terjadi.
     if (isCompanyLoading) return;
 
     let isSubscribed = true;
+    const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
+
+    // Reset data kartu saat perusahaan berganti agar tidak menampilkan kartu milik perusahaan lama
+    setNews([]);
+    setTasks([]);
+    setAgendas([]);
+    setAttendanceStatus(null);
+    setCompanySchedule(null);
+    setAttendanceError(false);
 
     const fetchData = async () => {
       try {
@@ -134,10 +164,32 @@ export default function DashboardPage() {
 
         const requestToken = token;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        // Setelah isCompanyLoading selesai, activeCompanyId sudah terverifikasi dari backend
-        const compId = activeCompanyId || getActiveCompanyId();
         if (compId) {
           headers["x-company-id"] = compId;
+        }
+
+        const newsCacheKey = buildCacheKey("dashboard_news", compId);
+        const tasksCacheKey = buildCacheKey("dashboard_tasks", compId);
+        const agendasCacheKey = buildCacheKey("dashboard_agendas", compId);
+
+        const cachedNews = getCachedData<any[]>(newsCacheKey);
+        if (cachedNews?.data && activeFetchCompanyIdRef.current === compId) {
+          setNews(cachedNews.data);
+          setIsLoading(false);
+        } else {
+          setIsLoading(true);
+        }
+
+        const cachedTasks = getCachedData<any[]>(tasksCacheKey);
+        if (cachedTasks?.data && activeFetchCompanyIdRef.current === compId) {
+          setTasks(cachedTasks.data);
+          setIsTasksAgendasLoading(false);
+        }
+
+        const cachedAgendas = getCachedData<any[]>(agendasCacheKey);
+        if (cachedAgendas?.data && activeFetchCompanyIdRef.current === compId) {
+          setAgendas(cachedAgendas.data);
+          setIsTasksAgendasLoading(false);
         }
 
         const [authRes, newsRes, attendRes, notifRes, tasksRes, agendasRes] = await Promise.all([
@@ -149,19 +201,17 @@ export default function DashboardPage() {
           fetch(process.env.NEXT_PUBLIC_API_URL + "/agendas", { headers })
         ]);
 
-        // Isolasi request: Jika token telah berganti (pergantian akun) atau unmount, abaikan respons lama
-        if (!isSubscribed || localStorage.getItem("accessToken") !== requestToken) {
+        // Proteksi Race Condition: Jika unmount, token berganti, atau perusahaan aktif sudah berbeda dari compId saat request dikirim, DROP respons!
+        if (!isSubscribed || localStorage.getItem("accessToken") !== requestToken || activeFetchCompanyIdRef.current !== compId) {
           return;
         }
 
         try {
           const authData = await authRes.json();
-          if (authData.success) {
+          if (authData.success && activeFetchCompanyIdRef.current === compId) {
             setUser(authData.data.user);
             setCurrentUser(authData.data.user);
             const skipCompanyPrompt = getPersonalModePreference(authData.data.user?.id);
-            // activeCompanyId di sini sudah diverifikasi backend (isCompanyLoading sudah false),
-            // jadi aman digunakan sebagai penentu apakah pengguna punya perusahaan aktif.
             if (!authData.data.user?.company && !activeCompanyId && !skipCompanyPrompt) {
               router.push("/cek-perusahaan");
               return;
@@ -173,8 +223,10 @@ export default function DashboardPage() {
 
         try {
           const newsData = await newsRes.json();
-          if (newsData.success) {
-            setNews(newsData.data.slice(0, 2));
+          if (newsData.success && activeFetchCompanyIdRef.current === compId) {
+            const sliceNews = newsData.data.slice(0, 2);
+            setNews(sliceNews);
+            setCachedData(newsCacheKey, sliceNews);
           }
         } catch (e) {
           console.error("Failed to parse news data", e);
@@ -182,7 +234,7 @@ export default function DashboardPage() {
 
         try {
           const notifData = await notifRes.json();
-          if (notifData.success) {
+          if (notifData.success && activeFetchCompanyIdRef.current === compId) {
             setUnreadCount(notifData.data.count);
           }
         } catch (e) {
@@ -191,32 +243,37 @@ export default function DashboardPage() {
 
         try {
           if (!activeCompanyId) {
-            setAttendanceError(false);
-            setAttendanceStatus("NOT_CHECKED_IN");
+            if (activeFetchCompanyIdRef.current === compId) {
+              setAttendanceError(false);
+              setAttendanceStatus("NOT_CHECKED_IN");
+            }
           } else {
             const attendData = await attendRes.json();
-            if (attendData.success && attendData.data) {
-              setAttendanceStatus(attendData.data.status);
-              setAttendanceError(false);
-              if (attendData.data.company) {
-                setCompanySchedule(attendData.data.company);
-                const offset = calculateServerOffsetMs(attendData.data.company.server_time);
-                setServerOffsetMs(offset);
+            if (activeFetchCompanyIdRef.current === compId) {
+              if (attendData.success && attendData.data) {
+                setAttendanceStatus(attendData.data.status);
+                setAttendanceError(false);
+                if (attendData.data.company) {
+                  setCompanySchedule(attendData.data.company);
+                  const offset = calculateServerOffsetMs(attendData.data.company.server_time);
+                  setServerOffsetMs(offset);
+                }
+              } else {
+                setAttendanceError(true);
               }
-            } else {
-              setAttendanceError(true);
             }
           }
         } catch (e) {
           console.error("Failed to parse attendance data", e);
-          if (activeCompanyId) setAttendanceError(true);
+          if (activeCompanyId && activeFetchCompanyIdRef.current === compId) setAttendanceError(true);
         }
 
         try {
-          if (tasksRes.ok) {
+          if (tasksRes.ok && activeFetchCompanyIdRef.current === compId) {
             const tasksData = await tasksRes.json();
             if (Array.isArray(tasksData)) {
               setTasks(tasksData);
+              setCachedData(tasksCacheKey, tasksData);
             }
           }
         } catch (e) {
@@ -224,10 +281,11 @@ export default function DashboardPage() {
         }
 
         try {
-          if (agendasRes.ok) {
+          if (agendasRes.ok && activeFetchCompanyIdRef.current === compId) {
             const agendasData = await agendasRes.json();
             if (agendasData.success && Array.isArray(agendasData.data)) {
               setAgendas(agendasData.data);
+              setCachedData(agendasCacheKey, agendasData.data);
             }
           }
         } catch (e) {
@@ -235,9 +293,9 @@ export default function DashboardPage() {
         }
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
-        setAttendanceError(true);
+        if (activeFetchCompanyIdRef.current === compId) setAttendanceError(true);
       } finally {
-        if (isSubscribed) {
+        if (isSubscribed && activeFetchCompanyIdRef.current === compId) {
           setIsLoading(false);
           setIsAttendanceLoading(false);
           setIsTasksAgendasLoading(false);
@@ -312,6 +370,8 @@ export default function DashboardPage() {
         headers,
         body: JSON.stringify({ completed: nextCompleted }),
       });
+      invalidateCache("dashboard_tasks");
+      invalidateCache("tasks");
     } catch (err) {
       console.error("Failed to toggle task", err);
       setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, completed: target.completed } : t)));
@@ -449,7 +509,7 @@ export default function DashboardPage() {
     router.push('/checkin');
   };
 
-  if (isCompanyLoading) {
+  if (isCompanyLoading && !currentUser && memberships.length === 0) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] items-center justify-center p-6 gap-3">
         <Loader2 className="w-8 h-8 text-[#1E4738] animate-spin" />
@@ -672,11 +732,8 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-col gap-3">
-            {isTasksAgendasLoading ? (
-              <div className="flex flex-col items-center justify-center py-8 text-gray-400 gap-2.5">
-                <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-                <span className="text-[13px] font-medium text-[#7d998c]">Memuat aktivitas...</span>
-              </div>
+            {isTasksAgendasLoading && todayTasks.length === 0 && todayAgendas.length === 0 ? (
+              <CardListSkeleton count={2} type={resumeTab === "agendas" ? "agenda" : "task"} />
             ) : resumeTab === "all" ? (
               todayTasks.length === 0 && todayAgendas.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-4">
@@ -957,11 +1014,8 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex flex-col gap-3">
-            {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-8 text-gray-400 gap-2.5">
-                <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-                <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
-              </div>
+            {isLoading && news.length === 0 ? (
+              <CardListSkeleton count={2} type="news" />
             ) : news.length === 0 ? (
               <p className="text-sm text-gray-500 text-center py-4">
                 Belum ada berita terbaru saat ini.
@@ -969,12 +1023,18 @@ export default function DashboardPage() {
             ) : (
               news.map((item, idx) => (
                 <div 
-                  key={item.id || idx} 
+                  key={item.id ? `news-${item.id}` : `news-idx-${idx}`} 
                   onClick={() => router.push(`/berita/${item.id}?from=/dashboard`)}
                   className="w-full bg-white rounded-[20px] p-4 flex items-center gap-3.5 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
                 >
                   {item.cover_image_url ? (
-                    <img src={item.cover_image_url} alt={sanitizeText(item.title)} className="w-[72px] h-[72px] rounded-2xl shrink-0 object-cover" />
+                    <img 
+                      src={item.cover_image_url} 
+                      alt={sanitizeText(item.title)} 
+                      loading="lazy"
+                      decoding="async"
+                      className="w-[72px] h-[72px] rounded-2xl shrink-0 object-cover" 
+                    />
                   ) : (
                     <div className="w-[72px] h-[72px] bg-[#d9e8df] rounded-2xl shrink-0 flex items-center justify-center text-[#1E4738]/60">
                       <Newspaper className="w-7 h-7" />

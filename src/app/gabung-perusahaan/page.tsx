@@ -9,6 +9,29 @@ import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
 import { setActiveCompanyId } from "@/lib/api";
 
+function LoadingOverlay({ text }: { text: string }) {
+  return (
+    <div 
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/95 backdrop-blur-[3px] select-none pointer-events-auto transition-all animate-in fade-in duration-200"
+      aria-live="assertive"
+      role="status"
+    >
+      <div className="flex flex-col items-center justify-center p-6 text-center max-w-xs">
+        <div className="relative w-12 h-12 mb-4">
+          <div className="w-12 h-12 rounded-full border-[3px] border-[#356E3B]/20"></div>
+          <div className="absolute top-0 left-0 w-12 h-12 rounded-full border-[3px] border-[#356E3B] border-t-transparent animate-spin"></div>
+        </div>
+        <p className="text-[15px] font-semibold text-[#1E293B]">
+          {text}
+        </p>
+        <p className="text-[13px] text-gray-500 mt-1">
+          Mohon tunggu sebentar
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function GabungPerusahaanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -22,6 +45,7 @@ function GabungPerusahaanContent() {
   const [companyName, setCompanyName] = useState("Perusahaan");
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState("Memverifikasi perusahaan...");
   const [isFlashOn, setIsFlashOn] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isProcessingRef = useRef<boolean>(false);
@@ -38,6 +62,7 @@ function GabungPerusahaanContent() {
   const handleLanjutKeBeranda = useCallback(async () => {
     if (isRedirectingRef.current) return;
     isRedirectingRef.current = true;
+    setLoadingText("Sedang memproses permintaan...");
     setIsLoading(true);
 
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
@@ -87,6 +112,7 @@ function GabungPerusahaanContent() {
 
     showToast("Berhasil bergabung dengan perusahaan!", "success");
     router.replace("/dashboard");
+    // Pertahankan isLoading = true agar loading overlay tetap menutupi layar sampai Next.js selesai berganti ke dashboard
   }, [activeRequestId, targetCompanyId, setCurrentUser, refreshMemberships, showToast, router]);
 
   useEffect(() => {
@@ -152,6 +178,9 @@ function GabungPerusahaanContent() {
               if (isFromProfile) {
                 setStatus('idle');
               } else {
+                setLoadingText("Sedang memproses permintaan...");
+                setIsLoading(true);
+                isRedirectingRef.current = true;
                 router.replace("/dashboard");
               }
               return;
@@ -174,6 +203,9 @@ function GabungPerusahaanContent() {
           if (!activeCompanyId && memberships[0]?.company_id) {
             setActiveCompanyId(memberships[0].company_id);
           }
+          setLoadingText("Sedang memproses permintaan...");
+          setIsLoading(true);
+          isRedirectingRef.current = true;
           router.replace("/dashboard");
         } else {
           setStatus('idle');
@@ -219,7 +251,7 @@ function GabungPerusahaanContent() {
   }, [status]);
 
   const handleGabung = async (codeOverride?: string) => {
-    if (isLoading || isProcessingRef.current) {
+    if (isLoading || isProcessingRef.current || isRedirectingRef.current) {
       isScannerHandlingRef.current = false;
       return;
     }
@@ -238,6 +270,7 @@ function GabungPerusahaanContent() {
       return;
     }
     
+    setLoadingText("Memverifikasi perusahaan...");
     setIsLoading(true);
     isProcessingRef.current = true;
 
@@ -299,7 +332,7 @@ function GabungPerusahaanContent() {
       scannerRef.current = html5QrCode;
 
       const onScanSuccess = (decodedText: string) => {
-        if (isProcessingRef.current || isRedirectingRef.current || isScannerHandlingRef.current) return;
+        if (isLoading || isProcessingRef.current || isRedirectingRef.current || isScannerHandlingRef.current) return;
         isScannerHandlingRef.current = true;
 
         try {
@@ -391,6 +424,7 @@ function GabungPerusahaanContent() {
   };
 
   const handleBack = () => {
+    if (isLoading || isProcessingRef.current || isRedirectingRef.current) return;
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
     } else {
@@ -458,6 +492,10 @@ function GabungPerusahaanContent() {
           </button>
         </div>
 
+        {/* Full-Page Loading Overlay */}
+        {isLoading && (
+          <LoadingOverlay text={loadingText || "Sedang memproses permintaan..."} />
+        )}
       </div>
     );
   }
@@ -647,13 +685,6 @@ function GabungPerusahaanContent() {
             />
           </div>
 
-          {isLoading && (
-            <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-emerald-50 text-[#1E4738] rounded-2xl text-[13.5px] font-semibold border border-emerald-100 animate-in fade-in">
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#1E4738] border-t-transparent" />
-              <span>Memproses verifikasi perusahaan...</span>
-            </div>
-          )}
-
           {errorMsg && !isLoading && (
             <p className="text-red-500 text-sm font-medium px-1">{errorMsg}</p>
           )}
@@ -680,6 +711,11 @@ function GabungPerusahaanContent() {
         </div>
 
       </div>
+
+      {/* Full-Page Loading Overlay */}
+      {isLoading && (
+        <LoadingOverlay text={loadingText || "Memverifikasi perusahaan..."} />
+      )}
     </div>
   );
 }

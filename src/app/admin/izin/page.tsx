@@ -9,6 +9,8 @@ import { Pagination } from "@/components/Pagination";
 
 import { useCompany } from "@/context/CompanyContext";
 import { getActiveCompanyId } from "@/lib/api";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
 // Types mapped from backend
 type IzinRequest = {
@@ -54,6 +56,12 @@ export default function KelolaIzinPage() {
   const [totalLeaves, setTotalLeaves] = useState(0);
   const limit = 10;
 
+  // Reset data and offset on company change
+  useEffect(() => {
+    setData([]);
+    setOffset(0);
+  }, [activeCompanyId]);
+
   // Reset offset on search or category filter change
   useEffect(() => {
     setOffset(0);
@@ -63,13 +71,28 @@ export default function KelolaIzinPage() {
   const fetchLeaves = useCallback(async () => {
     if (isCompanyLoading) return;
     try {
-      setIsLoading(true);
-      setFetchError(null);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
-      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
       const companyId = activeCompanyId || getActiveCompanyId();
+      const cacheKey = buildCacheKey("admin_leaves", companyId, {
+        limit,
+        offset,
+        searchQuery,
+        activeFilter,
+      });
+
+      const cached = getCachedData<IzinRequest[]>(cacheKey);
+      if (cached) {
+        setData(cached.data);
+        if (typeof cached.total === "number") setTotalLeaves(cached.total);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+      setFetchError(null);
+
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
       if (companyId) headers["x-company-id"] = companyId;
 
       const params = new URLSearchParams();
@@ -94,9 +117,10 @@ export default function KelolaIzinPage() {
           attachment_url: item.attachment_url || undefined,
           rejection_reason: item.rejection_reason || undefined
         }));
-        setData(mappedData);
         const total = resData.pagination?.total ?? resData.meta?.total ?? mappedData.length;
+        setData(mappedData);
         setTotalLeaves(total);
+        setCachedData(cacheKey, mappedData, total);
       } else {
         setFetchError(resData.message || "Gagal memuat data izin");
       }
@@ -196,6 +220,8 @@ export default function KelolaIzinPage() {
     try {
       const res = await updateStatus(confirmApproveItem.id, "Disetujui");
       if (res.success) {
+        invalidateCache("leaves");
+        invalidateCache("admin_leaves");
         setData(prev => prev.map(item => item.id === confirmApproveItem.id ? { ...item, status: "Disetujui" } : item));
         setSelectedItems(prev => prev.filter(itemId => itemId !== confirmApproveItem.id));
         setConfirmApproveItem(null);
@@ -239,6 +265,8 @@ export default function KelolaIzinPage() {
     try {
       const res = await updateStatus(rejectItem.id, "Ditolak", trimmed);
       if (res.success) {
+        invalidateCache("leaves");
+        invalidateCache("admin_leaves");
         setData(prev => prev.map(item => item.id === rejectItem.id ? {
           ...item,
           status: "Ditolak",
@@ -271,6 +299,8 @@ export default function KelolaIzinPage() {
     if (selectedItems.length === 0 || isSubmitting) return;
     setIsSubmitting(true);
     try {
+      invalidateCache("leaves");
+      invalidateCache("admin_leaves");
       let successCount = 0;
       let failedCount = 0;
       for (const id of selectedItems) {
@@ -353,12 +383,11 @@ export default function KelolaIzinPage() {
         </div>
 
         {/* Loading / Error / Data States */}
-        {isLoading ? (
-          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-10 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-[#356E3B]" />
-            <span className="text-[13px] font-medium text-gray-500">Memuat data permohonan izin...</span>
+        {isLoading && data.length === 0 ? (
+          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-5">
+            <CardListSkeleton count={3} type="leave" />
           </div>
-        ) : fetchError ? (
+        ) : fetchError && data.length === 0 ? (
           <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-8 flex flex-col items-center justify-center text-center gap-3">
             <span className="text-[13px] text-red-500 font-medium">{fetchError}</span>
             <button

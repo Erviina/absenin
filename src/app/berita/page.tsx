@@ -9,6 +9,9 @@ import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText, truncateText } from "@/lib/sanitize";
 import { CustomCalendar } from "@/components/CustomCalendar";
 import { Pagination } from "@/components/Pagination";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
+import { getActiveCompanyId } from "@/lib/api";
 
 type NewsItem = {
   id: string;
@@ -46,6 +49,13 @@ export default function BeritaPage() {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
+  // Reset offset and data when company changes
+  useEffect(() => {
+    setNews([]);
+    setCategories([]);
+    setOffset(0);
+  }, [activeCompanyId]);
+
   // Reset offset when search, category, or date filter changes
   useEffect(() => {
     setOffset(0);
@@ -55,15 +65,23 @@ export default function BeritaPage() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
+        const compId = activeCompanyId || getActiveCompanyId();
+        const catCacheKey = buildCacheKey("news_categories", compId);
+        const cachedCats = getCachedData<{ id: string; name: string }[]>(catCacheKey);
+        if (cachedCats) {
+          setCategories(cachedCats.data);
+        }
+
         const token = localStorage.getItem("accessToken");
         if (!token) return;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+        if (compId) headers["x-company-id"] = compId;
         const resCat = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news/categories", { headers });
         if (resCat.ok) {
           const dataCat = await resCat.json();
           if (dataCat.success && Array.isArray(dataCat.data)) {
             setCategories(dataCat.data);
+            setCachedData(catCacheKey, dataCat.data);
           }
         }
       } catch (err) {
@@ -76,7 +94,23 @@ export default function BeritaPage() {
   // Fetch paginated news from backend
   const fetchNews = useCallback(async () => {
     try {
-      setIsLoading(true);
+      const compId = activeCompanyId || getActiveCompanyId();
+      const cacheKey = buildCacheKey("news", compId, {
+        limit,
+        offset,
+        searchQuery,
+        selectedCategory,
+        selectedDate
+      });
+      const cachedNews = getCachedData<NewsItem[]>(cacheKey);
+      if (cachedNews) {
+        setNews(cachedNews.data);
+        if (typeof cachedNews.total === "number") setTotalNews(cachedNews.total);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+
       const token = localStorage.getItem("accessToken");
       if (!token) {
         router.push("/login");
@@ -84,8 +118,8 @@ export default function BeritaPage() {
       }
       
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
 
       const params = new URLSearchParams();
@@ -98,9 +132,11 @@ export default function BeritaPage() {
       const resNews = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/news?${params.toString()}`, { headers });
       const dataNews = await resNews.json();
       if (dataNews.success) {
-        setNews(dataNews.data || []);
+        const items = dataNews.data || [];
         const total = dataNews.pagination?.total ?? dataNews.meta?.total ?? (dataNews.data?.length || 0);
+        setNews(items);
         setTotalNews(total);
+        setCachedData(cacheKey, items, total);
       }
     } catch (error) {
       console.error("Error fetching news:", error);
@@ -278,11 +314,8 @@ export default function BeritaPage() {
 
         {/* News List */}
         <div className="flex flex-col gap-3.5 mt-1">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
-              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-              <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
-            </div>
+          {isLoading && news.length === 0 ? (
+            <CardListSkeleton count={3} type="news" />
           ) : news.length === 0 ? (
             <div className="py-8 text-center flex flex-col items-center justify-center">
               <p className="text-sm text-gray-500">
@@ -301,7 +334,7 @@ export default function BeritaPage() {
             <>
               {news.map((item) => (
                 <div
-                  key={item.id}
+                  key={`news-${item.id}`}
                   onClick={() => router.push(`/berita/${item.id}?from=/berita`)}
                   className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#dce9df] hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
                 >
@@ -310,6 +343,8 @@ export default function BeritaPage() {
                     <img
                       src={item.cover_image_url}
                       alt={sanitizeText(item.title)}
+                      loading="lazy"
+                      decoding="async"
                       className="w-[84px] h-[84px] rounded-[16px] shrink-0 object-cover"
                       style={{ objectFit: 'cover' }}
                     />

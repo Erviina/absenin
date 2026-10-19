@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronLeft, Plus, User, Users, Calendar, Clock, CheckCircle2, Check, AtSign, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
@@ -15,6 +15,8 @@ import { ViewAllButton } from "@/components/ViewAllButton";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { getActiveCompanyId } from "@/lib/api";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
 export default function TugasPage() {
   const router = useRouter();
@@ -41,16 +43,45 @@ export default function TugasPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
 
+  const activeFetchCompanyIdRef = useRef<string | null>(null);
+
+  // Reset on company change
+  useEffect(() => {
+    setTasks([]);
+    setCompanyMembers([]);
+    setIsLoadingTasks(true);
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setTasks([]);
+      setCompanyMembers([]);
+      setIsLoadingTasks(true);
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, []);
+
   useEffect(() => {
     const fetchTasks = async () => {
       if (isCompanyLoading) return;
       const compId = activeCompanyId || getActiveCompanyId();
+      activeFetchCompanyIdRef.current = compId;
       if (!compId) {
         setTasks([]);
         setIsLoadingTasks(false);
         return;
       }
-      setIsLoadingTasks(true);
+
+      const cacheKey = buildCacheKey("tasks", compId);
+      const cached = getCachedData<any[]>(cacheKey);
+      if (cached) {
+        setTasks(cached.data);
+        setIsLoadingTasks(false);
+      } else {
+        setIsLoadingTasks(true);
+      }
+
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) return;
@@ -63,16 +94,22 @@ export default function TugasPage() {
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", {
           headers
         });
+        if (activeFetchCompanyIdRef.current !== compId) return;
+
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {
             setTasks(data);
+            setCachedData(cacheKey, data);
           }
         }
       } catch (err) {
+        if (activeFetchCompanyIdRef.current !== compId) return;
         console.error("Failed to fetch tasks", err);
       } finally {
-        setIsLoadingTasks(false);
+        if (activeFetchCompanyIdRef.current === compId) {
+          setIsLoadingTasks(false);
+        }
       }
     };
     fetchTasks();
@@ -84,6 +121,13 @@ export default function TugasPage() {
       if (isCompanyLoading) return;
       const compId = activeCompanyId || getActiveCompanyId();
       if (!compId) return;
+
+      const memKey = buildCacheKey("company_members", compId);
+      const cachedMems = getCachedData<any[]>(memKey);
+      if (cachedMems) {
+        setCompanyMembers(cachedMems.data);
+      }
+
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) return;
@@ -96,13 +140,17 @@ export default function TugasPage() {
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/members", {
           headers,
         });
+        if (activeFetchCompanyIdRef.current !== compId) return;
+
         if (res.ok) {
           const json = await res.json();
           if (json.success && Array.isArray(json.data)) {
             setCompanyMembers(json.data);
+            setCachedData(memKey, json.data);
           }
         }
       } catch (err) {
+        if (activeFetchCompanyIdRef.current !== compId) return;
         console.error("Failed to fetch company members", err);
       }
     };
@@ -121,6 +169,8 @@ export default function TugasPage() {
     
     // Optimistic update
     setTasks(tasks.map(x => x.id === id ? { ...x, completed: !x.completed } : x));
+    invalidateCache("tasks");
+    invalidateCache("dashboard_tasks");
 
     try {
       const headers: Record<string, string> = {
@@ -231,6 +281,8 @@ export default function TugasPage() {
         headers
       });
       if (res.ok) {
+        invalidateCache("tasks");
+        invalidateCache("dashboard_tasks");
         showToast("Tugas berhasil dihapus", "success");
       } else {
         showToast("Gagal menghapus tugas dari server", "error");
@@ -295,6 +347,8 @@ export default function TugasPage() {
       });
       
       if (res.ok) {
+        invalidateCache("tasks");
+        invalidateCache("dashboard_tasks");
         const savedTask = await res.json();
         if (editingTaskId) {
           setTasks(tasks.map(t => t.id === editingTaskId ? savedTask : t));
@@ -576,20 +630,23 @@ export default function TugasPage() {
               Simpan Tugas
             </PrimaryButton>
           </div>
-        ) : isLoadingTasks ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
-            <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-            <span className="text-[13px] font-medium text-[#7d998c]">Memuat daftar tugas...</span>
+        ) : isLoadingTasks && tasks.length === 0 ? (
+          <div className="flex flex-col gap-3">
+            <CardListSkeleton count={3} type="task" />
           </div>
         ) : isViewingUpcoming ? (
           /* ALL UPCOMING TASKS VIEW */
           <div className="flex flex-col">
             {upcomingTasks.length === 0 && (
-              <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas mendatang.</p>
+              isLoadingTasks ? (
+                <CardListSkeleton count={3} type="task" />
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas mendatang.</p>
+              )
             )}
             {upcomingTasks.map(task => (
               <SwipeableTaskItem 
-                key={task.id}
+                key={`task-${task.id}`}
                 task={task}
                 onToggle={toggleTask}
                 onEdit={handleEditTask}
@@ -614,11 +671,15 @@ export default function TugasPage() {
               
               <div className="flex flex-col">
                 {todayTasks.length === 0 && (
-                  <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas untuk hari ini.</p>
+                  isLoadingTasks ? (
+                    <CardListSkeleton count={2} type="task" />
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas untuk hari ini.</p>
+                  )
                 )}
                 {todayTasks.map(task => (
                   <SwipeableTaskItem 
-                    key={task.id}
+                    key={`task-${task.id}`}
                     task={task}
                     onToggle={toggleTask}
                     onEdit={handleEditTask}
@@ -640,11 +701,15 @@ export default function TugasPage() {
               
               <div className="flex flex-col">
                 {upcomingTasks.length === 0 && (
-                  <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas mendatang.</p>
+                  isLoadingTasks ? (
+                    <CardListSkeleton count={2} type="task" />
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas mendatang.</p>
+                  )
                 )}
                 {upcomingTasks.slice(0, 3).map(task => ( // Hanya tampil 3 teratas di tampilan ringkas
                   <SwipeableTaskItem 
-                    key={task.id}
+                    key={`task-${task.id}`}
                     task={task}
                     onToggle={toggleTask}
                     onEdit={handleEditTask}

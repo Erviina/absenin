@@ -9,6 +9,9 @@ import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
 import { Pagination } from "@/components/Pagination";
+import { getActiveCompanyId } from "@/lib/api";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
 type NewsItem = {
   id: string;
@@ -37,6 +40,12 @@ export default function KelolaBeritaPage() {
   const [totalNews, setTotalNews] = useState(0);
   const limit = 10;
 
+  // Reset offset and data on company change
+  useEffect(() => {
+    setNews([]);
+    setOffset(0);
+  }, [activeCompanyId]);
+
   // Reset offset when filter or search changes
   useEffect(() => {
     setOffset(0);
@@ -44,12 +53,28 @@ export default function KelolaBeritaPage() {
 
   const fetchNews = useCallback(async () => {
     try {
-      setIsLoading(true);
+      const companyId = activeCompanyId || getActiveCompanyId();
+      const cacheKey = buildCacheKey("admin_news", companyId, {
+        limit,
+        offset,
+        searchQuery,
+        activeFilter,
+      });
+
+      const cached = getCachedData<NewsItem[]>(cacheKey);
+      if (cached) {
+        setNews(cached.data);
+        if (typeof cached.total === "number") setTotalNews(cached.total);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (companyId) headers["x-company-id"] = companyId;
 
       const params = new URLSearchParams();
       params.set("limit", String(limit));
@@ -62,9 +87,11 @@ export default function KelolaBeritaPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setNews(data.data || []);
+        const items = data.data || [];
         const total = data.pagination?.total ?? data.meta?.total ?? (data.data?.length || 0);
+        setNews(items);
         setTotalNews(total);
+        setCachedData(cacheKey, items, total);
       }
     } catch (error) {
       console.error("Error fetching news:", error);
@@ -101,13 +128,17 @@ export default function KelolaBeritaPage() {
     try {
       const token = localStorage.getItem("accessToken");
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const companyId = activeCompanyId || getActiveCompanyId();
+      if (companyId) headers["x-company-id"] = companyId;
 
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/news/${id}`, {
         method: "DELETE",
         headers
       });
       if (res.ok) {
+        invalidateCache("news");
+        invalidateCache("admin_news");
+        invalidateCache("dashboard_news");
         setNews(news.filter(n => n.id !== id));
         showToast("Berita berhasil dihapus", "success");
       } else {
@@ -169,11 +200,8 @@ export default function KelolaBeritaPage() {
         </div>
 
         <div className="flex flex-col gap-4 mt-2">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
-              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-              <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
-            </div>
+          {isLoading && news.length === 0 ? (
+            <CardListSkeleton count={3} type="news" />
           ) : news.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-6">
               Belum ada berita yang diterbitkan.
@@ -181,7 +209,7 @@ export default function KelolaBeritaPage() {
           ) : (
             <>
               {news.map(item => (
-                <div key={item.id} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#dce9df]">
+                <div key={`news-${item.id}`} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#dce9df]">
                   <div 
                     onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
                     className="cursor-pointer shrink-0 group/img"
@@ -191,6 +219,8 @@ export default function KelolaBeritaPage() {
                       <img 
                         src={item.cover_image_url} 
                         alt={item.title} 
+                        loading="lazy"
+                        decoding="async"
                         className="w-[80px] h-[80px] rounded-[16px] object-cover group-hover/img:opacity-90 transition-opacity" 
                         style={{ objectFit: 'cover' }}
                       />
