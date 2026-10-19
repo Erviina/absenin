@@ -538,7 +538,7 @@ export default function AdminDashboardPage() {
         {/* Action Buttons */}
         <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex justify-between items-start mt-1">
           {[
-            { icon: Calendar, label: "Jadwal", path: "/admin/agenda" },
+            { icon: Calendar, label: "Agenda", path: "/admin/agenda" },
             { icon: FileCheck, label: "Perizinan", path: "/admin/izin", badge: pendingLeavesCount },
             { icon: Users2, label: "Karyawan", path: "/admin/karyawan", badge: karyawanBadgeCount },
             { icon: FileText, label: "Laporan", path: "/admin/laporan-kehadiran" },

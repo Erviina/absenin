@@ -403,13 +403,13 @@ function BuatBeritaForm() {
                   </div>
                 </div>
 
-                {/* Cover Image - Menyesuaikan ukuran asli gambar */}
+                {/* Cover Image - Auto cropping berdasarkan width dengan height fix */}
                 {previewUrl && (
-                  <div className="w-full rounded-[16px] overflow-hidden bg-gray-50/70 shadow-2xs border border-[#eef5f0] flex items-center justify-center">
+                  <div className="w-full h-[210px] sm:h-[260px] rounded-[16px] overflow-hidden bg-gray-50/70 shadow-2xs border border-[#eef5f0]">
                     <img
                       src={previewUrl}
                       alt="Pratinjau Sampul"
-                      className="w-full h-auto max-h-[450px] object-contain rounded-[16px]"
+                      className="w-full h-full object-cover rounded-[16px]"
                     />
                   </div>
                 )}

@@ -71,11 +71,20 @@ function MapControls({
   const handleFocusTarget = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const targetZoom = Math.max(map.getZoom(), 16);
-    map.flyTo([targetLat, targetLng], targetZoom, {
-      animate: true,
-      duration: 0.8,
-    });
+    map.stop();
+    const currentZoom = map.getZoom();
+    const targetZoom = Math.max(currentZoom, 16);
+    if (currentZoom === targetZoom) {
+      map.panTo([targetLat, targetLng], {
+        animate: true,
+        duration: 0.35,
+      });
+    } else {
+      map.setView([targetLat, targetLng], targetZoom, {
+        animate: true,
+        duration: 0.35,
+      });
+    }
   };
 
   const posClass = position === "bottom-right" 
@@ -123,6 +132,8 @@ function MapControls({
 
 const getCustomIcon = (label: string) => new L.DivIcon({
   className: "custom-leaflet-icon",
+  iconSize: [120, 68],
+  iconAnchor: [60, 44],
   html: `
     <div class="flex flex-col items-center justify-start w-[120px]">
       <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.35));">
@@ -144,8 +155,6 @@ const getCustomIcon = (label: string) => new L.DivIcon({
       ` : ""}
     </div>
   `,
-  iconSize: [120, 75],
-  iconAnchor: [60, 43],
 });
 
 const ALL_DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
@@ -395,29 +404,28 @@ export default function ProfilPerusahaanContent() {
     ? company.work_days 
     : ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
 
-  const startTime = company.work_start_time || "08:00";
-  const endTime = company.work_end_time || "17:00";
+  const formatTimeHHmm = (timeStr?: string | null, fallback = "08:00"): string => {
+    if (!timeStr) return fallback;
+    const parts = timeStr.trim().split(":");
+    if (parts.length >= 2) {
+      const h = (parts[0] || "08").padStart(2, "0");
+      const m = (parts[1] || "00").padStart(2, "0");
+      return `${h}:${m}`;
+    }
+    return timeStr;
+  };
+
+  const startTime = formatTimeHHmm(company.work_start_time, "08:00");
+  const endTime = formatTimeHHmm(company.work_end_time, "17:00");
   const lat = typeof company.latitude === "number" ? company.latitude : -6.9175;
   const lng = typeof company.longitude === "number" ? company.longitude : 107.6191;
 
   return (
     <div className="flex flex-col min-h-screen bg-[#FBFDFC]">
-      {/* TopBar with conditional Kelola action for management */}
+      {/* TopBar */}
       <TopBar 
         title="Profil Perusahaan" 
         onBack={() => router.back()}
-        rightAction={
-          canManageCompany ? (
-            <button
-              onClick={() => router.push("/admin/perusahaan")}
-              className="bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[12px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all shadow-sm"
-              title="Kelola Data Organisasi"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span>Kelola</span>
-            </button>
-          ) : undefined
-        }
       />
 
       <div className="flex-1 flex flex-col p-5 gap-5 sm:max-w-md mx-auto w-full pb-24">

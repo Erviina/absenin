@@ -18,8 +18,22 @@ export function CustomTimePicker({
 }: CustomTimePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const initialHour = value ? value.split(":")[0] || "08" : "08";
-  const initialMinute = value ? value.split(":")[1] || "00" : "00";
+  // Helper to ensure HH:mm formatting
+  const formatTimeHHmm = (t?: string | null): string => {
+    if (!t) return "";
+    const parts = t.trim().split(":");
+    if (parts.length >= 2) {
+      const h = (parts[0] || "08").padStart(2, "0");
+      const m = (parts[1] || "00").padStart(2, "0");
+      return `${h}:${m}`;
+    }
+    return t;
+  };
+
+  const displayValue = formatTimeHHmm(value);
+
+  const initialHour = value ? (value.split(":")[0] || "08").padStart(2, "0") : "08";
+  const initialMinute = value ? (value.split(":")[1] || "00").padStart(2, "0") : "00";
 
   const [tempHour, setTempHour] = useState(initialHour);
   const [tempMinute, setTempMinute] = useState(initialMinute);
@@ -29,22 +43,22 @@ export function CustomTimePicker({
 
   useEffect(() => {
     if (value) {
-      const [h, m] = value.split(":");
-      setTempHour(h || "08");
-      setTempMinute(m || "00");
+      const parts = value.split(":");
+      setTempHour((parts[0] || "08").padStart(2, "0"));
+      setTempMinute((parts[1] || "00").padStart(2, "0"));
     }
   }, [value]);
 
   // When modal opens, sync temp with current value and auto-scroll into view
   useEffect(() => {
     if (isOpen) {
-      const [h, m] = value ? value.split(":") : ["08", "00"];
-      setTempHour(h || "08");
-      setTempMinute(m || "00");
+      const parts = value ? value.split(":") : ["08", "00"];
+      const targetHour = (parts[0] || "08").padStart(2, "0");
+      const targetMinute = (parts[1] || "00").padStart(2, "0");
+      setTempHour(targetHour);
+      setTempMinute(targetMinute);
 
       const timer = setTimeout(() => {
-        const targetHour = h || "08";
-        const targetMinute = m || "00";
         if (hourButtonRefs.current[targetHour]) {
           hourButtonRefs.current[targetHour]?.scrollIntoView({ block: "center", behavior: "smooth" });
         }
@@ -75,8 +89,8 @@ export function CustomTimePicker({
         }`}
       >
         <Clock className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-[#356E3B] absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 pointer-events-none shrink-0" strokeWidth={2.5} />
-        <span className={`truncate text-[13px] sm:text-[14px] font-medium leading-none ${value ? "text-[#111827]" : "text-[#9CA3AF]"}`}>
-          {value || placeholder}
+        <span className={`truncate text-[13px] sm:text-[14px] font-medium leading-none ${displayValue ? "text-[#111827]" : "text-[#9CA3AF]"}`}>
+          {displayValue || placeholder}
         </span>
       </div>
 
