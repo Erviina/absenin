@@ -43,7 +43,36 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
         });
       }
 
-    const { email, name: fullName, picture: avatarUrl } = payload;
+      email = payload.email;
+      fullName = payload.name || "";
+      avatarUrl = payload.picture || "";
+    } else if (googleAccessToken) {
+      // Verify Google Access Token via Google userinfo endpoint
+      const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { Authorization: `Bearer ${googleAccessToken}` },
+      });
+
+      if (!userInfoRes.ok) {
+        return res.status(401).json({
+          success: false,
+          message: "Token Google tidak valid",
+          errors: [],
+        });
+      }
+
+      const userInfo = await userInfoRes.json();
+      if (!userInfo || !userInfo.email) {
+        return res.status(401).json({
+          success: false,
+          message: "Data profil Google tidak memiliki email",
+          errors: [],
+        });
+      }
+
+      email = userInfo.email;
+      fullName = userInfo.name || "";
+      avatarUrl = userInfo.picture || "";
+    }
 
     // Check if profile exists
     let profileResult = await db.select().from(profiles).where(eq(profiles.email, email));

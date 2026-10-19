@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Eye, Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Loader2, AlertCircle, RefreshCw, MoreVertical, Share2, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
+import { shareContent } from "@/lib/shareUtils";
 import { Pagination } from "@/components/Pagination";
+import { getActiveCompanyId } from "@/lib/api";
+import { invalidateCache } from "@/lib/clientCache";
 
 type NewsItem = {
   id: string;
@@ -27,29 +30,85 @@ export default function KelolaBeritaPage() {
   const { activeCompanyId, canCreate } = useCompany();
   const { showConfirm, showToast } = useDialog();
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Semua");
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   // Pagination states
   const [offset, setOffset] = useState(0);
   const [totalNews, setTotalNews] = useState(0);
   const limit = 10;
 
+  // Reset when company changes
+  useEffect(() => {
+    setNews([]);
+    setOffset(0);
+  }, [activeCompanyId]);
+
   // Reset offset when filter or search changes
   useEffect(() => {
     setOffset(0);
   }, [searchQuery, activeFilter]);
 
+  // Click outside to close more option menu
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setActiveMenuId(null);
+    };
+    if (activeMenuId) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [activeMenuId]);
+
+  // Fetch categories dynamically
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const compId = activeCompanyId || getActiveCompanyId();
+        const token = localStorage.getItem("accessToken");
+        if (!token) return;
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        if (compId) headers["x-company-id"] = compId;
+        const resCat = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news/categories", { headers });
+        if (resCat.ok) {
+          const dataCat = await resCat.json();
+          if (dataCat.success && Array.isArray(dataCat.data)) {
+            setCategories(dataCat.data);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching categories:", err);
+      }
+    };
+    fetchCategories();
+  }, [activeCompanyId]);
+
+  const categoryTabs = useMemo(() => {
+    const list = ["Semua"];
+    categories.forEach(c => {
+      if (c.name && !list.includes(c.name)) list.push(c.name);
+    });
+    if (list.length === 1) {
+      return ["Semua", "Pengumuman", "Berita", "Artikel"];
+    }
+    return list;
+  }, [categories]);
+
   const fetchNews = useCallback(async () => {
     try {
       setIsLoading(true);
+      setErrorMsg(null);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       
+      const compId = activeCompanyId || getActiveCompanyId();
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
 
       const params = new URLSearchParams();
       params.set("limit", String(limit));
@@ -61,13 +120,16 @@ export default function KelolaBeritaPage() {
         headers
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setNews(data.data || []);
         const total = data.pagination?.total ?? data.meta?.total ?? (data.data?.length || 0);
         setTotalNews(total);
+      } else {
+        setErrorMsg(data.message || "Gagal memuat berita");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching news:", error);
+      setErrorMsg(error?.message || "Terjadi kesalahan saat memuat berita");
     } finally {
       setIsLoading(false);
     }
@@ -101,17 +163,23 @@ export default function KelolaBeritaPage() {
     try {
       const token = localStorage.getItem("accessToken");
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/news/${id}`, {
         method: "DELETE",
         headers
       });
       if (res.ok) {
-        setNews(news.filter(n => n.id !== id));
+        invalidateCache("news");
+        invalidateCache("admin_news");
+        invalidateCache("dashboard_news");
+        setNews(prev => prev.filter(n => n.id !== id));
+        setTotalNews(prev => Math.max(0, prev - 1));
         showToast("Berita berhasil dihapus", "success");
       } else {
-        showToast("Gagal menghapus berita", "error");
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.message || "Gagal menghapus berita", "error");
       }
     } catch (error) {
       showToast("Error jaringan saat menghapus berita", "error");
@@ -153,14 +221,14 @@ export default function KelolaBeritaPage() {
 
         {/* Tabs / Filters */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
-          {["Semua", "Pengumuman", "Berita", "Artikel"].map((filter) => (
+          {categoryTabs.map((filter) => (
             <button 
               key={filter}
               onClick={() => setActiveFilter(filter)}
-              className={`px-5 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors ${
+              className={`px-5 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors cursor-pointer ${
                 activeFilter === filter 
                   ? "font-semibold bg-[#356E3B] text-white" 
-                  : "font-medium bg-white border border-gray-200 text-gray-500"
+                  : "font-medium bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"
               }`}
             >
               {filter}
@@ -174,80 +242,163 @@ export default function KelolaBeritaPage() {
               <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
               <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
             </div>
+          ) : errorMsg ? (
+            <div className="bg-white rounded-[20px] p-6 text-center border border-red-100 flex flex-col items-center gap-3">
+              <AlertCircle className="w-8 h-8 text-red-500" />
+              <p className="text-[13px] text-gray-600">{errorMsg}</p>
+              <button
+                type="button"
+                onClick={fetchNews}
+                className="px-4 py-2 bg-[#356E3B] text-white text-[12px] font-bold rounded-full hover:bg-[#2a582f] transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Coba Lagi
+              </button>
+            </div>
           ) : news.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-6">
-              Belum ada berita yang diterbitkan.
-            </p>
+            <div className="bg-white rounded-[20px] p-8 text-center border border-[#eef5f0]">
+              <p className="text-sm text-gray-500">
+                Belum ada berita yang diterbitkan.
+              </p>
+            </div>
           ) : (
             <>
-              {news.map(item => (
-                <div key={item.id} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#dce9df]">
+              {news.map((item, index) => {
+                const isNearBottom = index >= news.length - 2 && news.length > 2;
+                return (
                   <div 
+                    key={item.id} 
                     onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                    className="cursor-pointer shrink-0 group/img"
-                    title="Klik untuk langsung melihat berita"
+                    className={`bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all hover:border-[#356E3B]/30 hover:shadow-md cursor-pointer active:scale-[0.99] group relative ${
+                      activeMenuId === item.id ? "z-30" : "z-0"
+                    }`}
                   >
-                    {item.cover_image_url ? (
-                      <img 
-                        src={item.cover_image_url} 
-                        alt={item.title} 
-                        className="w-[80px] h-[80px] rounded-[16px] object-cover group-hover/img:opacity-90 transition-opacity" 
-                        style={{ objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div className="w-[80px] h-[80px] bg-[#f4f9f6] rounded-[16px] flex items-center justify-center border border-[#eef5f0]">
-                        <ImageIcon className="w-6 h-6 text-[#7d998c]" />
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col flex-1 justify-center min-w-0">
-                    {item.category?.name && (
-                      <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
-                        {item.category.name}
-                      </span>
-                    )}
-                    <h3 
-                      onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                      className="text-[#1E4738] hover:text-[#356E3B] hover:underline cursor-pointer text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors"
-                      title="Klik untuk langsung melihat berita"
-                    >
-                      {sanitizeText(item.title)}
-                    </h3>
-                    <p className="text-[#7d998c] text-[11px] font-medium line-clamp-1 mb-2">
-                      {formatDate(item.created_at)}
-                    </p>
+                    {/* Thumbnail */}
+                    <div className="shrink-0">
+                      {item.cover_image_url ? (
+                        <img 
+                          src={item.cover_image_url} 
+                          alt={item.title} 
+                          className="w-[84px] h-[84px] rounded-[16px] object-cover group-hover:opacity-95 transition-opacity" 
+                          style={{ objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <div className="w-[84px] h-[84px] bg-[#f4f9f6] rounded-[16px] flex items-center justify-center border border-[#eef5f0] text-[#7d998c]">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                      )}
+                    </div>
                     
-                    <div className="flex gap-2 mt-auto flex-wrap">
-                      <button 
-                        onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                        className="text-[#1E4738] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
-                        title="Lihat Berita"
-                      >
-                        <Eye className="w-3 h-3 text-[#1E4738]" /> Lihat
-                      </button>
-                      <button 
-                        onClick={() => handleOpenEdit(item)}
-                        className="text-[#356E3B] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
-                      >
-                        <Edit2 className="w-3 h-3" /> Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(item.id)}
+                    {/* Details */}
+                    <div className="flex flex-col flex-1 justify-between min-w-0 pr-1">
+                      <div>
+                        {item.category?.name && (
+                          <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit inline-block mb-1.5">
+                            {item.category.name}
+                          </span>
+                        )}
+                        <h3 className="text-[#1E4738] group-hover:text-[#356E3B] text-[14px] font-bold leading-snug line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors">
+                          {sanitizeText(item.title)}
+                        </h3>
+                      </div>
+
+                      <div className="flex items-center text-[#7d998c] text-[11px] font-medium pt-2 mt-auto">
+                        <Calendar className="w-3.5 h-3.5 shrink-0 opacity-70 mr-1.5" />
+                        <span>{formatDate(item.created_at)}</span>
+                      </div>
+                    </div>
+
+                    {/* More Action Menu (Titik Tiga) */}
+                    <div 
+                      className="relative shrink-0 self-start -mr-1 -mt-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuId(activeMenuId === item.id ? null : item.id);
+                        }}
                         disabled={isDeletingId === item.id}
-                        className="text-[#e11d48] text-[11px] font-bold bg-[#ffe4e6] hover:bg-[#fecdd3] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-8 h-8 rounded-full hover:bg-gray-100 active:scale-95 text-gray-500 hover:text-[#1E4738] flex items-center justify-center transition-all cursor-pointer"
+                        aria-label="Menu Opsi Berita"
+                        title="Opsi Berita"
                       >
                         {isDeletingId === item.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <Loader2 className="w-4 h-4 animate-spin text-[#e11d48]" />
                         ) : (
-                          <Trash2 className="w-3 h-3" />
+                          <MoreVertical className="w-4 h-4" />
                         )}
-                        {isDeletingId === item.id ? "Menghapus..." : "Hapus"}
                       </button>
+
+                      {/* Dropdown Menu */}
+                      {activeMenuId === item.id && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-30" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuId(null);
+                            }} 
+                          />
+                          <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className={`absolute right-0 ${
+                              isNearBottom ? "bottom-full mb-1" : "top-full mt-1"
+                            } w-36 bg-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.18),0_8px_10px_-6px_rgba(0,0,0,0.1)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150`}
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleOpenEdit(item);
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                              <span>Edit Berita</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                shareContent({
+                                  title: item.title,
+                                  text: item.title,
+                                  path: `/berita/${item.id}`,
+                                  onToast: showToast,
+                                });
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                              <span>Bagikan</span>
+                            </button>
+
+                            <div className="h-[1px] bg-gray-100 mx-2 my-1" />
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleDelete(item.id);
+                              }}
+                              disabled={isDeletingId === item.id}
+                              className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                              <span>Hapus Berita</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               <Pagination
                 total={totalNews}
