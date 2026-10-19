@@ -12,7 +12,7 @@ function GabungPerusahaanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useDialog();
-  const { refreshMemberships, setCurrentUser } = useCompany();
+  const { refreshMemberships, setCurrentUser, activeCompanyId, currentUser } = useCompany();
   const [kode, setKode] = useState("");
   const [, setActiveRequestId] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -106,10 +106,22 @@ function GabungPerusahaanContent() {
           } else if (data.data.status === 'approved') {
             const seen = localStorage.getItem(`join_accepted_seen_${data.data.id}`);
             const forceSuccess = searchParams.get("success") === "true";
-            if (!seen || forceSuccess) {
+            const isFromProfile = searchParams.get("from") === "profil";
+            const hasActiveCompany = !!(activeCompanyId || currentUser?.company);
+
+            // Layar sukses / auto-redirect ke dashboard hanya boleh berjalan jika:
+            // 1. Ada parameter eksplisit ?success=true (dari notifikasi ACC atau transisi polling)
+            // 2. ATAU pengguna benar-benar belum memiliki perusahaan aktif sama sekali dan belum pernah melihat konfirmasi
+            if (forceSuccess || (!seen && !hasActiveCompany && !isFromProfile)) {
               await completeJoinAndGoToDashboard(data.data.id, data.data.company_id);
               return;
             } else {
+              // Jika sudah menjadi anggota aktif atau sudah pernah melihat konfirmasi, tandai seen dan tetap idle
+              if (data.data.id) {
+                try {
+                  localStorage.setItem(`join_accepted_seen_${data.data.id}`, "true");
+                } catch {}
+              }
               setStatus('idle');
             }
           } else {
@@ -123,7 +135,7 @@ function GabungPerusahaanContent() {
       }
     };
     fetchStatus();
-  }, [searchParams, completeJoinAndGoToDashboard]);
+  }, [searchParams, completeJoinAndGoToDashboard, activeCompanyId, currentUser]);
 
   // Polling saat status pending sehingga ketika admin meng-ACC langsung otomatis masuk ke Dashboard
   useEffect(() => {

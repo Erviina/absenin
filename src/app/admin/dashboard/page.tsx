@@ -27,6 +27,7 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
+import { getActiveCompanyId } from "@/lib/api";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -99,7 +100,8 @@ export default function AdminDashboardPage() {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (compId) headers["x-company-id"] = compId;
 
       const m = targetDate.getMonth() + 1;
       const y = targetDate.getFullYear();
@@ -146,8 +148,9 @@ export default function AdminDashboardPage() {
       }
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
 
       const m = selectedDate.getMonth() + 1;
@@ -262,8 +265,9 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
+    if (isCompanyLoading) return;
     fetchDashboardData();
-  }, [router, activeCompanyId]);
+  }, [router, activeCompanyId, isCompanyLoading]);
 
   // Fallback company if /companies/me is loading or failed but activeCompany is available
   const displayCompany = company || (activeCompany ? {

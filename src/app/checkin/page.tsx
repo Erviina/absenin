@@ -20,9 +20,11 @@ const LeafletMap = dynamic(() => import('@/components/MapLocation'), {
   loading: () => <div className="w-full h-full bg-[#e6eedc] animate-pulse" />
 });
 
+import { getActiveCompanyId } from "@/lib/api";
+
 export default function CheckinPage() {
   const router = useRouter();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, isLoading: isCompanyLoading } = useCompany();
   const { showToast } = useDialog();
   const [step, setStep] = useState(1);
   const [workMode, setWorkMode] = useState<"WFO" | "WFH">("WFO");
@@ -272,6 +274,8 @@ export default function CheckinPage() {
   };
 
   useEffect(() => {
+    if (isCompanyLoading) return;
+
     fetchLocation();
 
     const fetchUser = async () => {
@@ -279,10 +283,16 @@ export default function CheckinPage() {
         const token = localStorage.getItem("accessToken");
         if (!token) throw new Error("Token tidak ditemukan");
 
+        const compId = activeCompanyId || getActiveCompanyId();
+        const headers: Record<string, string> = {
+          "Authorization": `Bearer ${token}`
+        };
+        if (compId) {
+          headers["x-company-id"] = compId;
+        }
+
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
+          headers
         });
 
         if (!res.ok) throw new Error("Gagal mengambil data user");
@@ -298,7 +308,8 @@ export default function CheckinPage() {
 
     const fetchAttendanceStatus = async () => {
       try {
-        if (!activeCompanyId) {
+        const compId = activeCompanyId || getActiveCompanyId();
+        if (!compId) {
           setSubmitError("Silakan masuk atau bergabung ke perusahaan terlebih dahulu untuk melakukan presensi.");
           setIsStatusLoading(false);
           return;
@@ -311,8 +322,8 @@ export default function CheckinPage() {
         const headers: Record<string, string> = {
           "Authorization": `Bearer ${token}`
         };
-        if (activeCompanyId) {
-          headers["x-company-id"] = activeCompanyId;
+        if (compId) {
+          headers["x-company-id"] = compId;
         }
 
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/today`, {
@@ -349,10 +360,9 @@ export default function CheckinPage() {
       }
     };
 
-    fetchLocation();
     fetchUser();
     fetchAttendanceStatus();
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isCompanyLoading]);
 
   const handleBack = () => {
     if (step > 1) setStep(step - 1);
@@ -367,7 +377,8 @@ export default function CheckinPage() {
       return;
     }
 
-    if (!activeCompanyId) {
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
       setSubmitError("Silakan masuk atau bergabung ke perusahaan terlebih dahulu untuk melakukan presensi.");
       return;
     }
@@ -384,8 +395,8 @@ export default function CheckinPage() {
     if (attendanceStatus === "NOT_CHECKED_IN") {
       formData.append("work_mode", workMode);
     }
-    if (activeCompanyId) {
-      formData.append("company_id", activeCompanyId);
+    if (compId) {
+      formData.append("company_id", compId);
     }
     formData.append("latitude", location.lat.toString());
     formData.append("longitude", location.lng.toString());
@@ -398,8 +409,8 @@ export default function CheckinPage() {
       const headers: Record<string, string> = {
         "Authorization": `Bearer ${token}`
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {

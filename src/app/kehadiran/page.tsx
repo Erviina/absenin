@@ -13,13 +13,14 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate, formatDateWithDay, formatDateRange } from "@/lib/dateUtils";
 import { Pagination } from "@/components/Pagination";
+import { getActiveCompanyId } from "@/lib/api";
 
 let cachedAttendances: any[] = [];
 let cachedAttendancesCompanyId: string | null = null;
 
 export default function KehadiranPage() {
   const router = useRouter();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, isLoading: isCompanyLoading } = useCompany();
   const { showToast } = useDialog();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeCalendar, setActiveCalendar] = useState<"start" | "end" | null>(null);
@@ -87,7 +88,9 @@ export default function KehadiranPage() {
   };
 
   const fetchAttendances = async (silent = false) => {
-    if (!activeCompanyId) {
+    if (isCompanyLoading) return;
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
       setAttendances([]);
       setTotal(0);
       setIsLoading(false);
@@ -119,8 +122,8 @@ export default function KehadiranPage() {
       const headers: Record<string, string> = {
         "Authorization": `Bearer ${token}`
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
 
       const res = await fetch(url, { headers });
@@ -144,7 +147,7 @@ export default function KehadiranPage() {
 
   useEffect(() => {
     fetchAttendances(false);
-  }, [appliedStartDate, appliedEndDate, activeCompanyId, debouncedSearch, offset]);
+  }, [appliedStartDate, appliedEndDate, activeCompanyId, isCompanyLoading, debouncedSearch, offset]);
 
   const getDayName = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -162,7 +165,8 @@ export default function KehadiranPage() {
   const fetchAllForExport = async () => {
     try {
       const token = localStorage.getItem("accessToken");
-      if (!token || !activeCompanyId) return attendances;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (!token || !compId) return attendances;
       const queryParams = new URLSearchParams();
       if (appliedStartDate) queryParams.append("start_date", appliedStartDate);
       if (appliedEndDate) queryParams.append("end_date", appliedEndDate);
@@ -171,7 +175,7 @@ export default function KehadiranPage() {
       queryParams.append("offset", "0");
       const headers: Record<string, string> = {
         "Authorization": `Bearer ${token}`,
-        "x-company-id": activeCompanyId
+        "x-company-id": compId
       };
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances?${queryParams.toString()}`, { headers });
       const data = await res.json();

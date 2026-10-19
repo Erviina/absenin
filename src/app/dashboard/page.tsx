@@ -27,6 +27,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 import { getPersonalModePreference } from "@/lib/personalMode";
+import { getActiveCompanyId } from "@/lib/api";
 import { 
   evaluateSchedule, 
   getNextCheckInSchedule, 
@@ -124,8 +125,9 @@ export default function DashboardPage() {
 
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
         // Setelah isCompanyLoading selesai, activeCompanyId sudah terverifikasi dari backend
-        if (activeCompanyId) {
-          headers["x-company-id"] = activeCompanyId;
+        const compId = activeCompanyId || getActiveCompanyId();
+        if (compId) {
+          headers["x-company-id"] = compId;
         }
 
         const [authRes, newsRes, attendRes, notifRes, tasksRes, agendasRes] = await Promise.all([
@@ -148,23 +150,6 @@ export default function DashboardPage() {
             if (!authData.data.user?.company && !activeCompanyId && !skipCompanyPrompt) {
               router.push("/cek-perusahaan");
               return;
-            }
-
-            // Cek jika pengguna baru saja di-ACC oleh admin dan belum melihat layar "Berhasil Bergabung!"
-            try {
-              const joinReqRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              const joinReqData = await joinReqRes.json();
-              if (joinReqData.success && joinReqData.data && joinReqData.data.status === 'approved') {
-                const seen = localStorage.getItem(`join_accepted_seen_${joinReqData.data.id}`);
-                if (!seen) {
-                  router.push("/gabung-perusahaan");
-                  return;
-                }
-              }
-            } catch (e) {
-              // Abaikan jika error
             }
           }
         } catch (e) {

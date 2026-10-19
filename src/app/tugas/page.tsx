@@ -14,10 +14,11 @@ import { ViewAllButton } from "@/components/ViewAllButton";
 
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
+import { getActiveCompanyId } from "@/lib/api";
 
 export default function TugasPage() {
   const router = useRouter();
-  const { activeCompanyId, activeCompany } = useCompany();
+  const { activeCompanyId, activeCompany, isLoading: isCompanyLoading } = useCompany();
   const { showConfirm, showToast } = useDialog();
   
   const [activeTab, setActiveTab] = useState<"personal" | "group">("personal");
@@ -42,7 +43,9 @@ export default function TugasPage() {
 
   useEffect(() => {
     const fetchTasks = async () => {
-      if (!activeCompanyId) {
+      if (isCompanyLoading) return;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (!compId) {
         setTasks([]);
         setIsLoadingTasks(false);
         return;
@@ -54,8 +57,8 @@ export default function TugasPage() {
         const headers: Record<string, string> = {
           "Authorization": "Bearer " + token,
         };
-        if (activeCompanyId) {
-          headers["x-company-id"] = activeCompanyId;
+        if (compId) {
+          headers["x-company-id"] = compId;
         }
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", {
           headers
@@ -73,19 +76,22 @@ export default function TugasPage() {
       }
     };
     fetchTasks();
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isCompanyLoading]);
 
   // Fetch company members for mentions
   useEffect(() => {
     const fetchMembers = async () => {
+      if (isCompanyLoading) return;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (!compId) return;
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) return;
         const headers: Record<string, string> = {
           Authorization: "Bearer " + token,
         };
-        if (activeCompanyId) {
-          headers["x-company-id"] = activeCompanyId;
+        if (compId) {
+          headers["x-company-id"] = compId;
         }
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/members", {
           headers,
@@ -102,10 +108,11 @@ export default function TugasPage() {
     };
 
     fetchMembers();
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isCompanyLoading]);
 
   const toggleTask = async (id: string) => {
-    if (!activeCompanyId) {
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
       return;
     }
@@ -120,8 +127,8 @@ export default function TugasPage() {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + localStorage.getItem("accessToken")
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
       await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
         method: "PATCH",
@@ -195,7 +202,8 @@ export default function TugasPage() {
   });
 
   const handleDeleteTask = async (id: string) => {
-    if (!activeCompanyId) {
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
       return;
     }
@@ -215,8 +223,8 @@ export default function TugasPage() {
       const headers: Record<string, string> = {
         "Authorization": "Bearer " + localStorage.getItem("accessToken")
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
         method: "DELETE",
@@ -235,13 +243,14 @@ export default function TugasPage() {
 
   const handleSaveTask = async () => {
     if (isSaving) return;
-    if (!activeCompanyId) {
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
       return;
     }
     if (!taskTitle.trim()) return;
 
-    if (activeTab === "group" && !activeCompanyId) {
+    if (activeTab === "group" && !compId) {
       showToast("Pilih perusahaan terlebih dahulu untuk membuat tugas grup", "error");
       return;
     }
@@ -259,8 +268,8 @@ export default function TugasPage() {
       type: activeTab, // "personal" or "group"
     };
 
-    if (activeCompanyId) {
-      payload.company_id = activeCompanyId;
+    if (compId) {
+      payload.company_id = compId;
     }
 
     if (activeTab === "group") {
@@ -275,8 +284,8 @@ export default function TugasPage() {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + localStorage.getItem("accessToken")
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
 
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + url, {

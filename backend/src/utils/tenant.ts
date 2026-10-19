@@ -62,7 +62,36 @@ export async function resolveTenant(
     return null;
   }
 
-  // 2. Look for user's primary/active membership in company_members
+  // 2. Check if user's current profiles.company_id is an active membership
+  const profileMemRes = await db.execute(sql`
+    SELECT p.company_id, cm.role
+    FROM profiles p
+    JOIN company_members cm 
+      ON cm.profile_id = p.id 
+     AND cm.company_id = p.company_id 
+     AND cm.status = 'active' 
+     AND cm.deleted_at IS NULL
+    WHERE p.id = ${userId} 
+      AND p.deleted_at IS NULL
+    LIMIT 1
+  `);
+
+  if (profileMemRes.rows.length > 0 && profileMemRes.rows[0].company_id) {
+    const cid = profileMemRes.rows[0].company_id as string;
+    const rawRole = (profileMemRes.rows[0].role as string || "member").toLowerCase();
+    let role: TenantContext["role"] = "member";
+    if (rawRole === "owner") role = "owner";
+    else if (rawRole === "admin") role = "admin";
+    else if (rawRole === "manager") role = "manager";
+
+    return {
+      companyId: cid,
+      role,
+      isManagement: ["owner", "admin", "manager"].includes(role),
+    };
+  }
+
+  // 3. Fallback: Look for user's primary/active membership in company_members
   const activeMemRes = await db.execute(sql`
     SELECT company_id, role
     FROM company_members
@@ -82,7 +111,7 @@ export async function resolveTenant(
     else if (rawRole === "admin") role = "admin";
     else if (rawRole === "manager") role = "manager";
 
-    // Keep profiles.company_id in sync if different
+    // Keep profiles.company_id in sync if empty or different
     db.execute(sql`
       UPDATE profiles SET company_id = ${cid} WHERE id = ${userId} AND (company_id IS NULL OR company_id != ${cid})
     `).catch(console.error);
@@ -94,7 +123,7 @@ export async function resolveTenant(
     };
   }
 
-  // 3. Fallback to legacy profiles.company_id (only if valid and not inactive/deleted)
+  // 4. Fallback to legacy profiles.company_id (only if valid and not inactive/deleted)
   const profileRes = await db.execute(sql`
     SELECT company_id FROM profiles WHERE id = ${userId} AND deleted_at IS NULL
   `);

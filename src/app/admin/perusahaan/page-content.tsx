@@ -45,11 +45,15 @@ const getCustomIcon = (label: string) => new L.DivIcon({
 function MapControls({ 
   targetLat, 
   targetLng,
-  position = "top-right"
+  position = "top-right",
+  onLocate,
+  isLocating = false
 }: { 
   targetLat: number; 
   targetLng: number;
   position?: "top-right" | "bottom-right";
+  onLocate?: (flyToCoords: (lat: number, lng: number) => void) => void;
+  isLocating?: boolean;
 }) {
   const map = useMap();
   const controlsRef = useRef<HTMLDivElement>(null);
@@ -76,6 +80,15 @@ function MapControls({
   const handleFocusTarget = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (onLocate) {
+      onLocate((lat: number, lng: number) => {
+        map.flyTo([lat, lng], Math.max(map.getZoom(), 16), {
+          animate: true,
+          duration: 0.8,
+        });
+      });
+      return;
+    }
     const targetZoom = Math.max(map.getZoom(), 16);
     map.flyTo([targetLat, targetLng], targetZoom, {
       animate: true,
@@ -116,11 +129,16 @@ function MapControls({
       <button
         type="button"
         onClick={handleFocusTarget}
-        title="Pusatkan ke Lokasi Target"
-        aria-label="Pusatkan ke Lokasi Target"
-        className="w-8 h-8 bg-white/95 backdrop-blur-xs rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 border border-gray-200/80 transition-all active:scale-95 text-[#356E3B] hover:text-[#1E4738] cursor-pointer"
+        disabled={isLocating}
+        title={onLocate ? (isLocating ? "Mendeteksi lokasi GPS..." : "Deteksi Lokasi GPS Saat Ini") : "Pusatkan ke Lokasi Target"}
+        aria-label={onLocate ? "Deteksi Lokasi GPS Saat Ini" : "Pusatkan ke Lokasi Target"}
+        className="w-8 h-8 bg-white/95 backdrop-blur-xs rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 active:bg-gray-100 border border-gray-200/80 transition-all active:scale-95 text-[#356E3B] hover:text-[#1E4738] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        <Target className="w-4 h-4 stroke-[2.5]" />
+        {isLocating ? (
+          <Loader2 className="w-4 h-4 animate-spin text-[#356E3B]" />
+        ) : (
+          <Target className="w-4 h-4 stroke-[2.5]" />
+        )}
       </button>
     </div>
   );
@@ -617,6 +635,7 @@ export default function KelolaPerusahaanPage() {
   // Temp state for modal inputs
   const [tempLat, setTempLat] = useState(lat);
   const [tempLng, setTempLng] = useState(lng);
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
 
   // Jadwal State
   const [isKelolaJadwalOpen, setIsKelolaJadwalOpen] = useState(false);
@@ -679,7 +698,70 @@ export default function KelolaPerusahaanPage() {
     }
   };
 
+  const handleDetectCurrentLocation = (flyToMap?: (lat: number, lng: number) => void) => {
+    if (isDetectingGps) return;
+
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      showToast("Geolokasi tidak didukung oleh browser Anda.", "error");
+      return;
+    }
+
+    setIsDetectingGps(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const newLatStr = latitude.toFixed(6);
+        const newLngStr = longitude.toFixed(6);
+
+        // Update form coordinates
+        setTempLat(newLatStr);
+        setTempLng(newLngStr);
+
+        // Center map to detected coordinates
+        if (flyToMap) {
+          flyToMap(latitude, longitude);
+        }
+
+        showToast("Lokasi GPS berhasil terdeteksi!", "success");
+
+        // Reverse geocode to update address in the modal search bar
+        setIsSearching(true);
+        try {
+          const addr = await reverseGeocodeCoord(latitude, longitude);
+          if (addr) {
+            skipSearch.current = true;
+            setSearchQuery(addr);
+          }
+        } catch (e) {
+          console.warn("Reverse geocode GPS coords failed:", e);
+        } finally {
+          setIsSearching(false);
+          setIsDetectingGps(false);
+        }
+      },
+      (error) => {
+        setIsDetectingGps(false);
+        let msg = "Gagal mendeteksi lokasi GPS.";
+        if (error.code === 1 /* PERMISSION_DENIED */) {
+          msg = "Izin akses lokasi ditolak. Silakan izinkan akses lokasi di pengaturan browser.";
+        } else if (error.code === 2 /* POSITION_UNAVAILABLE */) {
+          msg = "Informasi lokasi GPS tidak tersedia. Pastikan GPS/layanan lokasi aktif pada perangkat Anda.";
+        } else if (error.code === 3 /* TIMEOUT */) {
+          msg = "Waktu pencarian lokasi GPS habis. Silakan klik tombol lagi.";
+        }
+        showToast(msg, "warning");
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+      }
+    );
+  };
+
   const openModal = () => {
+    setIsDetectingGps(false);
     setTempLat(lat);
     setTempLng(lng);
     skipSearch.current = true;
@@ -1248,6 +1330,8 @@ export default function KelolaPerusahaanPage() {
                     <MapControls 
                       targetLat={parseFloat(tempLat) || -6.9175} 
                       targetLng={parseFloat(tempLng) || 107.6191} 
+                      onLocate={handleDetectCurrentLocation}
+                      isLocating={isDetectingGps}
                     />
                     <ModalMapEvents onLocationSelected={handleMapClick} />
                     <MapUpdater lat={parseFloat(tempLat) || -6.9175} lng={parseFloat(tempLng) || 107.6191} />

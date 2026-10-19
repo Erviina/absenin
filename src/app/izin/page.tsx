@@ -14,6 +14,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDateRange } from "@/lib/dateUtils";
+import { getActiveCompanyId } from "@/lib/api";
 
 // Tipe Data untuk Pengajuan Izin
 type IzinRequest = {
@@ -27,7 +28,7 @@ type IzinRequest = {
 
 export default function IzinPage() {
   const router = useRouter();
-  const { activeCompanyId, activeCompany } = useCompany();
+  const { activeCompanyId, activeCompany, isLoading: isCompanyLoading } = useCompany();
   const { showToast } = useDialog();
   const [user, setUser] = useState<any>(null);
 
@@ -76,12 +77,14 @@ export default function IzinPage() {
   // Fetch categories once
   useEffect(() => {
     const fetchCategories = async () => {
-      if (!activeCompanyId) return;
+      if (isCompanyLoading) return;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (!compId) return;
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) return;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+        if (compId) headers["x-company-id"] = compId;
         const catRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/categories", { headers });
         const catData = await catRes.json();
         if (catData.success) {
@@ -93,11 +96,13 @@ export default function IzinPage() {
       }
     };
     fetchCategories();
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isCompanyLoading]);
 
   // Fetch paginated leaves
   const fetchLeaves = useCallback(async () => {
-    if (!activeCompanyId) {
+    if (isCompanyLoading) return;
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
       setPengajuanList([]);
       setTotalLeaves(0);
       return;
@@ -111,8 +116,8 @@ export default function IzinPage() {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
 
       const params = new URLSearchParams();
@@ -137,7 +142,7 @@ export default function IzinPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeCompanyId, limit, offset, filterCategory, filterDate]);
+  }, [activeCompanyId, isCompanyLoading, limit, offset, filterCategory, filterDate]);
 
   useEffect(() => {
     fetchLeaves();
@@ -166,7 +171,8 @@ export default function IzinPage() {
 
   // Handler form submit
   const handleSubmit = async () => {
-    if (!activeCompanyId) {
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
       return;
     }
@@ -210,8 +216,8 @@ export default function IzinPage() {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
 
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves", {
@@ -890,10 +896,10 @@ export default function IzinPage() {
               <AlertCircle className="w-7 h-7" strokeWidth={2.2} />
             </div>
             <h3 className="text-[18px] font-bold text-[#111827] mb-2">
-              Sudah Mengajukan Izin di {activeCompany?.name || "Perusahaan Ini"}
+              Sudah Mengajukan Izin di Hari Ini
             </h3>
             <p className="text-[13px] text-[#4B5563] leading-relaxed mb-6">
-              Pengajuan izin kamu di {activeCompany?.name ? <strong className="text-[#111827]">{activeCompany.name}</strong> : "perusahaan ini"} masih menunggu persetujuan atau sudah disetujui hari ini. Kamu tetap bisa mengajukan izin di perusahaan lain yang belum memiliki pengajuan aktif hari ini.
+              Pengajuan Izin Hanya Satu Kali Dalam Sehari 
             </p>
             <PrimaryButton
               type="button"

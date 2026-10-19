@@ -249,8 +249,11 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
             <span className="text-[14px] font-medium">Memuat detail karyawan...</span>
           </div>
         ) : error ? (
-          <div className="py-20 text-center text-red-500 text-[14px] font-medium">{error}</div>
-        ) : employee && (
+          <div className="py-20 flex flex-col items-center justify-center text-center gap-3">
+            <span className="text-red-500 text-[14px] font-medium">{error}</span>
+            <button onClick={() => router.push("/admin/laporan-kehadiran")} className="px-5 py-2 rounded-full bg-[#356E3B] text-white text-[13px] font-bold active:scale-95 transition-all shadow-sm">Kembali ke Laporan</button>
+          </div>
+        ) : employee ? (
           <>
             {/* Profile Card */}
             <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#E5E7EB] flex items-center gap-4">
@@ -264,9 +267,19 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
               <div className="flex flex-col flex-1 overflow-hidden">
                 <span className="text-[#111827] text-[16px] font-bold truncate mb-1">{employee.full_name}</span>
                 <span className="text-gray-500 text-[12px] truncate mb-2">{employee.email || "Tidak ada email"}</span>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit bg-[#E8F3EB] text-[#356E3B] border border-[#D1E5D5]">
-                  {employee.role === 'Admin' ? 'Admin' : (employee.role === 'Manager' ? 'Manajemen' : 'Karyawan')}
-                </span>
+                {(() => {
+                  const r = (employee.role || "employee").toLowerCase();
+                  if (r === "owner") {
+                    return <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit bg-[#1E4738] text-white">Owner</span>;
+                  }
+                  if (r === "admin") {
+                    return <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit bg-[#eef5f0] text-[#356E3B] border border-[#dce9df]">Admin</span>;
+                  }
+                  if (r === "manager") {
+                    return <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit bg-[#eef5f0] text-[#1E4738] border border-[#dce9df]">Manajemen</span>;
+                  }
+                  return <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit bg-gray-100 text-gray-600 border border-gray-200">Karyawan</span>;
+                })()}
               </div>
             </div>
 
@@ -617,6 +630,11 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
               )}
             </div>
           </>
+        ) : (
+          <div className="py-20 flex flex-col items-center justify-center text-center gap-3">
+            <span className="text-gray-500 text-[14px] font-medium">Data karyawan tidak ditemukan</span>
+            <button onClick={() => router.push("/admin/laporan-kehadiran")} className="px-5 py-2 rounded-full bg-[#356E3B] text-white text-[13px] font-bold active:scale-95 transition-all shadow-sm">Kembali ke Laporan</button>
+          </div>
         )}
       </div>
 

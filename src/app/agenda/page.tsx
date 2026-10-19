@@ -28,6 +28,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { shareContent } from "@/lib/shareUtils";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { getActiveCompanyId } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { AgendaCardSchedule, AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
 
@@ -165,7 +166,7 @@ function AgendaPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryAgendaId = searchParams.get("id");
-  const { activeCompanyId, activeCompany, canCreate } = useCompany();
+  const { activeCompanyId, activeCompany, canCreate, isLoading: isCompanyLoading } = useCompany();
   const { showConfirm, showToast } = useDialog();
   
   // State Data
@@ -233,8 +234,10 @@ function AgendaPageContent() {
   const [submitError, setSubmitError] = useState("");
 
   const fetchCategories = useCallback(async () => {
+    if (isCompanyLoading) return;
+    const compId = activeCompanyId || getActiveCompanyId();
     try {
-      if (!activeCompanyId) {
+      if (!compId) {
         setCategories([]);
         return;
       }
@@ -242,7 +245,7 @@ function AgendaPageContent() {
       if (!token) return;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
       const res = await fetch(`${apiUrl}/agendas/categories`, { headers });
       const data = await res.json();
       if (data.success) {
@@ -251,11 +254,13 @@ function AgendaPageContent() {
     } catch (err) {
       console.error("Fetch categories error:", err);
     }
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isCompanyLoading]);
 
   const fetchAgendas = useCallback(async () => {
+    if (isCompanyLoading) return;
+    const compId = activeCompanyId || getActiveCompanyId();
     try {
-      if (!activeCompanyId) {
+      if (!compId) {
         setAgendasMap({});
         setIsLoading(false);
         setErrorMsg("");
@@ -274,7 +279,7 @@ function AgendaPageContent() {
       if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(`${apiUrl}/agendas`, { headers });
       const data = await res.json();
@@ -517,7 +522,8 @@ function AgendaPageContent() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`
       };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(url, {
         method,
@@ -540,7 +546,8 @@ function AgendaPageContent() {
 
   const handleDeleteAgenda = async (agendaId: string) => {
     if (isSubmitting) return;
-    if (!activeCompanyId) {
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
       showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.", "warning");
       return;
     }
@@ -560,7 +567,7 @@ function AgendaPageContent() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(`${apiUrl}/agendas/${agendaId}`, {
         method: "DELETE",

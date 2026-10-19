@@ -143,7 +143,7 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
 
     // 1. Check if there is a pending request
     const pendingRes = await db.execute(sql`
-      SELECT cjr.id, cjr.status, cjr.created_at, c.name as company_name 
+      SELECT cjr.id, cjr.company_id, cjr.status, cjr.created_at, c.name as company_name 
       FROM company_join_requests cjr
       JOIN companies c ON c.id = cjr.company_id
       WHERE cjr.profile_id = ${user.id} AND cjr.status = 'pending' AND cjr.deleted_at IS NULL
@@ -160,11 +160,17 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
     }
 
     // 2. If no pending request, check if there is an approved request
+    // Pastikan keanggotaan masih aktif dan belum dicabut/dihapus
     const approvedRes = await db.execute(sql`
-      SELECT cjr.id, cjr.status, cjr.created_at, c.name as company_name 
+      SELECT cjr.id, cjr.company_id, cjr.status, cjr.created_at, c.name as company_name 
       FROM company_join_requests cjr
       JOIN companies c ON c.id = cjr.company_id
-      WHERE cjr.profile_id = ${user.id} AND cjr.status = 'approved' AND cjr.deleted_at IS NULL
+      JOIN company_members cm ON cm.company_id = cjr.company_id AND cm.profile_id = cjr.profile_id
+      WHERE cjr.profile_id = ${user.id} 
+        AND cjr.status = 'approved' 
+        AND cjr.deleted_at IS NULL
+        AND cm.status = 'active'
+        AND cm.deleted_at IS NULL
       ORDER BY cjr.updated_at DESC
       LIMIT 1
     `);

@@ -8,6 +8,7 @@ import { formatDateRange } from "@/lib/dateUtils";
 import { Pagination } from "@/components/Pagination";
 
 import { useCompany } from "@/context/CompanyContext";
+import { getActiveCompanyId } from "@/lib/api";
 
 // Types mapped from backend
 type IzinRequest = {
@@ -24,7 +25,7 @@ type IzinRequest = {
 
 export default function KelolaIzinPage() {
   const router = useRouter();
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, isCompanyLoading } = useCompany();
   
   const [data, setData] = useState<IzinRequest[]>([]);
   const [selectAll, setSelectAll] = useState(false);
@@ -60,6 +61,7 @@ export default function KelolaIzinPage() {
 
   // Fetch Leaves
   const fetchLeaves = useCallback(async () => {
+    if (isCompanyLoading) return;
     try {
       setIsLoading(true);
       setFetchError(null);
@@ -67,7 +69,7 @@ export default function KelolaIzinPage() {
       if (!token) return;
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      const companyId = activeCompanyId || localStorage.getItem("activeCompanyId");
+      const companyId = activeCompanyId || getActiveCompanyId();
       if (companyId) headers["x-company-id"] = companyId;
 
       const params = new URLSearchParams();
@@ -104,7 +106,7 @@ export default function KelolaIzinPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeCompanyId, limit, offset, searchQuery, activeFilter]);
+  }, [activeCompanyId, isCompanyLoading, limit, offset, searchQuery, activeFilter]);
 
   useEffect(() => {
     fetchLeaves();
@@ -162,8 +164,8 @@ export default function KelolaIzinPage() {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       };
-      const activeCompanyId = localStorage.getItem("activeCompanyId");
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const companyId = activeCompanyId || getActiveCompanyId();
+      if (companyId) headers["x-company-id"] = companyId;
       
       const payload: Record<string, any> = { status };
       if (status === "Ditolak" && rejectionReason) {

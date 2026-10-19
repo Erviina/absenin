@@ -38,31 +38,9 @@ function CekPerusahaanContent() {
         return;
       }
 
-      // Check if user has an approved or pending join request
-      try {
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        
-        if (data.success && data.data) {
-          if (data.data.status === 'approved') {
-            const seen = localStorage.getItem(`join_accepted_seen_${data.data.id}`);
-            if (!seen) {
-              router.replace("/gabung-perusahaan");
-              return;
-            }
-          } else if (data.data.status === 'pending') {
-            setCompanyName(data.data.company_name || "Perusahaan");
-            setStatus('pending');
-            return;
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      }
+      let hasActiveCompany = false;
 
-      // Fetch user profile
+      // 1. Periksa profil pengguna terlebih dahulu: jika sudah memiliki perusahaan aktif, langsung ke dashboard
       try {
         const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
           headers: { Authorization: `Bearer ${token}` }
@@ -72,13 +50,40 @@ function CekPerusahaanContent() {
           localStorage.setItem("user", JSON.stringify(meData.data.user));
           setUserName(meData.data.user.fullName || "User");
           
-          if (meData.data.user.company && from !== "profil") {
-            router.push("/dashboard");
-            return;
+          if (meData.data.user.company) {
+            hasActiveCompany = true;
+            if (from !== "profil") {
+              router.replace("/dashboard");
+              return;
+            }
           }
         }
       } catch (e) {
-        console.error("Error fetching /auth/me", e);
+        console.error("Error fetching /auth/me:", e);
+      }
+
+      // 2. Jika belum memiliki perusahaan aktif, periksa apakah ada permintaan bergabung (pending atau baru di-ACC)
+      if (!hasActiveCompany) {
+        try {
+          const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await res.json();
+          
+          if (data.success && data.data) {
+            if (data.data.status === 'pending') {
+              setCompanyName(data.data.company_name || "Perusahaan");
+              setStatus('pending');
+              return;
+            } else if (data.data.status === 'approved') {
+              // Pengguna baru saja disetujui, arahkan ke alur sukses satu kali
+              router.replace("/gabung-perusahaan?success=true");
+              return;
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching join requests in cek-perusahaan:", err);
+        }
       }
 
       setStatus('idle');
@@ -100,7 +105,7 @@ function CekPerusahaanContent() {
         });
         const data = await res.json();
         if (data.success && data.data && data.data.status === 'approved') {
-          router.replace("/gabung-perusahaan");
+          router.replace("/gabung-perusahaan?success=true");
         }
       } catch (e) {
         console.error("Polling error in cek-perusahaan:", e);

@@ -21,8 +21,13 @@ import {
   UserMinus,
   Sparkles,
   RefreshCw,
-  FileText
-, Loader2 } from "lucide-react";
+  FileText,
+  Loader2,
+  Maximize2,
+  ImageOff,
+  CalendarDays,
+  Info
+} from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Badge } from "@/components/Badge";
 import { useCompany } from "@/context/CompanyContext";
@@ -55,6 +60,16 @@ interface AttendanceItem {
   check_out_address: string | null;
   check_out_photo_url: string | null;
   is_terlambat: boolean;
+  is_pulang_cepat?: boolean;
+}
+
+interface PreviewPhotoData {
+  url: string;
+  title: string;
+  date?: string;
+  time?: string;
+  location?: string;
+  coords?: string;
 }
 
 interface AttendanceSummary {
@@ -160,7 +175,7 @@ export default function DetailKaryawanMonitoringPage() {
   const [agendasError, setAgendasError] = useState("");
 
   // Photo Preview Modal State
-  const [previewPhoto, setPreviewPhoto] = useState<{ url: string; title: string; time?: string } | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<PreviewPhotoData | null>(null);
 
   // Role Management Modal State
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
@@ -583,7 +598,7 @@ export default function DetailKaryawanMonitoringPage() {
                 : "text-gray-600 hover:text-[#111827] hover:bg-white/60"
             }`}
           >
-            <CalendarCheck className="w-4 h-4" />
+            <CalendarCheck className="w-[22px] h-[22px] shrink-0" size={22} />
             <span>Kehadiran</span>
           </button>
 
@@ -596,7 +611,7 @@ export default function DetailKaryawanMonitoringPage() {
                 : "text-gray-600 hover:text-[#111827] hover:bg-white/60"
             }`}
           >
-            <ListTodo className="w-4 h-4" />
+            <ListTodo className="w-[22px] h-[22px] shrink-0" size={22} />
             <span>Tugas</span>
           </button>
 
@@ -609,7 +624,7 @@ export default function DetailKaryawanMonitoringPage() {
                 : "text-gray-600 hover:text-[#111827] hover:bg-white/60"
             }`}
           >
-            <Calendar className="w-4 h-4" />
+            <Calendar className="w-[22px] h-[22px] shrink-0" size={22} />
             <span>Agenda</span>
           </button>
         </div>
@@ -690,174 +705,299 @@ export default function DetailKaryawanMonitoringPage() {
                   Belum ada riwayat kehadiran.
                 </p>
               ) : (
-                attendances.map((att) => (
-                  <div 
-                    key={att.id}
-                    className="bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col gap-3 transition-colors hover:border-[#dce9df]"
-                  >
-                    {/* Header: Date + Work Mode + Status */}
-                    <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-gray-100">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-4 h-4 text-[#356E3B]" />
-                        <span className="text-[#111827] text-[13px] font-bold">
-                          {formatDateWithDay(att.check_in_time)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-1.5">
-                        {/* WFO/WFH Badge */}
-                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                          att.work_mode === "WFH" 
-                            ? "bg-blue-50 text-blue-700 border border-blue-200/60" 
-                            : "bg-[#eef5f0] text-[#1E4738] border border-[#dce9df]"
-                        }`}>
-                          {att.work_mode}
-                        </span>
+                <div className="flex flex-col gap-4">
+                  {attendances.map((att) => {
+                    const hasCheckInCoords = 
+                      att.check_in_latitude !== null && 
+                      att.check_in_latitude !== undefined && 
+                      att.check_in_longitude !== null && 
+                      att.check_in_longitude !== undefined &&
+                      att.check_in_latitude !== "" &&
+                      att.check_in_longitude !== "";
 
-                        {/* Terlambat vs Tepat Waktu */}
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          att.is_terlambat
-                            ? "bg-amber-50 text-amber-700 border border-amber-200/60"
-                            : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                        }`}>
-                          {att.is_terlambat ? "Terlambat" : "Tepat Waktu"}
-                        </span>
-                      </div>
-                    </div>
+                    const hasCheckOutCoords = 
+                      att.check_out_latitude !== null && 
+                      att.check_out_latitude !== undefined && 
+                      att.check_out_longitude !== null && 
+                      att.check_out_longitude !== undefined &&
+                      att.check_out_latitude !== "" &&
+                      att.check_out_longitude !== "";
 
-                    {/* Check In Details */}
-                    <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                          <span className="text-[#111827] text-[12px] font-bold">
-                            Masuk: {formatTime(att.check_in_time)} WIB
-                          </span>
-                        </div>
-                        <div className="flex items-start gap-1 text-[11px] text-gray-500 pl-3.5 leading-snug">
-                          <MapPin className="w-3 h-3 text-gray-400 shrink-0 mt-0.5" />
-                          <span className="line-clamp-2">{att.check_in_address || "Alamat tidak tersedia"}</span>
-                        </div>
-                        {att.check_in_latitude && att.check_in_longitude ? (
-                          <div className="flex items-center gap-2 pl-3.5 mt-0.5 flex-wrap">
-                            <span className="text-[10px] text-gray-400 font-mono">
-                              Lat: {parseFloat(att.check_in_latitude).toFixed(5)} • Long: {parseFloat(att.check_in_longitude).toFixed(5)}
-                            </span>
-                            <a 
-                              href={`https://www.google.com/maps?q=${att.check_in_latitude},${att.check_in_longitude}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[10px] text-[#356E3B] hover:underline font-bold inline-flex items-center gap-0.5"
-                              title="Buka titik lokasi di Google Maps"
-                            >
-                              <span>Buka Peta</span>
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-gray-400 pl-3.5 italic">Koordinat tidak tersedia</span>
-                        )}
-                      </div>
-
-                      {/* Photo Thumbnail */}
-                      {att.check_in_photo_url ? (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewPhoto({ 
-                            url: att.check_in_photo_url!, 
-                            title: `Foto Bukti Masuk - ${formatDate(att.check_in_time)}`,
-                            time: `${formatTime(att.check_in_time)} WIB`
-                          })}
-                          className="w-12 h-12 rounded-[12px] border border-gray-100 overflow-hidden shrink-0 relative group shadow-sm active:scale-95 transition-transform bg-gray-50 cursor-pointer"
-                          title="Lihat foto bukti masuk"
-                        >
-                          <img 
-                            src={att.check_in_photo_url} 
-                            alt="Bukti Masuk" 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                          />
-                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Camera className="w-4 h-4 text-white" />
-                          </div>
-                        </button>
-                      ) : (
-                        <div className="w-12 h-12 rounded-[12px] border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center text-center p-1 text-gray-400 shrink-0">
-                          <Camera className="w-3.5 h-3.5 text-gray-300" />
-                          <span className="text-[8px] font-medium leading-tight">Foto tidak tersedia</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Check Out Details */}
-                    <div className="grid grid-cols-[1fr_auto] gap-3 items-start pt-2 border-t border-gray-50">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${att.check_out_time ? "bg-blue-500" : "bg-gray-300"}`}></span>
-                          <span className="text-[#111827] text-[12px] font-bold">
-                            Pulang: {att.check_out_time ? `${formatTime(att.check_out_time)} WIB` : "Belum Check-Out"}
-                          </span>
-                        </div>
-                        {att.check_out_time ? (
-                          <>
-                            <div className="flex items-start gap-1 text-[11px] text-gray-500 pl-3.5 leading-snug">
-                              <MapPin className="w-3 h-3 text-gray-400 shrink-0 mt-0.5" />
-                              <span className="line-clamp-2">{att.check_out_address || "Alamat tidak tersedia"}</span>
+                    return (
+                      <div 
+                        key={att.id} 
+                        className="bg-white rounded-[24px] p-5 border border-[#eef5f0] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col gap-4 transition-colors hover:border-[#dce9df]"
+                      >
+                        {/* Header: Tanggal & Badge Mode Kerja / Status */}
+                        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-[#f4f9f6] flex items-center justify-center text-[#356E3B] shrink-0">
+                              <CalendarDays className="w-4 h-4" />
                             </div>
-                            {att.check_out_latitude && att.check_out_longitude ? (
-                              <div className="flex items-center gap-2 pl-3.5 mt-0.5 flex-wrap">
-                                <span className="text-[10px] text-gray-400 font-mono">
-                                  Lat: {parseFloat(att.check_out_latitude).toFixed(5)} • Long: {parseFloat(att.check_out_longitude).toFixed(5)}
+                            <div>
+                              <span className="text-[#111827] text-[14px] font-bold block leading-tight">
+                                {formatDateWithDay(att.check_in_time)}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* Mode Kerja */}
+                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                              att.work_mode === "WFH"
+                                ? "bg-blue-50 text-blue-700 border border-blue-200/60"
+                                : "bg-[#eef5f0] text-[#1E4738] border border-[#dce9df]"
+                            }`}>
+                              {att.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
+                            </span>
+
+                            {/* Status Terlambat */}
+                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                              att.is_terlambat
+                                ? "bg-amber-50 text-amber-700 border border-amber-200/60"
+                                : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                            }`}>
+                              {att.is_terlambat ? "Terlambat" : "Tepat Waktu"}
+                            </span>
+
+                            {/* Status Pulang Cepat */}
+                            {att.is_pulang_cepat && (
+                              <span className="bg-orange-50 text-orange-700 border border-orange-200/60 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                                Pulang Cepat
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Konten Terpisah: Masuk vs Keluar */}
+                        <div className="flex flex-col gap-3.5">
+                          
+                          {/* 1. DETAIL MASUK (CHECK-IN) */}
+                          <div className="bg-[#fbfdfc] border border-[#eef5f0] rounded-[18px] p-4 flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                <span className="text-[#1E4738] text-[12px] font-bold uppercase tracking-wider">
+                                  Detail Masuk (Check-In)
                                 </span>
-                                <a 
-                                  href={`https://www.google.com/maps?q=${att.check_out_latitude},${att.check_out_longitude}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-[10px] text-[#356E3B] hover:underline font-bold inline-flex items-center gap-0.5"
-                                  title="Buka titik lokasi keluar di Google Maps"
-                                >
-                                  <span>Buka Peta</span>
-                                  <ExternalLink className="w-2.5 h-2.5" />
-                                </a>
+                              </div>
+                              <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
+                                <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="text-[#111827] font-bold text-[13px]">
+                                  {formatTime(att.check_in_time)}
+                                </span>
+                                <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-3.5 items-start justify-between">
+                              {/* Lokasi Masuk */}
+                              <div className="flex-1 flex flex-col gap-1 min-w-0">
+                                <span className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider">
+                                  Lokasi Masuk
+                                </span>
+                                <div className="flex items-start gap-1.5 text-gray-700 text-[13px] leading-snug">
+                                  <MapPin className="w-4 h-4 text-[#356E3B] shrink-0 mt-0.5" />
+                                  <span className="font-medium break-words">
+                                    {att.check_in_address || "Alamat tidak tersedia"}
+                                  </span>
+                                </div>
+
+                                {/* Koordinat */}
+                                {hasCheckInCoords ? (
+                                  <div className="flex items-center gap-2 pl-5.5 mt-0.5 flex-wrap">
+                                    <span className="text-[11px] text-gray-500 font-mono">
+                                      Lat: {parseFloat(att.check_in_latitude!).toFixed(5)} • Long: {parseFloat(att.check_in_longitude!).toFixed(5)}
+                                    </span>
+                                    <a 
+                                      href={`https://www.google.com/maps?q=${att.check_in_latitude},${att.check_in_longitude}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[11px] text-[#356E3B] hover:underline font-bold inline-flex items-center gap-0.5"
+                                      title="Buka titik lokasi masuk di Google Maps"
+                                    >
+                                      <span>Buka Peta</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-gray-400 pl-5.5 italic">
+                                    Koordinat tidak tersedia
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Foto Bukti Masuk */}
+                              <div className="shrink-0 flex flex-col gap-1 w-full sm:w-auto">
+                                <span className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider">
+                                  Foto Bukti Masuk
+                                </span>
+                                {att.check_in_photo_url ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewPhoto({
+                                      url: att.check_in_photo_url!,
+                                      title: `Foto Bukti Masuk`,
+                                      date: formatDateWithDay(att.check_in_time),
+                                      time: `${formatTime(att.check_in_time)} WIB`,
+                                      location: att.check_in_address || undefined,
+                                      coords: hasCheckInCoords ? `${att.check_in_latitude}, ${att.check_in_longitude}` : undefined
+                                    })}
+                                    className="group relative w-full sm:w-24 h-24 rounded-[14px] overflow-hidden border border-gray-200 shadow-xs active:scale-95 transition-transform bg-gray-50 cursor-pointer"
+                                    title="Klik untuk memperbesar foto bukti masuk"
+                                  >
+                                    <img 
+                                      src={att.check_in_photo_url} 
+                                      alt="Foto Masuk" 
+                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                      onError={(e) => {
+                                        (e.target as HTMLElement).style.display = 'none';
+                                        (e.target as HTMLElement).nextElementSibling?.classList.remove('hidden');
+                                      }}
+                                    />
+                                    <div className="hidden absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-gray-100 text-gray-400 text-[10px]">
+                                      <ImageOff className="w-5 h-5 mb-1" />
+                                      <span>Gagal memuat foto</span>
+                                    </div>
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <Maximize2 className="w-5 h-5 text-white drop-shadow" />
+                                    </div>
+                                  </button>
+                                ) : (
+                                  <div className="w-full sm:w-24 h-24 rounded-[14px] border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center text-center p-2 text-gray-400">
+                                    <Camera className="w-5 h-5 text-gray-300 mb-1" />
+                                    <span className="text-[10px] font-medium leading-tight">Foto tidak tersedia</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 2. DETAIL KELUAR (CHECK-OUT) */}
+                          <div className={`border rounded-[18px] p-4 flex flex-col gap-3 ${
+                            att.check_out_time ? "bg-[#fffdfb] border-[#fde8d7]" : "bg-gray-50/60 border-dashed border-gray-200"
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                  att.check_out_time ? "bg-orange-500" : "bg-gray-300"
+                                }`}></span>
+                                <span className={`text-[12px] font-bold uppercase tracking-wider ${
+                                  att.check_out_time ? "text-orange-800" : "text-gray-400"
+                                }`}>
+                                  Detail Keluar (Check-Out)
+                                </span>
+                              </div>
+                              {att.check_out_time ? (
+                                <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
+                                  <Clock className="w-3.5 h-3.5 text-orange-600" />
+                                  <span className="text-[#111827] font-bold text-[13px]">
+                                    {formatTime(att.check_out_time)}
+                                  </span>
+                                  <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] font-semibold text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-full">
+                                  Belum Check-Out
+                                </span>
+                              )}
+                            </div>
+
+                            {att.check_out_time ? (
+                              <div className="flex flex-col sm:flex-row gap-3.5 items-start justify-between">
+                                {/* Lokasi Keluar */}
+                                <div className="flex-1 flex flex-col gap-1 min-w-0">
+                                  <span className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider">
+                                    Lokasi Keluar
+                                  </span>
+                                  <div className="flex items-start gap-1.5 text-gray-700 text-[13px] leading-snug">
+                                    <MapPin className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+                                    <span className="font-medium break-words">
+                                      {att.check_out_address || "Alamat tidak tersedia"}
+                                    </span>
+                                  </div>
+
+                                  {/* Koordinat */}
+                                  {hasCheckOutCoords ? (
+                                    <div className="flex items-center gap-2 pl-5.5 mt-0.5 flex-wrap">
+                                      <span className="text-[11px] text-gray-500 font-mono">
+                                        Lat: {parseFloat(att.check_out_latitude!).toFixed(5)} • Long: {parseFloat(att.check_out_longitude!).toFixed(5)}
+                                      </span>
+                                      <a 
+                                        href={`https://www.google.com/maps?q=${att.check_out_latitude},${att.check_out_longitude}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[11px] text-orange-600 hover:underline font-bold inline-flex items-center gap-0.5"
+                                        title="Buka titik lokasi keluar di Google Maps"
+                                      >
+                                        <span>Buka Peta</span>
+                                        <ExternalLink className="w-3 h-3" />
+                                      </a>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[11px] text-gray-400 pl-5.5 italic">
+                                      Koordinat tidak tersedia
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Foto Bukti Keluar */}
+                                <div className="shrink-0 flex flex-col gap-1 w-full sm:w-auto">
+                                  <span className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider">
+                                    Foto Bukti Keluar
+                                  </span>
+                                  {att.check_out_photo_url ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewPhoto({
+                                        url: att.check_out_photo_url!,
+                                        title: `Foto Bukti Keluar`,
+                                        date: formatDateWithDay(att.check_out_time),
+                                        time: `${formatTime(att.check_out_time)} WIB`,
+                                        location: att.check_out_address || undefined,
+                                        coords: hasCheckOutCoords ? `${att.check_out_latitude}, ${att.check_out_longitude}` : undefined
+                                      })}
+                                      className="group relative w-full sm:w-24 h-24 rounded-[14px] overflow-hidden border border-gray-200 shadow-xs active:scale-95 transition-transform bg-gray-50 cursor-pointer"
+                                      title="Klik untuk memperbesar foto bukti keluar"
+                                    >
+                                      <img 
+                                        src={att.check_out_photo_url} 
+                                        alt="Foto Keluar" 
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                        onError={(e) => {
+                                          (e.target as HTMLElement).style.display = 'none';
+                                          (e.target as HTMLElement).nextElementSibling?.classList.remove('hidden');
+                                        }}
+                                      />
+                                      <div className="hidden absolute inset-0 flex flex-col items-center justify-center p-2 text-center bg-gray-100 text-gray-400 text-[10px]">
+                                        <ImageOff className="w-5 h-5 mb-1" />
+                                        <span>Gagal memuat foto</span>
+                                      </div>
+                                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                        <Maximize2 className="w-5 h-5 text-white drop-shadow" />
+                                      </div>
+                                    </button>
+                                  ) : (
+                                    <div className="w-full sm:w-24 h-24 rounded-[14px] border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center text-center p-2 text-gray-400">
+                                      <Camera className="w-5 h-5 text-gray-300 mb-1" />
+                                      <span className="text-[10px] font-medium leading-tight">Foto tidak tersedia</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             ) : (
-                              <span className="text-[10px] text-gray-400 pl-3.5 italic">Koordinat tidak tersedia</span>
+                              <div className="py-2 text-gray-400 text-[12px] italic flex items-center gap-1.5">
+                                <Info className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>Karyawan belum melakukan presensi keluar untuk hari ini.</span>
+                              </div>
                             )}
-                          </>
-                        ) : null}
-                      </div>
-
-                      {/* Check-Out Photo Thumbnail */}
-                      {att.check_out_time ? (
-                        att.check_out_photo_url ? (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewPhoto({ 
-                              url: att.check_out_photo_url!, 
-                              title: `Foto Pulang - ${formatDate(att.check_out_time)}`,
-                              time: `${formatTime(att.check_out_time)} WIB`
-                            })}
-                            className="w-12 h-12 rounded-[12px] border border-gray-100 overflow-hidden shrink-0 relative group shadow-sm active:scale-95 transition-transform bg-gray-50 cursor-pointer"
-                            title="Lihat foto bukti pulang"
-                          >
-                            <img 
-                              src={att.check_out_photo_url} 
-                              alt="Bukti Pulang" 
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                            />
-                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                              <Camera className="w-4 h-4 text-white" />
-                            </div>
-                          </button>
-                        ) : (
-                          <div className="w-12 h-12 rounded-[12px] border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center text-center p-1 text-gray-400 shrink-0">
-                            <Camera className="w-3.5 h-3.5 text-gray-300" />
-                            <span className="text-[8px] font-medium leading-tight">Foto tidak tersedia</span>
                           </div>
-                        )
-                      ) : null}
-                    </div>
-                  </div>
-                ))
+
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -1153,36 +1293,66 @@ export default function DetailKaryawanMonitoringPage() {
           onClick={() => setPreviewPhoto(null)}
         >
           <div 
-            className="w-full max-w-sm bg-white rounded-[24px] overflow-hidden flex flex-col shadow-2xl relative"
+            className="w-full max-w-sm bg-white rounded-[24px] overflow-hidden flex flex-col shadow-2xl relative animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-[#fbfdfc]">
-              <div className="flex flex-col">
-                <span className="text-[#111827] text-[13px] font-bold truncate">{previewPhoto.title}</span>
-                {previewPhoto.time && <span className="text-gray-400 text-[11px]">{previewPhoto.time}</span>}
+              <div className="flex flex-col min-w-0 pr-2">
+                <span className="text-[#111827] text-[14px] font-bold truncate">
+                  {previewPhoto.title}
+                </span>
+                <span className="text-gray-500 text-[11px] truncate">
+                  {previewPhoto.date ? `${previewPhoto.date}` : ""} {previewPhoto.time ? `• ${previewPhoto.time}` : ""}
+                </span>
               </div>
               <button
                 type="button"
                 onClick={() => setPreviewPhoto(null)}
-                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors"
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors shrink-0"
+                aria-label="Tutup Preview"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-3 bg-black/5 flex items-center justify-center max-h-[70vh] overflow-hidden">
+            {/* Modal Image Body */}
+            <div className="p-3 bg-black/5 flex items-center justify-center max-h-[65vh] overflow-hidden">
               <img 
                 src={previewPhoto.url} 
                 alt="Foto Bukti Kehadiran" 
-                className="w-full max-h-[65vh] object-contain rounded-[14px]"
+                className="w-full max-h-[60vh] object-contain rounded-[14px]"
               />
             </div>
 
-            <div className="p-4 bg-white border-t border-gray-100 flex flex-col gap-2">
+            {/* Modal Footer / Location details */}
+            <div className="p-4 bg-white border-t border-gray-100 flex flex-col gap-3">
+              {previewPhoto.location && (
+                <div className="flex items-start gap-1.5 text-[12px] text-gray-600">
+                  <MapPin className="w-3.5 h-3.5 text-[#356E3B] shrink-0 mt-0.5" />
+                  <span className="font-medium break-words leading-relaxed">{previewPhoto.location}</span>
+                </div>
+              )}
+
+              {previewPhoto.coords && (
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-gray-400 font-mono">Koordinat: {previewPhoto.coords}</span>
+                  <a
+                    href={`https://www.google.com/maps?q=${previewPhoto.coords}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#356E3B] font-bold hover:underline inline-flex items-center gap-0.5"
+                  >
+                    <span>Buka Maps</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={() => setPreviewPhoto(null)}
-                className="w-full py-2.5 px-4 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-[13px] font-bold active:scale-95 transition-all text-center"
+                className="w-full py-2.5 px-4 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-[13px] font-bold active:scale-95 transition-all text-center mt-1"
               >
                 Tutup
               </button>

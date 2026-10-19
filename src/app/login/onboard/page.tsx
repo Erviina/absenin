@@ -65,7 +65,7 @@ export default function OnboardingPage() {
   ];
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-background relative overflow-hidden">
+    <div className="flex flex-col min-h-[100dvh] bg-background relative overflow-x-hidden overflow-y-auto">
       {/* Subtle Glow Effects (Dari PRD/Figma) */}
       <div className="absolute -top-16 -right-16 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none" />

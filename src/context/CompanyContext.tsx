@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { clearPersonalModePreference } from "@/lib/personalMode";
+import { getActiveCompanyId, setActiveCompanyId as setActiveCompanyIdStorage } from "@/lib/api";
 
 export type CompanyCategoryCode = "community" | "organization" | "business";
 
@@ -41,6 +42,7 @@ interface CompanyContextType {
   activeCompany: CompanyDetails | null;
   activeRole: CompanyRole | null;
   isLoading: boolean;
+  isCompanyLoading: boolean;
   switchCompany: (companyId: string) => void;
   refreshMemberships: () => Promise<void>;
   canCreate: (feature: "agendas" | "news") => boolean;
@@ -51,12 +53,11 @@ interface CompanyContextType {
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
 
-const STORAGE_KEY = "activeCompanyId";
 const MEMBERSHIPS_CACHE_KEY = "companyMemberships";
 
 export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [memberships, setMemberships] = useState<CompanyMembership[]>([]);
-  const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
+  const [activeCompanyId, setActiveCompanyId] = useState<string | null>(getActiveCompanyId);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
 
@@ -85,7 +86,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       }
       const cached = localStorage.getItem(MEMBERSHIPS_CACHE_KEY);
-      const storedActiveId = localStorage.getItem(STORAGE_KEY);
+      const storedActiveId = getActiveCompanyId();
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -213,8 +214,18 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // If user has no active memberships, clear any cached company in local user
-      if (formatted.length === 0 && typeof window !== "undefined") {
+      // CRITICAL: If both backend API and Supabase direct query failed to return data (e.g. temporary network error),
+      // DO NOT wipe the active company or memberships cache! Retain existing state.
+      if (!backendLoaded && formatted.length === 0) {
+        console.warn("Unable to reach backend or Supabase for memberships. Retaining current active company state.");
+        return;
+      }
+
+      // Filter only active, non-deleted memberships
+      const activeList = formatted.filter((m: any) => m.status === "active" && !m.deleted_at);
+
+      // If user has no active memberships at all, clear any cached company in local user
+      if (activeList.length === 0 && typeof window !== "undefined") {
         try {
           const userStr = localStorage.getItem("user");
           if (userStr) {
@@ -222,6 +233,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
             if (u.company) {
               u.company = null;
               localStorage.setItem("user", JSON.stringify(u));
+              setCurrentUser(u);
             }
           }
         } catch (e) {
@@ -230,33 +242,68 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (typeof window !== "undefined") {
-        if (formatted.length > 0) {
-          localStorage.setItem(MEMBERSHIPS_CACHE_KEY, JSON.stringify(formatted));
+        if (activeList.length > 0) {
+          localStorage.setItem(MEMBERSHIPS_CACHE_KEY, JSON.stringify(activeList));
           clearPersonalModePreference(profileId);
         } else {
           localStorage.removeItem(MEMBERSHIPS_CACHE_KEY);
         }
       }
 
-      setMemberships(formatted);
+      setMemberships(activeList);
 
       // Validate activeCompanyId against active memberships
-      const storedId = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-      const isValidStored = formatted.some((m) => m.company_id === storedId);
+      const storedId = getActiveCompanyId();
+      const matched = activeList.find((m) => m.company_id === storedId);
 
-      if (storedId && isValidStored) {
+      if (storedId && matched) {
+        // Active company is valid and confirmed by server
         setActiveCompanyId(storedId);
-      } else if (formatted.length > 0) {
-        const fallbackId = formatted[0].company_id;
-        setActiveCompanyId(fallbackId);
-        if (typeof window !== "undefined") {
-          localStorage.setItem(STORAGE_KEY, fallbackId);
-        }
+        setActiveCompanyIdStorage(storedId);
+        // Sync local user object with verified active company
+        try {
+          const userStr = localStorage.getItem("user");
+          if (userStr) {
+            const u = JSON.parse(userStr);
+            u.company = matched.company;
+            u.activeRole = matched.role;
+            localStorage.setItem("user", JSON.stringify(u));
+            setCurrentUser(u);
+          }
+        } catch {}
+      } else if (storedId && !matched) {
+        // Previously chosen company is NO LONGER ACTIVE (membership revoked/deleted)
+        // Per rules: Handle explicitly, do NOT silently select another company
+        console.warn(`Previously selected company ${storedId} is no longer active for user.`);
+        setActiveCompanyId(null);
+        setActiveCompanyIdStorage(null);
+        try {
+          const userStr = localStorage.getItem("user");
+          if (userStr) {
+            const u = JSON.parse(userStr);
+            u.company = null;
+            localStorage.setItem("user", JSON.stringify(u));
+            setCurrentUser(u);
+          }
+        } catch {}
+      } else if (!storedId && activeList.length > 0) {
+        // User had no stored choice yet (first login)
+        const defaultId = activeList[0].company_id;
+        setActiveCompanyId(defaultId);
+        setActiveCompanyIdStorage(defaultId);
+        try {
+          const userStr = localStorage.getItem("user");
+          if (userStr) {
+            const u = JSON.parse(userStr);
+            u.company = activeList[0].company;
+            u.activeRole = activeList[0].role;
+            localStorage.setItem("user", JSON.stringify(u));
+            setCurrentUser(u);
+          }
+        } catch {}
       } else {
         setActiveCompanyId(null);
-        if (typeof window !== "undefined") {
-          localStorage.removeItem(STORAGE_KEY);
-        }
+        setActiveCompanyIdStorage(null);
       }
     } catch (err) {
       console.error("Exception fetching memberships:", err);
@@ -273,18 +320,26 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const switchCompany = useCallback((companyId: string) => {
     if (companyId === activeCompanyId) return;
 
-    const target = memberships.find((m) => m.company_id === companyId);
+    const target = memberships.find((m) => m.company_id === companyId && m.status === "active");
     if (!target) {
       console.warn(`Cannot switch to company ${companyId}: Not an active member.`);
       return;
     }
 
     if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, companyId);
+      setActiveCompanyIdStorage(companyId);
       setActiveCompanyId(companyId);
 
+      // Sync local user object immediately with selected company
       try {
-        sessionStorage.clear();
+        const userStr = localStorage.getItem("user");
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          u.company = target.company;
+          u.activeRole = target.role;
+          localStorage.setItem("user", JSON.stringify(u));
+          setCurrentUser(u);
+        }
       } catch {}
 
       window.dispatchEvent(new CustomEvent("companyChanged", { detail: { companyId } }));
@@ -364,6 +419,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       activeCompany,
       activeRole,
       isLoading,
+      isCompanyLoading: isLoading,
       switchCompany,
       refreshMemberships: fetchMemberships,
       canCreate,

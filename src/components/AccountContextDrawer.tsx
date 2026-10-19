@@ -134,7 +134,7 @@ export function AccountContextDrawer({
                           Mode Personal
                         </span>
                         <span className="text-[#5C786C] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
-                          Absensi harian, agenda pribadi, dan izin
+                          Absensi harian
                         </span>
                       </div>
                     </div>
@@ -159,7 +159,7 @@ export function AccountContextDrawer({
                           Mode Personal
                         </span>
                         <span className="text-[#6B7280] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
-                          Absensi harian, agenda pribadi, dan izin
+                          Absensi harian
                         </span>
                       </div>
                     </div>
@@ -186,7 +186,7 @@ export function AccountContextDrawer({
                           Mode Manajemen
                         </span>
                         <span className="text-[#5C786C] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
-                          Kelola karyawan, approval izin, dan laporan
+                          Kelola Perusahaan & karyawan 
                         </span>
                       </div>
                     </div>
@@ -215,7 +215,7 @@ export function AccountContextDrawer({
                           Mode Manajemen
                         </span>
                         <span className="text-[#6B7280] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
-                          Kelola karyawan, approval izin, dan laporan
+                          Kelola Perusahaan & karyawan 
                         </span>
                       </div>
                     </div>

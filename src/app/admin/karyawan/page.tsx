@@ -11,6 +11,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
 import { Pagination } from "@/components/Pagination";
+import { getActiveCompanyId } from "@/lib/api";
 
 export default function KelolaKaryawanPage() {
   const router = useRouter();
@@ -38,7 +39,8 @@ export default function KelolaKaryawanPage() {
 
       try {
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+        const compId = activeCompanyId || getActiveCompanyId();
+        if (compId) headers["x-company-id"] = compId;
 
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
           headers

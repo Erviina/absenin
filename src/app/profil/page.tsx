@@ -16,10 +16,11 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
+import { getActiveCompanyId, setActiveCompanyId } from "@/lib/api";
 
 export default function ProfilPage() {
   const router = useRouter();
-  const { activeCompany, activeRole, memberships, currentUser, setCurrentUser } = useCompany();
+  const { activeCompany, activeCompanyId, activeRole, memberships, currentUser, setCurrentUser, isLoading: isCompanyLoading } = useCompany();
   const { showConfirm, showToast } = useDialog();
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -59,8 +60,9 @@ export default function ProfilPage() {
       }
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompany?.id) {
-        headers["x-company-id"] = activeCompany.id;
+      const effectiveCompanyId = activeCompanyId || activeCompany?.id || getActiveCompanyId();
+      if (effectiveCompanyId) {
+        headers["x-company-id"] = effectiveCompanyId;
       }
 
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
@@ -88,8 +90,10 @@ export default function ProfilPage() {
   };
 
   useEffect(() => {
-    fetchUser(true);
-  }, [activeCompany?.id]);
+    if (!isCompanyLoading) {
+      fetchUser(true);
+    }
+  }, [activeCompanyId, isCompanyLoading]);
 
   const getRoleDisplay = () => {
     if (activeRole === "owner") return "Pemilik (Owner)";
@@ -119,7 +123,7 @@ export default function ProfilPage() {
 
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");
-    localStorage.removeItem("activeCompanyId");
+    setActiveCompanyId(null);
     localStorage.removeItem("companyMemberships");
     router.push("/login");
   };
@@ -180,7 +184,7 @@ export default function ProfilPage() {
       />
 
       <div className="px-6 pt-6 flex flex-col gap-6">
-        {isLoading && !user ? (
+        {(isLoading || isCompanyLoading) && !user ? (
           <div className="flex-1 flex flex-col items-center justify-center h-[50vh]">
             <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
             <p className="text-[#4B5563] font-medium text-[14px]">Memuat profil...</p>
@@ -188,8 +192,9 @@ export default function ProfilPage() {
         ) : error && !user ? (
           <div className="flex-1 flex flex-col items-center justify-center h-[50vh] p-6 text-center">
             <p className="text-red-600 font-bold text-[16px] mb-2">{error}</p>
+            <button onClick={() => fetchUser(false)} className="mt-2 px-5 py-2 rounded-full bg-[#356E3B] text-white text-[13px] font-bold active:scale-95 transition-all shadow-sm">Coba Lagi</button>
           </div>
-        ) : user && (
+        ) : user ? (
           <>
         {/* Profile Header section */}
         <div className="flex items-center gap-5">
@@ -351,6 +356,11 @@ export default function ProfilPage() {
         </div>
 
           </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center h-[50vh] p-6 text-center">
+            <p className="text-gray-500 font-medium text-[14px]">Data profil tidak tersedia</p>
+            <button onClick={() => router.push("/dashboard")} className="mt-2 px-5 py-2 rounded-full bg-[#356E3B] text-white text-[13px] font-bold active:scale-95 transition-all shadow-sm">Kembali ke Beranda</button>
+          </div>
         )}
       </div>
 

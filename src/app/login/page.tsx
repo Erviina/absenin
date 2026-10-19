@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 
 import { getPersonalModePreference, isTokenValid } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
+import { setActiveCompanyId } from "@/lib/api";
 
 function LoginForm() {
   const router = useRouter();
@@ -57,6 +58,9 @@ function LoginForm() {
       if (data?.success) {
         localStorage.setItem("accessToken", data.data.accessToken);
         localStorage.setItem("user", JSON.stringify(data.data.user));
+        if (data.data.user?.company?.id) {
+          setActiveCompanyId(data.data.user.company.id);
+        }
         showToast("Login berhasil!", "success");
 
         // Cek jika terdapat target redirect dari tautan yang dibagikan
@@ -86,7 +90,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
+    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-x-hidden overflow-y-auto">
 
       {/* Top Section */}
       <div className="flex flex-col items-center pt-20 px-6 z-10">
