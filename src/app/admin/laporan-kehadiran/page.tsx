@@ -9,10 +9,15 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { useDialog } from "@/context/DialogContext";
 import { Pagination } from "@/components/Pagination";
+import { useCompany } from "@/context/CompanyContext";
+import { getActiveCompanyId } from "@/lib/api";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData } from "@/lib/clientCache";
 
 export default function LaporanKehadiranPage() {
   const router = useRouter();
   const { showToast } = useDialog();
+  const { activeCompanyId, isLoading: isCompanyLoading } = useCompany();
   
   const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
@@ -33,8 +38,14 @@ export default function LaporanKehadiranPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Reset data when active company changes
+    setDataKaryawan([]);
+    setIsLoading(true);
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    if (isCompanyLoading) return;
     const fetchSummary = async () => {
-      setIsLoading(true);
       setError(null);
       try {
         const token = localStorage.getItem("accessToken");
@@ -47,9 +58,18 @@ export default function LaporanKehadiranPage() {
         const monthNum = monthNames.indexOf(monthName) + 1;
         const yearNum = parseInt(yearString);
 
+        const compId = activeCompanyId || getActiveCompanyId();
+        const cacheKey = buildCacheKey("admin_attendance_summary", compId, { month: monthNum, year: yearNum });
+        const cached = getCachedData<any[]>(cacheKey);
+        if (cached?.data) {
+          setDataKaryawan(cached.data);
+          setIsLoading(false);
+        } else {
+          setIsLoading(true);
+        }
+
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        const activeCompanyId = localStorage.getItem("activeCompanyId");
-        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+        if (compId) headers["x-company-id"] = compId;
 
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/management/summary?month=${monthNum}&year=${yearNum}`, {
           headers
@@ -68,7 +88,8 @@ export default function LaporanKehadiranPage() {
         }
 
         if (data.success) {
-          setDataKaryawan(data.data);
+          setDataKaryawan(data.data || []);
+          setCachedData(cacheKey, data.data || []);
         } else {
           setError(data.message || "Gagal memuat laporan kehadiran");
         }
@@ -80,7 +101,7 @@ export default function LaporanKehadiranPage() {
       }
     };
     fetchSummary();
-  }, [selectedMonth, router]);
+  }, [selectedMonth, activeCompanyId, isCompanyLoading, router]);
 
   const handlePrevMonth = () => {
     const [monthName, yearString] = selectedMonth.split(" ");
@@ -325,11 +346,8 @@ export default function LaporanKehadiranPage() {
 
           {/* List Items */}
           <div className="flex flex-col gap-3">
-            {isLoading ? (
-              <div className="py-10 flex flex-col items-center justify-center text-gray-400">
-                <Loader2 className="w-8 h-8 animate-spin text-[#356E3B] mb-2" />
-                <span className="text-[13px]">Memuat data...</span>
-              </div>
+            {isLoading && dataKaryawan.length === 0 ? (
+              <CardListSkeleton count={3} type="admin-report" />
             ) : error ? (
               <div className="py-10 text-center text-red-500 text-[13px]">{error}</div>
             ) : filteredData.length === 0 ? (

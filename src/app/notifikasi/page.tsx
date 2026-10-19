@@ -7,12 +7,15 @@ import {
   Search, ListFilter, Bell, Clock, Calendar, Users, 
   Megaphone, Info, ChevronRight, X, CalendarDays, Check 
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
+import { getActiveCompanyId } from "@/lib/api";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 import { formatDate, formatDateRange } from "@/lib/dateUtils";
 import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
 export default function NotifikasiPage() {
   const router = useRouter();
@@ -39,14 +42,58 @@ export default function NotifikasiPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Reset offset and data when company changes
+  useEffect(() => {
+    setNotifications([]);
+    setOffset(0);
+  }, [activeCompanyId]);
+
+  const activeFetchCompanyIdRef = useRef<string | null>(null);
+
+  // Reset state and offset when activeCompanyId changes
+  useEffect(() => {
+    setNotifications([]);
+    setOffset(0);
+    setIsLoading(true);
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setNotifications([]);
+      setOffset(0);
+      setIsLoading(true);
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, []);
+
   // Reset offset when filter, search, or date changes
   useEffect(() => {
     setOffset(0);
   }, [activeCategory, searchQuery, appliedStartDate, appliedEndDate]);
 
   const fetchNotifications = useCallback(async () => {
+    const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
     try {
-      setIsLoading(true);
+      const cacheKey = buildCacheKey("notifications", compId, {
+        limit,
+        offset,
+        searchQuery,
+        activeCategory,
+        appliedStartDate,
+        appliedEndDate
+      });
+
+      const cached = getCachedData<any[]>(cacheKey);
+      if (cached) {
+        setNotifications(cached.data);
+        if (typeof cached.total === "number") setTotalNotifications(cached.total);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
@@ -58,23 +105,35 @@ export default function NotifikasiPage() {
       if (appliedStartDate) params.set("start_date", appliedStartDate);
       if (appliedEndDate) params.set("end_date", appliedEndDate);
 
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (compId) {
+        headers["x-company-id"] = compId;
+      }
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers
       });
       const json = await res.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
+
       if (json.success) {
-        setNotifications(json.data || []);
+        const items = json.data || [];
         const total = json.pagination?.total ?? json.meta?.total ?? (json.data?.length || 0);
+        setNotifications(items);
         setTotalNotifications(total);
+        setCachedData(cacheKey, items, total);
       } else {
         setError(json.message);
       }
     } catch (err: any) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
       setError(err.message || "Gagal mengambil data");
     } finally {
-      setIsLoading(false);
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoading(false);
+      }
     }
-  }, [limit, offset, searchQuery, activeCategory, appliedStartDate, appliedEndDate]);
+  }, [activeCompanyId, limit, offset, searchQuery, activeCategory, appliedStartDate, appliedEndDate]);
 
   useEffect(() => {
     fetchNotifications();
@@ -114,6 +173,7 @@ export default function NotifikasiPage() {
   };
 
   const handleNotificationClick = async (notif: any) => {
+    invalidateCache("notifications");
     await handleNotificationNavigation(
       notif,
       { activeCompanyId, activeRole, memberships, switchCompany },
@@ -219,12 +279,9 @@ export default function NotifikasiPage() {
 
         {/* Notifications List */}
         <div className="flex flex-col gap-3">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
-              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-              <span className="text-[13px] font-medium text-[#7d998c]">Memuat aktivitas...</span>
-            </div>
-          ) : error ? (
+          {isLoading && notifications.length === 0 ? (
+            <CardListSkeleton count={4} type="notification" />
+          ) : error && notifications.length === 0 ? (
             <p className="text-sm text-red-500 text-center py-6">{error}</p>
           ) : notifications.length > 0 ? (
             <>
@@ -233,7 +290,7 @@ export default function NotifikasiPage() {
                 const membershipInfo = parseMembershipNotification(notif.message, notif.type);
                 return (
                 <div
-                  key={notif.id}
+                  key={`notif-${notif.id}`}
                   onClick={() => handleNotificationClick(notif)}
                   className={`border rounded-[20px] p-4 flex gap-4 items-start shadow-sm active:bg-gray-50 transition-colors cursor-pointer ${notif.is_read ? 'bg-white border-[#E5E7EB]' : 'bg-[#f4f7f5] border-[#356E3B]/20'}`}
                 >

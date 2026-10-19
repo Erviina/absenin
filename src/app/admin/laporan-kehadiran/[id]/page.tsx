@@ -153,7 +153,7 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
       const mode = item.work_mode || "-";
       const addrIn = item.check_in_address || "-";
       const addrOut = item.check_out_address || "-";
-      const status = item.is_terlambat ? "Terlambat" : "Tepat Waktu";
+      const status = item.is_terlambat ? "Terlambat" : "Disiplin";
       return [tanggal, checkIn, checkOut, mode, addrIn, addrOut, status];
     });
 
@@ -381,19 +381,23 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
                             {item.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
                           </span>
 
-                          {/* Status Terlambat */}
+                          {/* Status Masuk */}
                           <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
                             item.is_terlambat
                               ? "bg-amber-50 text-amber-700 border border-amber-200/60"
                               : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
                           }`}>
-                            {item.is_terlambat ? "Terlambat" : "Tepat Waktu"}
+                            {item.is_terlambat ? "Terlambat" : "Disiplin"}
                           </span>
 
-                          {/* Status Pulang Cepat */}
-                          {item.is_pulang_cepat && (
-                            <span className="bg-orange-50 text-orange-700 border border-orange-200/60 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                              Pulang Cepat
+                          {/* Status Pulang */}
+                          {item.check_out_time && (
+                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                              item.is_pulang_cepat
+                                ? "bg-orange-50 text-orange-700 border border-orange-200/60"
+                                : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                            }`}>
+                              {item.is_pulang_cepat ? "Pulang Cepat" : "Disiplin"}
                             </span>
                           )}
                         </div>

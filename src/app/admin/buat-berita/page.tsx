@@ -9,6 +9,7 @@ import { CustomSelect } from "@/components/CustomSelect";
 import { createClient } from "@supabase/supabase-js";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
+import { invalidateCache } from "@/lib/clientCache";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -105,8 +106,13 @@ function BuatBeritaForm() {
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
-    if (!title || !content) {
+    if (!title.trim() || !content.trim()) {
       showToast("Judul dan Isi Berita wajib diisi", "warning");
+      return;
+    }
+
+    if (!fileObj && !previewUrl) {
+      showToast("Sampul Berita wajib diunggah", "warning");
       return;
     }
 
@@ -170,6 +176,9 @@ function BuatBeritaForm() {
 
       const data = await res.json();
       if (data.success) {
+        invalidateCache("news");
+        invalidateCache("admin_news");
+        invalidateCache("dashboard_news");
         showToast(editingId ? "Berita berhasil diperbarui" : "Berita berhasil diterbitkan", "success");
         router.push("/admin/berita");
       } else {
@@ -246,7 +255,7 @@ function BuatBeritaForm() {
 
           <div className="flex flex-col gap-2">
             <label className="text-[#1E4738] text-[13px] font-bold">
-              Sampul Berita
+              Sampul Berita <span className="text-red-500">*</span>
             </label>
             <div 
               onClick={() => fileInputRef.current?.click()}

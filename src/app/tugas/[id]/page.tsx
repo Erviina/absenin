@@ -274,8 +274,10 @@ export default function TugasDetailPage() {
             type="button"
             onClick={handleToggleComplete}
             disabled={isToggling}
-            className={`w-full py-3.5 px-6 rounded-full font-bold text-[14px] flex items-center justify-center gap-2.5 transition-all shadow-md active:scale-[0.98] cursor-pointer disabled:opacity-60 ${
-              task.completed
+            className={`w-full py-3.5 px-6 rounded-full font-bold text-[14px] flex items-center justify-center gap-2.5 transition-all shadow-md active:scale-[0.98] cursor-pointer ${
+              isToggling
+                ? "bg-gray-400 text-white cursor-wait pointer-events-none shadow-none"
+                : task.completed
                 ? "bg-[#E8F3EB] hover:bg-[#d7eadc] text-[#1E4738] border border-[#C1DFCD]"
                 : "bg-[#356E3B] hover:bg-[#2b5930] text-white shadow-[#356E3B]/25"
             }`}

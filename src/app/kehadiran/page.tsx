@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronLeft, Search, ListFilter, Download, CheckCircle2, XCircle, X, CalendarDays, Check, RefreshCcw } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
 import { useRouter } from "next/navigation";
@@ -13,10 +13,9 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate, formatDateWithDay } from "@/lib/dateUtils";
 import { Pagination } from "@/components/Pagination";
-import { getActiveCompanyId } from "@/lib/api";
-
-let cachedAttendances: any[] = [];
-let cachedAttendancesCompanyId: string | null = null;
+import { getActiveCompanyId } from "@/lib/api"; 
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData } from "@/lib/clientCache";
 
 export default function KehadiranPage() {
   const router = useRouter();
@@ -87,9 +86,12 @@ export default function KehadiranPage() {
     }
   };
 
+  const activeFetchCompanyIdRef = useRef<string | null>(null);
+
   const fetchAttendances = async (silent = false) => {
     if (isCompanyLoading) return;
     const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
     if (!compId) {
       setAttendances([]);
       setTotal(0);
@@ -97,7 +99,20 @@ export default function KehadiranPage() {
       setError(null);
       return;
     }
-    if (!silent) {
+    const cacheKey = buildCacheKey("attendances", compId, {
+      start: appliedStartDate,
+      end: appliedEndDate,
+      search: debouncedSearch.trim(),
+      limit,
+      offset,
+    });
+
+    const cached = getCachedData<any[]>(cacheKey);
+    if (cached?.data && !silent) {
+      setAttendances(cached.data);
+      if (cached.total !== undefined) setTotal(cached.total);
+      setIsLoading(false);
+    } else if (!silent) {
       setIsLoading(true);
     }
     setError(null);
@@ -128,6 +143,8 @@ export default function KehadiranPage() {
 
       const res = await fetch(url, { headers });
       const data = await res.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
+
       if (!res.ok) {
         throw new Error(data.message || data.error || "Gagal mengambil data kehadiran");
       }
@@ -136,14 +153,35 @@ export default function KehadiranPage() {
       const totalCount = Number(data.pagination?.total ?? data.meta?.total ?? list.length);
       setAttendances(list);
       setTotal(totalCount);
+      setCachedData(cacheKey, list, totalCount);
     } catch (err: any) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
       if (attendances.length === 0) {
         setError(err.message || "Terjadi kesalahan sistem");
       }
     } finally {
-      setIsLoading(false);
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoading(false);
+      }
     }
   };
+
+  useEffect(() => {
+    // Reset state and offset when active company changes
+    setAttendances([]);
+    setOffset(0);
+    setIsLoading(true);
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setAttendances([]);
+      setOffset(0);
+      setIsLoading(true);
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, []);
 
   useEffect(() => {
     fetchAttendances(false);
@@ -317,10 +355,7 @@ export default function KehadiranPage() {
         <div className="flex flex-col gap-4">
           
           {isLoading && attendances.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
-              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-              <span className="text-[13px] font-medium text-[#7d998c]">Memuat riwayat kehadiran...</span>
-            </div>
+            <CardListSkeleton count={3} type="attendance" />
           ) : error && attendances.length === 0 ? (
             <div className="py-8 text-center flex flex-col items-center justify-center">
               <p className="text-red-600 font-medium text-[14px]">Gagal Memuat Data</p>
@@ -367,9 +402,13 @@ export default function KehadiranPage() {
                         <span className="text-[#111827] font-bold text-[16px]">{extractTime(item.check_in_time)}</span>
                         <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
                       </div>
-                      {item.is_terlambat && (
+                      {item.is_terlambat ? (
                         <span className="mt-1 bg-amber-50 text-amber-700 border border-amber-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
                           Terlambat
+                        </span>
+                      ) : (
+                        <span className="mt-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          Disiplin
                         </span>
                       )}
                     </div>
@@ -393,9 +432,13 @@ export default function KehadiranPage() {
                             <span className="text-[#111827] font-bold text-[16px]">{extractTime(item.check_out_time)}</span>
                             <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
                           </div>
-                          {item.is_pulang_cepat && (
+                          {item.is_pulang_cepat ? (
                             <span className="mt-1 bg-orange-50 text-orange-700 border border-orange-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
                               Pulang Cepat
+                            </span>
+                          ) : (
+                            <span className="mt-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              Disiplin
                             </span>
                           )}
                         </>

@@ -569,23 +569,38 @@ export default function DetailKaryawanMonitoringPage() {
             </div>
           </div>
 
-          {/* DEDICATED ACTION: Kelola Hak Akses (Hanya Admin / Owner) */}
-          {canModifyRole && (
+          {/* DEDICATED ACTIONS: Keluarkan Karyawan (Kiri) & Kelola Hak Akses (Kanan) */}
+          {(canModifyRole || canRemoveMember) && (
             <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
-              <span className="text-[11px] text-gray-400 leading-tight">
-                Atur hak akses karyawan di perusahaan
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setRoleError("");
-                  setIsRoleModalOpen(true);
-                }}
-                className="px-4 py-2 bg-[#E8F3EB] hover:bg-[#D5EAD9] border border-[#D1E5D5] text-[#356E3B] rounded-full text-[13px] font-bold flex items-center gap-1.5 active:scale-[0.98] transition-all shrink-0 shadow-sm"
-              >
-                <Shield className="w-4 h-4 text-[#356E3B]" />
-                <span>Kelola Hak Akses</span>
-              </button>
+              {canRemoveMember ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteError("");
+                    setIsDeleteModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-full text-[13px] font-bold flex items-center gap-1.5 active:scale-[0.98] transition-all shrink-0 shadow-sm cursor-pointer"
+                >
+                  <UserMinus className="w-4 h-4 text-red-600" />
+                  <span>Keluarkan Karyawan</span>
+                </button>
+              ) : (
+                <div />
+              )}
+
+              {canModifyRole && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoleError("");
+                    setIsRoleModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-[#E8F3EB] hover:bg-[#D5EAD9] border border-[#D1E5D5] text-[#356E3B] rounded-full text-[13px] font-bold flex items-center gap-1.5 active:scale-[0.98] transition-all shrink-0 shadow-sm cursor-pointer ml-auto"
+                >
+                  <Shield className="w-4 h-4 text-[#356E3B]" />
+                  <span>Kelola Hak Akses</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -754,19 +769,23 @@ export default function DetailKaryawanMonitoringPage() {
                               {att.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
                             </span>
 
-                            {/* Status Terlambat */}
+                            {/* Status Masuk */}
                             <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
                               att.is_terlambat
                                 ? "bg-amber-50 text-amber-700 border border-amber-200/60"
                                 : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
                             }`}>
-                              {att.is_terlambat ? "Terlambat" : "Tepat Waktu"}
+                              {att.is_terlambat ? "Terlambat" : "Disiplin"}
                             </span>
 
-                            {/* Status Pulang Cepat */}
-                            {att.is_pulang_cepat && (
-                              <span className="bg-orange-50 text-orange-700 border border-orange-200/60 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                                Pulang Cepat
+                            {/* Status Pulang */}
+                            {att.check_out_time && (
+                              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                                att.is_pulang_cepat
+                                  ? "bg-orange-50 text-orange-700 border border-orange-200/60"
+                                  : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                              }`}>
+                                {att.is_pulang_cepat ? "Pulang Cepat" : "Disiplin"}
                               </span>
                             )}
                           </div>
@@ -1426,7 +1445,7 @@ export default function DetailKaryawanMonitoringPage() {
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[#111827] text-[13px] font-bold">Karyawan</span>
                   <span className="text-gray-500 text-[11px] leading-relaxed max-w-[240px]">
-                    Presensi digital, pengajuan izin, serta melihat berita dan tugas.
+                    Melakukan presensi, mengajukan izin, membuat tugas sert agenda dan melihat berita.
                   </span>
                 </div>
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${
@@ -1448,7 +1467,7 @@ export default function DetailKaryawanMonitoringPage() {
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[#111827] text-[13px] font-bold">Manajemen / Manager</span>
                   <span className="text-gray-500 text-[11px] leading-relaxed max-w-[240px]">
-                    Memantau kehadiran & tugas bawahan, menyetujui izin, serta publikasi agenda.
+                    Memantau kehadiran & tugas bawahan, menyetujui izin, serta publikasi agenda dan berita.
                   </span>
                 </div>
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${
@@ -1493,7 +1512,13 @@ export default function DetailKaryawanMonitoringPage() {
                 type="button"
                 onClick={handleSaveRole}
                 disabled={isSavingRole || !canModifyRole}
-                className="w-full py-3.5 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-full font-bold text-[14px] active:scale-[0.98] transition-all shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className={`w-full py-3.5 text-white rounded-full font-bold text-[14px] active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${
+                  isSavingRole
+                    ? "bg-gray-400 cursor-wait pointer-events-none shadow-none"
+                    : !canModifyRole
+                    ? "bg-gray-300 opacity-50 cursor-not-allowed"
+                    : "bg-[#356E3B] hover:bg-[#2A582F] shadow-md shadow-[#356E3B]/20"
+                }`}
               >
                 {isSavingRole ? (
                   <>
@@ -1504,21 +1529,6 @@ export default function DetailKaryawanMonitoringPage() {
                   "Simpan Perubahan Role"
                 )}
               </button>
-
-              {/* Opsi Keluarkan Karyawan */}
-              {canRemoveMember && (
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setDeleteError("");
-                    setIsDeleteModalOpen(true);
-                  }}
-                  className="w-full py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-full font-bold text-[13px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-sm"
-                >
-                  <UserMinus className="w-4 h-4" />
-                  <span>Keluarkan Karyawan</span>
-                </button>
-              )}
             </div>
           </div>
         </div>

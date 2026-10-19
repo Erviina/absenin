@@ -33,41 +33,38 @@ function LoginForm() {
     }
   }, [redirectParam, router]);
 
-  const handleGoogleSuccess = async (accessToken: string) => {
-    if (!accessToken) {
-      setIsLoading(false);
-      return;
-    }
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    if (isLoading || !credentialResponse.credential) return;
 
     setIsLoading(true);
     try {
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken }),
+        body: JSON.stringify({ idToken: credentialResponse.credential }),
       });
 
-      const contentType = res.headers.get("content-type");
-      let data: any = null;
-      if (contentType && contentType.includes("application/json")) {
-        data = await res.json();
-      }
+        const contentType = res.headers.get("content-type");
+        let data: any = null;
+        if (contentType && contentType.includes("application/json")) {
+          data = await res.json();
+        }
 
-      if (!res.ok) {
-        console.error("Login failed with status:", res.status, data);
-        showToast(data?.message || `Gagal login (Error ${res.status})`, "error");
-        return;
-      }
+        if (!res.ok) {
+          console.error("Login failed with status:", res.status, data);
+          showToast(data?.message || `Gagal login (Error ${res.status})`, "error");
+          return;
+        }
 
       if (data?.success) {
         // 1. Bersihkan sesi lama secara menyeluruh agar tidak ada residu data/perusahaan akun sebelumnya
         clearAuthSession();
 
         const user = data.data.user;
-        const newAccessToken = data.data.accessToken;
+        const accessToken = data.data.accessToken;
 
         // 2. Simpan token & user akun baru
-        localStorage.setItem("accessToken", newAccessToken);
+        localStorage.setItem("accessToken", accessToken);
         localStorage.setItem("user", JSON.stringify(user));
 
         if (user?.company?.id) {
@@ -81,15 +78,11 @@ function LoginForm() {
 
         showToast("Login berhasil!", "success");
 
-        // Cek jika terdapat target redirect dari tautan yang dibagikan
-        if (redirectParam && redirectParam.startsWith("/")) {
-          if (redirectParam.startsWith("/gabung-perusahaan") && user?.company?.id) {
-            router.replace("/dashboard");
+          // Cek jika terdapat target redirect dari tautan yang dibagikan
+          if (redirectParam && redirectParam.startsWith("/")) {
+            router.replace(redirectParam);
             return;
           }
-          router.replace(redirectParam);
-          return;
-        }
 
         // Redirect default sesuai alur aplikasi
         const skipCompany = getPersonalModePreference(user.id);
@@ -110,20 +103,8 @@ function LoginForm() {
     }
   };
 
-  const loginWithGoogle = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
-      handleGoogleSuccess(tokenResponse.access_token);
-    },
-    onError: (error) => {
-      console.error("Google Login Error:", error);
-      setIsLoading(false);
-      showToast("Gagal menghubungkan dengan Google", "error");
-    },
-    prompt: "select_account",
-  });
-
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-x-hidden overflow-y-auto">
+    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
 
       {/* Top Section */}
       <div className="flex flex-col items-center pt-20 px-6 z-10">
@@ -144,47 +125,17 @@ function LoginForm() {
             </p>
           </div>
 
-          <div className="flex justify-center w-full mt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setIsLoading(true);
-                loginWithGoogle();
+          <div className={`flex justify-center w-full mt-2 ${isLoading ? "pointer-events-none opacity-50" : ""}`}>
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => {
+                console.error("Login Failed");
+                setIsLoading(false);
               }}
-              disabled={isLoading}
-              className="w-full max-w-[300px] h-[46px] bg-white hover:bg-[#F8FAFC] active:bg-[#F1F5F9] border border-[#747775]/40 hover:border-[#747775]/70 rounded-full flex items-center justify-center gap-3 px-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)] active:scale-[0.98] transition-all cursor-pointer font-sans disabled:opacity-60 disabled:pointer-events-none"
-            >
-              {isLoading ? (
-                <div className="flex items-center gap-2 text-[#374151] text-[14px] font-medium">
-                  <Loader2 className="w-5 h-5 animate-spin text-[#1E4738]" />
-                  <span>Menghubungkan...</span>
-                </div>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
-                  </svg>
-                  <span className="text-[14px] font-semibold text-[#1F1F1F] tracking-normal">
-                    Masuk dengan Google
-                  </span>
-                </>
-              )}
-            </button>
+              shape="pill"
+              size="large"
+              width="300"
+            />
           </div>
         </div>
       </div>

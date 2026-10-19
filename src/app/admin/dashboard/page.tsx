@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   ChevronLeft, 
   Building2, 
@@ -28,14 +28,38 @@ import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
 import { getActiveCompanyId } from "@/lib/api";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData } from "@/lib/clientCache";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
   const { activeCompanyId, activeCompany, activeRole, memberships, switchCompany, isLoading: isCompanyLoading } = useCompany();
   
-  const [company, setCompany] = useState<{ name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(null);
+  const [company, setCompany] = useState<{ id?: string; name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+
+  // Ref untuk melacak perusahaan yang sedang di-fetch guna mencegah race condition
+  const activeFetchCompanyIdRef = useRef<string | null>(null);
+
+  // Listener event pergantian perusahaan untuk mereset dashboard admin seketika
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setCompany(null);
+      setAttendanceStats(null);
+      setLeaveStats(null);
+      setActivities([]);
+      setIsLoading(true);
+      setIsStatsLoading(true);
+      setIsLeaveStatsLoading(true);
+      setIsActivitiesLoading(true);
+      setDashboardError(null);
+      setStatsError(null);
+      setActivitiesError(null);
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, []);
   
   const [attendanceStats, setAttendanceStats] = useState<{
     hadir: number;
@@ -141,6 +165,9 @@ export default function AdminDashboardPage() {
   };
 
   const fetchDashboardData = async () => {
+    const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
+
     try {
       setIsLoading(true);
       setDashboardError(null);
@@ -152,13 +179,19 @@ export default function AdminDashboardPage() {
       }
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      const compId = activeCompanyId || getActiveCompanyId();
       if (compId) {
         headers["x-company-id"] = compId;
       }
 
       const m = selectedDate.getMonth() + 1;
       const y = selectedDate.getFullYear();
+
+      const actCacheKey = buildCacheKey("admin_dashboard_act", compId);
+      const cachedAct = getCachedData<any[]>(actCacheKey);
+      if (cachedAct?.data && activeFetchCompanyIdRef.current === compId) {
+        setActivities(cachedAct.data);
+        setIsActivitiesLoading(false);
+      }
 
       // Parallel fetching using Promise.allSettled so that one endpoint failure doesn't block the rest
       const [resCompanySettled, resStatsSettled, resLeaveSettled, resActSettled, resBadgeSettled] = await Promise.allSettled([
@@ -184,11 +217,17 @@ export default function AdminDashboardPage() {
         }),
       ]);
 
+      // Race condition guard: jika perusahaan telah berganti di tengah jalan, drop respons
+      if (activeFetchCompanyIdRef.current !== compId) {
+        return;
+      }
+
       let hadSuccess = false;
 
       // 1. Company Data
       if (resCompanySettled.status === "fulfilled" && resCompanySettled.value?.success && resCompanySettled.value.data) {
         setCompany({
+          id: compId || undefined,
           name: resCompanySettled.value.data.name || "",
           address: resCompanySettled.value.data.address || "",
           memberCount: resCompanySettled.value.data.memberCount || 0,
@@ -217,6 +256,7 @@ export default function AdminDashboardPage() {
       // 4. Notifications / Activities
       if (resActSettled.status === "fulfilled" && resActSettled.value?.success && Array.isArray(resActSettled.value.data)) {
         setActivities(resActSettled.value.data);
+        setCachedData(actCacheKey, resActSettled.value.data);
         setActivitiesError(null);
         hadSuccess = true;
       } else {
@@ -237,20 +277,22 @@ export default function AdminDashboardPage() {
             fetch(process.env.NEXT_PUBLIC_API_URL + "/company/exit-requests", { headers }).then(r => r.json()),
           ]);
 
-          if (resLeavesAdmin.status === "fulfilled" && resLeavesAdmin.value?.success && Array.isArray(resLeavesAdmin.value.data)) {
-            const pendingLeaves = resLeavesAdmin.value.data.filter((l: any) => l.status === "Menunggu").length;
-            setPendingLeavesCount(pendingLeaves);
-          }
+          if (activeFetchCompanyIdRef.current === compId) {
+            if (resLeavesAdmin.status === "fulfilled" && resLeavesAdmin.value?.success && Array.isArray(resLeavesAdmin.value.data)) {
+              const pendingLeaves = resLeavesAdmin.value.data.filter((l: any) => l.status === "Menunggu").length;
+              setPendingLeavesCount(pendingLeaves);
+            }
 
-          let joinCount = 0;
-          let exitCount = 0;
-          if (resJoin.status === "fulfilled" && resJoin.value?.success && Array.isArray(resJoin.value.data)) {
-            joinCount = resJoin.value.data.length;
+            let joinCount = 0;
+            let exitCount = 0;
+            if (resJoin.status === "fulfilled" && resJoin.value?.success && Array.isArray(resJoin.value.data)) {
+              joinCount = resJoin.value.data.length;
+            }
+            if (resExit.status === "fulfilled" && resExit.value?.success && Array.isArray(resExit.value.data)) {
+              exitCount = resExit.value.data.length;
+            }
+            setKaryawanBadgeCount(joinCount + exitCount);
           }
-          if (resExit.status === "fulfilled" && resExit.value?.success && Array.isArray(resExit.value.data)) {
-            exitCount = resExit.value.data.length;
-          }
-          setKaryawanBadgeCount(joinCount + exitCount);
         } catch {}
       }
 
@@ -259,22 +301,36 @@ export default function AdminDashboardPage() {
       }
     } catch (error) {
       console.error("Failed to fetch dashboard data", error);
-      setDashboardError("Terjadi kesalahan saat memuat data dashboard.");
-      setIsStatsLoading(false);
-      setIsLeaveStatsLoading(false);
-      setIsActivitiesLoading(false);
+      if (activeFetchCompanyIdRef.current === compId) {
+        setDashboardError("Terjadi kesalahan saat memuat data dashboard.");
+        setIsStatsLoading(false);
+        setIsLeaveStatsLoading(false);
+        setIsActivitiesLoading(false);
+      }
     } finally {
-      setIsLoading(false);
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     if (isCompanyLoading) return;
+    setCompany(null);
+    setAttendanceStats(null);
+    setLeaveStats(null);
+    setActivities([]);
+    setIsLoading(true);
+    setIsStatsLoading(true);
+    setIsLeaveStatsLoading(true);
+    setIsActivitiesLoading(true);
     fetchDashboardData();
   }, [router, activeCompanyId, isCompanyLoading]);
 
-  // Fallback company if /companies/me is loading or failed but activeCompany is available
-  const displayCompany = company || (activeCompany ? {
+  // Fallback company if /companies/me is loading or failed but activeCompany is available.
+  // Pastikan company id cocok dengan activeCompanyId agar tidak menampilkan nama perusahaan lama
+  const displayCompany = (company && (!company.id || company.id === activeCompanyId) ? company : null) || (activeCompany ? {
+    id: activeCompany.id,
     name: activeCompany.name,
     address: "",
     memberCount: 0,
@@ -547,8 +603,12 @@ export default function AdminDashboardPage() {
                 return true;
               }).slice(0, 5);
 
-              if (isActivitiesLoading) {
-                return <div className="p-8 text-center text-[#7d998c] text-[13px] font-medium animate-pulse flex items-center justify-center h-full">Memuat aktivitas...</div>;
+              if (isActivitiesLoading && safeActivities.length === 0) {
+                return (
+                  <div className="p-4 flex flex-col gap-3">
+                    <CardListSkeleton count={3} type="notification" />
+                  </div>
+                );
               }
               if (activitiesError) {
                 return (

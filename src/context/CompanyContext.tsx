@@ -321,7 +321,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       setMemberships(activeList);
 
       // Validasi activeCompanyId terhadap membership yang benar-benar aktif
-      const storedId = getActiveCompanyId();
+      const storedId = activeCompanyId || getActiveCompanyId();
       const matched = activeList.find((m) => m.company_id === storedId);
 
       if (storedId && matched) {
@@ -491,8 +491,6 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         window.location.replace("/dashboard");
         return;
       }
-
-      window.location.reload();
     }
   }, [memberships, activeCompanyId]);
 
