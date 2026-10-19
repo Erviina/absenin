@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
+import { googleLogout } from "@react-oauth/google";
 
 export default function ProfilPage() {
   const router = useRouter();
@@ -102,6 +103,12 @@ export default function ProfilPage() {
       icon: "logout",
     });
     if (!confirmed) return;
+
+    try {
+      googleLogout();
+    } catch (e) {
+      console.error("googleLogout error:", e);
+    }
 
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");
