@@ -355,7 +355,6 @@ export default function AdminDashboardPage() {
       <TopBar 
         title="Manajemen" 
         onBack={() => router.push("/dashboard")} 
-        showCompanySwitcher={true}
         rightAction={
           <button
             onClick={() => router.push("/notifikasi")}
