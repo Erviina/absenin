@@ -482,7 +482,7 @@ function GabungPerusahaanContent() {
         </p>
 
         {/* Bottom Button */}
-        <div className="absolute bottom-8 left-6 right-6 flex justify-center w-full max-w-md mx-auto">
+        <div className="absolute bottom-8 left-0 right-0 px-6 flex justify-center w-full max-w-md mx-auto">
           <button 
             onClick={handleLanjutKeBeranda}
             disabled={isLoading}

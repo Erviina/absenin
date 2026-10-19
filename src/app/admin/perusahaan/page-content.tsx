@@ -80,20 +80,25 @@ function MapControls({
   const handleFocusTarget = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    map.stop();
+    const currentZoom = map.getZoom();
+    const targetZoom = Math.max(currentZoom, 16);
     if (onLocate) {
       onLocate((lat: number, lng: number) => {
-        map.flyTo([lat, lng], Math.max(map.getZoom(), 16), {
-          animate: true,
-          duration: 0.8,
-        });
+        map.stop();
+        if (currentZoom === targetZoom) {
+          map.panTo([lat, lng], { animate: true, duration: 0.35 });
+        } else {
+          map.setView([lat, lng], targetZoom, { animate: true, duration: 0.35 });
+        }
       });
       return;
     }
-    const targetZoom = Math.max(map.getZoom(), 16);
-    map.flyTo([targetLat, targetLng], targetZoom, {
-      animate: true,
-      duration: 0.8,
-    });
+    if (currentZoom === targetZoom) {
+      map.panTo([targetLat, targetLng], { animate: true, duration: 0.35 });
+    } else {
+      map.setView([targetLat, targetLng], targetZoom, { animate: true, duration: 0.35 });
+    }
   };
 
   const posClass = position === "bottom-right" 
@@ -238,6 +243,18 @@ async function reverseGeocodeCoord(lat: number, lon: number): Promise<string | n
   }
 
   return null;
+}
+
+// Helper to normalize and ensure time format is strictly HH:mm (2 digits hour and 2 digits minute)
+function formatTimeHHmm(timeStr?: string | null, fallback = "08:00"): string {
+  if (!timeStr) return fallback;
+  const parts = timeStr.trim().split(":");
+  if (parts.length >= 2) {
+    const h = (parts[0] || "08").padStart(2, "0");
+    const m = (parts[1] || "00").padStart(2, "0");
+    return `${h}:${m}`;
+  }
+  return timeStr;
 }
 
 export default function KelolaPerusahaanPage() {
@@ -398,8 +415,8 @@ export default function KelolaPerusahaanPage() {
           const fetchedWorkDays = Array.isArray(data.data.work_days) && data.data.work_days.length > 0 
             ? data.data.work_days 
             : ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
-          const fetchedStart = data.data.work_start_time || "08:00";
-          const fetchedEnd = data.data.work_end_time || "17:00";
+          const fetchedStart = formatTimeHHmm(data.data.work_start_time, "08:00");
+          const fetchedEnd = formatTimeHHmm(data.data.work_end_time, "17:00");
 
           setCompanyData({
             name: data.data.name || "",
@@ -663,10 +680,12 @@ export default function KelolaPerusahaanPage() {
     try {
       setIsSaving(true);
       const token = localStorage.getItem("accessToken");
+      const cleanStart = formatTimeHHmm(jadwalForm.work_start_time, "08:00");
+      const cleanEnd = formatTimeHHmm(jadwalForm.work_end_time, "17:00");
       const requestBody = { 
         work_days: jadwalForm.work_days,
-        work_start_time: jadwalForm.work_start_time,
-        work_end_time: jadwalForm.work_end_time
+        work_start_time: cleanStart,
+        work_end_time: cleanEnd
       };
 
       const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
@@ -683,8 +702,8 @@ export default function KelolaPerusahaanPage() {
         setCompanyData(prev => ({ 
           ...prev, 
           work_days: jadwalForm.work_days,
-          work_start_time: jadwalForm.work_start_time,
-          work_end_time: jadwalForm.work_end_time
+          work_start_time: cleanStart,
+          work_end_time: cleanEnd
         }));
         setIsKelolaJadwalOpen(false);
         showToast("Jadwal operasional berhasil diperbarui!", "success");
@@ -1100,8 +1119,8 @@ export default function KelolaPerusahaanPage() {
               onClick={() => {
                 setJadwalForm({
                   work_days: companyData.work_days,
-                  work_start_time: companyData.work_start_time,
-                  work_end_time: companyData.work_end_time
+                  work_start_time: formatTimeHHmm(companyData.work_start_time, "08:00"),
+                  work_end_time: formatTimeHHmm(companyData.work_end_time, "17:00")
                 });
                 setIsKelolaJadwalOpen(true);
               }}
@@ -1137,7 +1156,7 @@ export default function KelolaPerusahaanPage() {
                 <div className="flex flex-col">
                   <span className="text-[#9CA3AF] text-[11px] font-medium mb-0.5">Jam Masuk & Pulang</span>
                   <span className="text-[#111827] text-[14px] font-bold">
-                    {companyData.work_start_time} - {companyData.work_end_time} WIB
+                    {formatTimeHHmm(companyData.work_start_time, "08:00")} - {formatTimeHHmm(companyData.work_end_time, "17:00")} WIB
                   </span>
                 </div>
               </div>

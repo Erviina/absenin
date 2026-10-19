@@ -318,8 +318,8 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
       message: "Berhasil mendapatkan data perusahaan",
       data: {
         ...company,
-        work_start_time: company.work_start_time || "08:00",
-        work_end_time: company.work_end_time || "17:00",
+        work_start_time: company.work_start_time ? String(company.work_start_time).split(':').slice(0, 2).join(':') : "08:00",
+        work_end_time: company.work_end_time ? String(company.work_end_time).split(':').slice(0, 2).join(':') : "17:00",
         work_days: (Array.isArray(company.work_days) && company.work_days.length > 0)
           ? company.work_days
           : ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
