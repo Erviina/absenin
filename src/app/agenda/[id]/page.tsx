@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
-import { Calendar, Clock, MapPin, ExternalLink, Info, ArrowLeft, Share2, Tag, FileText } from "lucide-react";
+import { Calendar, MapPin, ExternalLink, Info, ArrowLeft, Share2, Tag, FileText } from "lucide-react";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
-import { formatDateWithDay } from "@/lib/dateUtils";
 import { shareContent } from "@/lib/shareUtils";
 import { isAgendaUrl, formatAgendaUrl, getAgendaCategoryColor, LocationPinIcon } from "@/app/agenda/page";
 import { Badge } from "@/components/Badge";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
 
 export default function AgendaDetailPage() {
   const router = useRouter();
@@ -90,7 +90,7 @@ export default function AgendaDetailPage() {
   if (loading) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
-        <TopBar title="Detail Agenda" onBack={() => router.back()} />
+        <TopBar title="Detail Agenda" onBack={() => router.push("/agenda")} />
         <div className="flex-1 flex items-center justify-center">
           <p className="text-gray-500 text-sm">Memuat agenda...</p>
         </div>
@@ -101,7 +101,7 @@ export default function AgendaDetailPage() {
   if (error || !agenda) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
-        <TopBar title="Detail Agenda" onBack={() => router.back()} />
+        <TopBar title="Detail Agenda" onBack={() => router.push("/agenda")} />
         <div className="flex-1 flex flex-col items-center justify-center px-6 text-center gap-3">
           <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
             <Calendar className="w-7 h-7" />
@@ -126,7 +126,7 @@ export default function AgendaDetailPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
       <TopBar 
         title="Detail Agenda" 
-        onBack={() => router.back()} 
+        onBack={() => router.push("/agenda")} 
         rightAction={
           <button
             onClick={handleShare}
@@ -163,31 +163,12 @@ export default function AgendaDetailPage() {
               Jadwal & Waktu
             </h3>
 
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-[#F3F4F6] flex items-center justify-center text-[#6B7280] shrink-0">
-                  <Calendar className="w-[18px] h-[18px]" strokeWidth={2.5} />
-                </div>
-                <div>
-                  <p className="text-[11px] text-[#6B7280] font-medium">Tanggal</p>
-                  <p className="text-[14px] font-bold text-[#111827]">
-                    {agenda.start_time ? formatDateWithDay(agenda.start_time) : "-"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-[#F3F4F6] flex items-center justify-center text-[#6B7280] shrink-0">
-                  <Clock className="w-[18px] h-[18px]" strokeWidth={2.5} />
-                </div>
-                <div>
-                  <p className="text-[11px] text-[#6B7280] font-medium">Waktu</p>
-                  <p className="text-[14px] font-bold text-[#111827]">
-                    {agenda.time_range || agenda.time || "-"}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <AgendaDetailSchedule
+              startTime={agenda.start_time}
+              endTime={agenda.end_time}
+              isAllDay={agenda.is_all_day}
+              fallbackTime={agenda.time_range || agenda.time}
+            />
           </div>
 
           {(agenda.link_or_location || agenda.link) && (

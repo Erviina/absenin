@@ -164,7 +164,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
 
       {/* 1. TOAST NOTIFICATIONS CONTAINER */}
       {toasts.length > 0 && (
-        <div className="fixed top-4 inset-x-0 z-[250] pointer-events-none flex flex-col items-center gap-2 px-4 max-w-md mx-auto">
+        <div className="fixed top-4 inset-x-0 z-[250] pointer-events-none flex flex-col items-center gap-2 px-4 w-full sm:max-w-md mx-auto">
           {toasts.map((toast) => {
             const isSuccess = toast.type === "success";
             const isError = toast.type === "error";

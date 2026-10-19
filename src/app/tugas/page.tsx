@@ -10,19 +10,22 @@ import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { CustomTimePicker } from "@/components/CustomTimePicker";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Badge } from "@/components/Badge";
+import { ViewAllButton } from "@/components/ViewAllButton";
 
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
+import { getActiveCompanyId } from "@/lib/api";
 
 export default function TugasPage() {
   const router = useRouter();
-  const { activeCompanyId, activeCompany } = useCompany();
+  const { activeCompanyId, activeCompany, isLoading: isCompanyLoading } = useCompany();
   const { showConfirm, showToast } = useDialog();
   
   const [activeTab, setActiveTab] = useState<"personal" | "group">("personal");
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [isViewingUpcoming, setIsViewingUpcoming] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form states
   const [taskTitle, setTaskTitle] = useState("");
@@ -40,6 +43,13 @@ export default function TugasPage() {
 
   useEffect(() => {
     const fetchTasks = async () => {
+      if (isCompanyLoading) return;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (!compId) {
+        setTasks([]);
+        setIsLoadingTasks(false);
+        return;
+      }
       setIsLoadingTasks(true);
       try {
         const token = localStorage.getItem("accessToken");
@@ -47,8 +57,8 @@ export default function TugasPage() {
         const headers: Record<string, string> = {
           "Authorization": "Bearer " + token,
         };
-        if (activeCompanyId) {
-          headers["x-company-id"] = activeCompanyId;
+        if (compId) {
+          headers["x-company-id"] = compId;
         }
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", {
           headers
@@ -66,19 +76,22 @@ export default function TugasPage() {
       }
     };
     fetchTasks();
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isCompanyLoading]);
 
   // Fetch company members for mentions
   useEffect(() => {
     const fetchMembers = async () => {
+      if (isCompanyLoading) return;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (!compId) return;
       try {
         const token = localStorage.getItem("accessToken");
         if (!token) return;
         const headers: Record<string, string> = {
           Authorization: "Bearer " + token,
         };
-        if (activeCompanyId) {
-          headers["x-company-id"] = activeCompanyId;
+        if (compId) {
+          headers["x-company-id"] = compId;
         }
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/members", {
           headers,
@@ -95,9 +108,14 @@ export default function TugasPage() {
     };
 
     fetchMembers();
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isCompanyLoading]);
 
   const toggleTask = async (id: string) => {
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const t = tasks.find(x => x.id === id);
     if (!t) return;
     
@@ -109,8 +127,8 @@ export default function TugasPage() {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + localStorage.getItem("accessToken")
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
       await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
         method: "PATCH",
@@ -123,6 +141,10 @@ export default function TugasPage() {
   };
 
   const handleOpenAdd = () => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu untuk membuat tugas.", "warning");
+      return;
+    }
     setEditingTaskId(null);
     setTaskTitle("");
     setTaskDate(new Date().toISOString().split("T")[0]);
@@ -134,6 +156,10 @@ export default function TugasPage() {
   };
 
   const handleEditTask = (id: string) => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const t = tasks.find(x => x.id === id);
     if (t) {
       setTaskTitle(t.title);
@@ -176,6 +202,11 @@ export default function TugasPage() {
   });
 
   const handleDeleteTask = async (id: string) => {
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const taskToDelete = tasks.find(t => t.id === id);
     const confirmed = await showConfirm({
       title: "Hapus Tugas?",
@@ -192,8 +223,8 @@ export default function TugasPage() {
       const headers: Record<string, string> = {
         "Authorization": "Bearer " + localStorage.getItem("accessToken")
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
         method: "DELETE",
@@ -211,12 +242,20 @@ export default function TugasPage() {
   };
 
   const handleSaveTask = async () => {
+    if (isSaving) return;
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     if (!taskTitle.trim()) return;
 
-    if (activeTab === "group" && !activeCompanyId) {
+    if (activeTab === "group" && !compId) {
       showToast("Pilih perusahaan terlebih dahulu untuk membuat tugas grup", "error");
       return;
     }
+
+    setIsSaving(true);
 
     const method = editingTaskId ? "PATCH" : "POST";
     const url = editingTaskId ? `/tasks/${editingTaskId}` : "/tasks";
@@ -229,8 +268,8 @@ export default function TugasPage() {
       type: activeTab, // "personal" or "group"
     };
 
-    if (activeCompanyId) {
-      payload.company_id = activeCompanyId;
+    if (compId) {
+      payload.company_id = compId;
     }
 
     if (activeTab === "group") {
@@ -245,8 +284,8 @@ export default function TugasPage() {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + localStorage.getItem("accessToken")
       };
-      if (activeCompanyId) {
-        headers["x-company-id"] = activeCompanyId;
+      if (compId) {
+        headers["x-company-id"] = compId;
       }
 
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + url, {
@@ -264,6 +303,8 @@ export default function TugasPage() {
           setTasks([savedTask, ...tasks]);
           showToast("Tugas baru berhasil ditambahkan", "success");
         }
+        setIsAddingTask(false);
+        setEditingTaskId(null);
       } else {
         const data = await res.json().catch(() => ({}));
         const errorMsg = data.error || data.message || data.errors?.[0] || `HTTP ${res.status}`;
@@ -272,10 +313,9 @@ export default function TugasPage() {
     } catch (err) {
       console.error("Save error:", err);
       showToast("Terjadi kesalahan jaringan saat menyimpan tugas", "error");
+    } finally {
+      setIsSaving(false);
     }
-
-    setIsAddingTask(false);
-    setEditingTaskId(null);
   };
 
   const filteredTasks = tasks.filter(t => t.type === activeTab);
@@ -304,7 +344,7 @@ export default function TugasPage() {
           } else if (isViewingUpcoming) {
             setIsViewingUpcoming(false);
           } else {
-            router.back();
+            router.push("/dashboard");
           }
         }}
         rightAction={
@@ -373,17 +413,21 @@ export default function TugasPage() {
                 <label className="text-[13px] font-bold text-[#374151]">
                   Batas Waktu (Deadline) <span className="text-[#EF4444]">*</span>
                 </label>
-                <div className="flex gap-3">
-                  <CustomDatePicker 
-                    value={taskDate}
-                    onChange={setTaskDate}
-                  />
-                  <CustomTimePicker
-                    value={taskTime}
-                    onChange={setTaskTime}
-                    placeholder="Pilih Waktu"
-                    className="flex-1"
-                  />
+                <div className="flex gap-2.5 sm:gap-3">
+                  <div className="flex-1 min-w-0">
+                    <CustomDatePicker 
+                      value={taskDate}
+                      onChange={setTaskDate}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <CustomTimePicker
+                      value={taskTime}
+                      onChange={setTaskTime}
+                      placeholder="Pilih Waktu"
+                      className="w-full"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -500,7 +544,7 @@ export default function TugasPage() {
                                   {member.full_name}
                                 </span>
                                 <span className="text-[10px] text-gray-400 truncate">
-                                  {member.role ? member.role.toUpperCase() : "MEMBER"}
+                                  {(member.role || "KARYAWAN").toUpperCase() === "MEMBER" ? "KARYAWAN" : (member.role || "KARYAWAN").toUpperCase()}
                                 </span>
                               </div>
                             </div>
@@ -524,7 +568,9 @@ export default function TugasPage() {
 
             <PrimaryButton 
               onClick={handleSaveTask}
-              disabled={!taskTitle.trim()}
+              disabled={!taskTitle.trim() || isSaving}
+              isLoading={isSaving}
+              loadingText={editingTaskId ? "Menyimpan Perubahan..." : "Menyimpan Tugas..."}
               icon={<CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5} />}
             >
               Simpan Tugas
@@ -589,12 +635,7 @@ export default function TugasPage() {
                 <h2 className="text-[#374151] text-[12px] font-bold uppercase tracking-widest">
                   Tugas Mendatang
                 </h2>
-                <button 
-                  onClick={() => setIsViewingUpcoming(true)}
-                  className="text-[#6EA874] text-[12px] font-bold hover:text-[#356E3B] transition-colors"
-                >
-                  Lihat Semua
-                </button>
+                <ViewAllButton onClick={() => setIsViewingUpcoming(true)} />
               </div>
               
               <div className="flex flex-col">

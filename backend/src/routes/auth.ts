@@ -135,29 +135,50 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       profile = profileResultRaw.rows[0] as any;
     }
 
-    // Fetch active company — hanya berdasarkan company_members aktif (konsisten dengan resolveTenant di /auth/me)
+    // Fetch active company — prioritaskan profile.company_id jika status aktif di company_members
     let company = null;
     let targetCompanyId: string | null = null;
-    const activeMemRes = await db.execute(sql`
-      SELECT company_id, role
-      FROM company_members
-      WHERE profile_id = ${profile.id}
-        AND status = 'active'
-        AND deleted_at IS NULL
-      ORDER BY joined_at DESC
-      LIMIT 1
-    `);
-    if (activeMemRes.rows.length > 0) {
-      targetCompanyId = activeMemRes.rows[0].company_id as string;
+
+    if (profile.company_id) {
+      const currentMemCheck = await db.execute(sql`
+        SELECT company_id, role
+        FROM company_members
+        WHERE profile_id = ${profile.id}
+          AND company_id = ${profile.company_id}
+          AND status = 'active'
+          AND deleted_at IS NULL
+        LIMIT 1
+      `);
+      if (currentMemCheck.rows.length > 0) {
+        targetCompanyId = profile.company_id;
+      }
     }
-    // Catatan: profile.company_id tidak digunakan sebagai fallback karena bisa tidak sinkron
-    // dengan status keanggotaan aktual di company_members. Sumber kebenaran adalah company_members.
+
+    if (!targetCompanyId) {
+      const activeMemRes = await db.execute(sql`
+        SELECT company_id, role
+        FROM company_members
+        WHERE profile_id = ${profile.id}
+          AND status = 'active'
+          AND deleted_at IS NULL
+        ORDER BY joined_at DESC
+        LIMIT 1
+      `);
+      if (activeMemRes.rows.length > 0) {
+        targetCompanyId = activeMemRes.rows[0].company_id as string;
+      }
+    }
 
     if (targetCompanyId) {
       const companyResult = await db.select().from(companies).where(eq(companies.id, targetCompanyId));
       if (companyResult.length > 0) {
         company = companyResult[0];
       }
+      if (profile.company_id !== targetCompanyId) {
+        await db.execute(sql`UPDATE profiles SET company_id = ${targetCompanyId} WHERE id = ${profile.id}`);
+      }
+    } else if (profile.company_id) {
+      await db.execute(sql`UPDATE profiles SET company_id = NULL WHERE id = ${profile.id}`);
     }
 
     // Fetch roles
@@ -225,12 +246,20 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
     }
 
     // Resolve tenant for multi-tenancy
-    const tenant = await resolveTenant(req, userId);
-    let targetCompanyId = tenant?.companyId || null;
+    let tenant = await resolveTenant(req, userId);
 
-    if (!targetCompanyId && profile.company_id) {
-      await db.execute(sql`UPDATE profiles SET company_id = NULL WHERE id = ${userId}`);
+    // Jika header x-company-id yang dikirim tidak valid untuk user ini (misal sisa sesi lama),
+    // coba selesaikan tenant tanpa header usang tersebut agar user tetap menerima company aktif yang sah
+    if (!tenant) {
+      const headerCompanyId = req.headers["x-company-id"] as string | undefined;
+      if (headerCompanyId) {
+        const reqWithoutHeader = { ...req, headers: { ...req.headers } };
+        delete (reqWithoutHeader.headers as any)["x-company-id"];
+        tenant = await resolveTenant(reqWithoutHeader as any, userId);
+      }
     }
+
+    let targetCompanyId = tenant?.companyId || null;
 
     // Fetch company if available
     let company = null;

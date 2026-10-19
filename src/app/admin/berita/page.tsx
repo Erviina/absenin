@@ -28,6 +28,7 @@ export default function KelolaBeritaPage() {
   const { showConfirm, showToast } = useDialog();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Semua");
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -44,29 +45,38 @@ export default function KelolaBeritaPage() {
 
   const fetchNews = async () => {
     try {
+      setIsLoading(true);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news", {
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(offset));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (activeFilter && activeFilter !== "Semua") params.set("category", activeFilter);
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/news?${params.toString()}`, {
         headers
       });
       const data = await res.json();
       if (data.success) {
-        setNews(data.data);
+        setNews(data.data || []);
+        const total = data.pagination?.total ?? data.meta?.total ?? (data.data?.length || 0);
+        setTotalNews(total);
       }
     } catch (error) {
       console.error("Error fetching news:", error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeCompanyId, limit, offset, searchQuery, activeFilter]);
 
   useEffect(() => {
     fetchNews();
-  }, [activeCompanyId]);
+  }, [fetchNews]);
 
   const handleOpenCreate = () => {
     router.push("/admin/buat-berita");
@@ -77,6 +87,7 @@ export default function KelolaBeritaPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (isDeletingId) return;
     const confirmed = await showConfirm({
       title: "Hapus Berita?",
       message: "Apakah Anda yakin ingin menghapus berita ini? Tindakan ini tidak dapat dibatalkan.",
@@ -87,6 +98,7 @@ export default function KelolaBeritaPage() {
     });
     if (!confirmed) return;
 
+    setIsDeletingId(id);
     try {
       const token = localStorage.getItem("accessToken");
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
@@ -104,16 +116,10 @@ export default function KelolaBeritaPage() {
       }
     } catch (error) {
       showToast("Error jaringan saat menghapus berita", "error");
+    } finally {
+      setIsDeletingId(null);
     }
   };
-
-  const filteredNews = news.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          item.content.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (activeFilter === "Semua") return matchesSearch;
-    return matchesSearch && item.category?.name.toLowerCase() === activeFilter.toLowerCase();
-  });
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-8">
@@ -165,11 +171,14 @@ export default function KelolaBeritaPage() {
 
         <div className="flex flex-col gap-4 mt-2">
           {isLoading ? (
-            <div className="text-center py-10 text-gray-400 text-[13px]">Memuat berita...</div>
-          ) : filteredNews.length === 0 ? (
-            <div className="bg-white rounded-[24px] p-8 text-center border border-[#eef5f0] shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-              <p className="text-[#7d998c] text-[13px] font-medium">Belum ada berita yang diterbitkan.</p>
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
+              <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+              <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
             </div>
+          ) : news.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">
+              Belum ada berita yang diterbitkan.
+            </p>
           ) : (
             filteredNews.map((item) => (
               <div 
@@ -299,8 +308,18 @@ export default function KelolaBeritaPage() {
                     </span>
                   </div>
                 </div>
-              </div>
-            ))
+              ))}
+
+              <Pagination
+                total={totalNews}
+                limit={limit}
+                offset={offset}
+                onPageChange={setOffset}
+                isLoading={isLoading}
+                label="berita"
+                className="mt-2"
+              />
+            </>
           )}
         </div>
       </div>

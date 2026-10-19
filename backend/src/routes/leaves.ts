@@ -6,6 +6,7 @@ import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
 import { resolveTenant } from "../utils/tenant";
+import { parsePaginationParams, buildPaginationMeta } from "../utils/pagination";
 
 const router = express.Router();
 
@@ -25,10 +26,44 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const tenant = await resolveTenant(req, user.id);
+    const { limit, offset } = parsePaginationParams(req.query, 10, 100);
+    const { status, category, category_id, start_date, end_date, search } = req.query;
 
     const companyCondition = tenant ? sql`AND (lr.company_id = ${tenant.companyId} OR lr.company_id IS NULL)` : sql``;
 
-    // Fetch leave requests for this user, ordered by created_at desc with approver profile info
+    let filterConditions = sql``;
+    if (status && typeof status === "string" && status !== "Semua") {
+      filterConditions = sql`${filterConditions} AND lr.status = ${status}`;
+    }
+    if (category_id && typeof category_id === "string") {
+      filterConditions = sql`${filterConditions} AND lr.leave_category_id = ${category_id}`;
+    } else if (category && typeof category === "string" && category !== "Semua Kategori" && category !== "Semua") {
+      filterConditions = sql`${filterConditions} AND (lc.name ILIKE ${category} OR lc.name ILIKE ${'%' + category + '%'})`;
+    }
+    if (start_date && typeof start_date === "string") {
+      filterConditions = sql`${filterConditions} AND (DATE(lr.start_date) <= ${start_date}::date AND DATE(lr.end_date) >= ${start_date}::date)`;
+    }
+    if (end_date && typeof end_date === "string") {
+      filterConditions = sql`${filterConditions} AND (DATE(lr.end_date) <= ${end_date}::date)`;
+    }
+    if (search && typeof search === "string" && search.trim()) {
+      const q = `%${search.trim()}%`;
+      filterConditions = sql`${filterConditions} AND (lr.description ILIKE ${q} OR lc.name ILIKE ${q})`;
+    }
+
+    // 1. Total count
+    const countRes = await db.execute(sql`
+      SELECT COUNT(*) as total
+      FROM leave_requests lr
+      LEFT JOIN leave_categories lc ON lc.id = lr.leave_category_id
+      WHERE lr.profile_id = ${user.id} 
+        AND lr.deleted_at IS NULL
+        ${companyCondition}
+        ${filterConditions}
+    `);
+    const total = parseInt(countRes.rows[0]?.total as string, 10) || 0;
+
+    // 2. Fetch paginated leave requests for this user, ordered by created_at desc with approver profile info
     const userLeaves = await db.execute(sql`
       SELECT 
         lr.id,
@@ -54,10 +89,22 @@ router.get("/", authenticate, async (req: Request, res: Response) => {
       WHERE lr.profile_id = ${user.id} 
         AND lr.deleted_at IS NULL
         ${companyCondition}
-      ORDER BY lr.created_at DESC
+        ${filterConditions}
+      ORDER BY lr.created_at DESC, lr.id DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `);
       
-    res.json({ success: true, data: userLeaves.rows });
+    res.json({
+      success: true,
+      data: userLeaves.rows,
+      pagination: buildPaginationMeta(total, limit, offset),
+      meta: {
+        total,
+        limit,
+        offset,
+      }
+    });
   } catch (error) {
     console.error("Error fetching user leaves:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
@@ -219,7 +266,47 @@ router.get("/admin", authenticate, async (req: Request, res: Response): Promise<
     }
     const companyId = tenant.companyId;
 
-    // Fetch leaves for this company
+    const { limit, offset } = parsePaginationParams(req.query, 10, 100);
+    const { status, category, category_id, search, start_date, end_date } = req.query;
+
+    let filterConditions = sql``;
+    if (status && typeof status === "string" && status !== "Semua") {
+      filterConditions = sql`${filterConditions} AND lr.status = ${status}`;
+    }
+    if (category_id && typeof category_id === "string") {
+      filterConditions = sql`${filterConditions} AND lr.leave_category_id = ${category_id}`;
+    } else if (category && typeof category === "string" && category !== "Semua") {
+      filterConditions = sql`${filterConditions} AND (lc.name ILIKE ${category} OR lc.name ILIKE ${'%' + category + '%'})`;
+    }
+    if (start_date && typeof start_date === "string") {
+      filterConditions = sql`${filterConditions} AND (DATE(lr.start_date) <= ${start_date}::date AND DATE(lr.end_date) >= ${start_date}::date)`;
+    }
+    if (end_date && typeof end_date === "string") {
+      filterConditions = sql`${filterConditions} AND (DATE(lr.end_date) <= ${end_date}::date)`;
+    }
+    if (search && typeof search === "string" && search.trim()) {
+      const q = `%${search.trim()}%`;
+      filterConditions = sql`${filterConditions} AND (
+        p.full_name ILIKE ${q} OR 
+        p.email ILIKE ${q} OR 
+        lr.description ILIKE ${q} OR 
+        lc.name ILIKE ${q}
+      )`;
+    }
+
+    // 1. Total count
+    const countRes = await db.execute(sql`
+      SELECT COUNT(*) as total
+      FROM leave_requests lr
+      LEFT JOIN profiles p ON p.id = lr.profile_id
+      LEFT JOIN leave_categories lc ON lc.id = lr.leave_category_id
+      WHERE lr.company_id = ${companyId}
+        AND lr.deleted_at IS NULL
+        ${filterConditions}
+    `);
+    const total = parseInt(countRes.rows[0]?.total as string, 10) || 0;
+
+    // 2. Fetch leaves for this company
     const companyLeaves = await db.execute(sql`
       SELECT 
         lr.id, lr.start_date, lr.end_date, lr.description, lr.attachment_url, lr.status, lr.created_at, lr.rejection_reason,
@@ -235,10 +322,22 @@ router.get("/admin", authenticate, async (req: Request, res: Response): Promise<
       LEFT JOIN leave_categories lc ON lc.id = lr.leave_category_id
       WHERE lr.company_id = ${companyId}
         AND lr.deleted_at IS NULL
-      ORDER BY lr.created_at DESC
+        ${filterConditions}
+      ORDER BY lr.created_at DESC, lr.id DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `);
       
-    return res.status(200).json({ success: true, data: companyLeaves.rows });
+    return res.status(200).json({
+      success: true,
+      data: companyLeaves.rows,
+      pagination: buildPaginationMeta(total, limit, offset),
+      meta: {
+        total,
+        limit,
+        offset,
+      }
+    });
   } catch (error) {
     console.error("Error fetching company leaves:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });

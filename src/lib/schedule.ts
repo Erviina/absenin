@@ -44,6 +44,8 @@ export const MONTH_NAMES_ID = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember"
 ] as const;
 
+export const DEFAULT_WORK_DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
+
 /**
  * Mem-parsing string server_time secara aman ke epoch timestamp (ms).
  * Mendukung format ISO dengan offset (+07:00, Z) maupun string tanpa offset (diasumsikan Asia/Jakarta).
@@ -150,9 +152,10 @@ export function getNextCheckInSchedule(
   const openTimeFormatted = `${String(openHour).padStart(2, '0')}:${String(openMinute).padStart(2, '0')}`;
   const startTimeFormatted = `${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}`;
 
-  const workDays = schedule?.work_days;
-  const hasCustomWorkDays = Array.isArray(workDays) && workDays.length > 0;
-  const isWorkDay = (dayName: string) => (hasCustomWorkDays ? workDays.includes(dayName) : true);
+  const workDays = (Array.isArray(schedule?.work_days) && schedule.work_days.length > 0)
+    ? schedule.work_days
+    : DEFAULT_WORK_DAYS;
+  const isWorkDay = (dayName: string) => workDays.includes(dayName);
 
   const jktParts = getJakartaParts(refDate);
 
@@ -230,7 +233,9 @@ export function evaluateSchedule(
   // Nilai default jika perusahaan belum memiliki setting khusus (standar proyek 08:00 - 17:00)
   const rawStartTime = schedule?.work_start_time || "08:00";
   const rawEndTime = schedule?.work_end_time || "17:00";
-  const workDays = schedule?.work_days;
+  const workDays = (Array.isArray(schedule?.work_days) && schedule.work_days.length > 0)
+    ? schedule.work_days
+    : DEFAULT_WORK_DAYS;
 
   const [startHourRaw, startMinRaw] = rawStartTime.split(":").map(Number);
   const [endHourRaw, endMinRaw] = rawEndTime.split(":").map(Number);
@@ -252,10 +257,7 @@ export function evaluateSchedule(
   const endTimeFormatted = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
 
   // Cek work_days
-  let isWorkDay = true;
-  if (Array.isArray(workDays) && workDays.length > 0) {
-    isWorkDay = workDays.includes(jktParts.currentDayName);
-  }
+  const isWorkDay = workDays.includes(jktParts.currentDayName);
 
   // Cek jam buka check-in
   const isTimeOpen = jktParts.totalMinutes >= openTotalMinutes;

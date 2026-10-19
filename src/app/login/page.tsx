@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 
 import { getPersonalModePreference, isTokenValid } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
+import { setActiveCompanyId, clearAuthSession } from "@/lib/api";
 
 function LoginForm() {
   const router = useRouter();
@@ -17,16 +18,17 @@ function LoginForm() {
 
   // Jika terdapat target redirectParam dari tautan eksternal dan pengguna sudah memiliki token valid, arahkan ke target tersebut
   useEffect(() => {
-    if (!redirectParam || !redirectParam.startsWith("/")) return;
-
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
     if (token) {
       if (isTokenValid(token)) {
-        router.replace(redirectParam);
+        if (redirectParam && redirectParam.startsWith("/")) {
+          router.replace(redirectParam);
+        } else {
+          router.replace("/dashboard");
+        }
       } else {
-        // Token tidak valid atau kedaluwarsa: bersihkan sesi usang
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("user");
+        // Token tidak valid atau kedaluwarsa: bersihkan sesi usang secara menyeluruh
+        clearAuthSession();
       }
     }
   }, [redirectParam, router]);
@@ -94,7 +96,7 @@ function LoginForm() {
   });
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
+    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-x-hidden overflow-y-auto">
 
       {/* Top Section */}
       <div className="flex flex-col items-center pt-20 px-6 z-10">

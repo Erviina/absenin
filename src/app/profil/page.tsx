@@ -6,36 +6,48 @@ import {
   Building2, 
   Camera, 
   Mail, 
-  Phone, 
   Lock, 
   LogOut, 
-  LogIn, 
   ChevronRight,
-  Clock,
-  Shield,
-  X,
-  AlertTriangle
-} from "lucide-react";
+  ArrowLeftRight
+, Loader2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
-import { googleLogout } from "@react-oauth/google";
+import { getActiveCompanyId, setActiveCompanyId, clearAuthSession } from "@/lib/api";
 
 export default function ProfilPage() {
   const router = useRouter();
-  const { activeCompany, activeRole, memberships, refreshMemberships } = useCompany();
+  const { activeCompany, activeCompanyId, activeRole, memberships, currentUser, setCurrentUser, isLoading: isCompanyLoading } = useCompany();
   const { showConfirm, showToast } = useDialog();
+  const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
 
-  const fetchUser = async () => {
+  useEffect(() => {
+    setMounted(true);
+    if (currentUser) {
+      setUser(currentUser);
+      setIsLoading(false);
+    } else {
+      try {
+        const saved = localStorage.getItem("user");
+        if (saved) {
+          setUser(JSON.parse(saved));
+          setIsLoading(false);
+        }
+      } catch {}
+    }
+  }, [currentUser]);
+
+  const fetchUser = async (silent = false) => {
     try {
       const token = localStorage.getItem("accessToken");
       if (!token) {
@@ -43,9 +55,14 @@ export default function ProfilPage() {
         return;
       }
 
+      if (!silent && !user) {
+        setIsLoading(true);
+      }
+
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompany?.id) {
-        headers["x-company-id"] = activeCompany.id;
+      const effectiveCompanyId = activeCompanyId || activeCompany?.id || getActiveCompanyId();
+      if (effectiveCompanyId) {
+        headers["x-company-id"] = effectiveCompanyId;
       }
 
       const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
@@ -55,28 +72,28 @@ export default function ProfilPage() {
       const data = await res.json();
       if (data.success) {
         setUser(data.data.user);
-        try {
-          localStorage.setItem("user", JSON.stringify(data.data.user));
-        } catch {}
+        setCurrentUser(data.data.user);
         setAvatarError(false);
       } else {
-        setError(data.message || "Gagal memuat profil");
+        if (!user) {
+          setError(data.message || "Gagal memuat profil");
+        }
       }
     } catch (err) {
       console.error(err);
-      setError("Terjadi kesalahan jaringan");
+      if (!user) {
+        setError("Terjadi kesalahan jaringan");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    refreshMemberships();
-  }, [refreshMemberships]);
-
-  useEffect(() => {
-    fetchUser();
-  }, [activeCompany?.id]);
+    if (!isCompanyLoading) {
+      fetchUser(true);
+    }
+  }, [activeCompanyId, isCompanyLoading]);
 
   const getRoleDisplay = () => {
     if (activeRole === "owner") return "Pemilik (Owner)";
@@ -104,20 +121,12 @@ export default function ProfilPage() {
     });
     if (!confirmed) return;
 
-    try {
-      googleLogout();
-    } catch (e) {
-      console.error("googleLogout error:", e);
-    }
-
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("user");
-    localStorage.removeItem("activeCompanyId");
-    localStorage.removeItem("companyMemberships");
+    clearAuthSession();
     router.push("/login");
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isUploadingAvatar) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -166,19 +175,23 @@ export default function ProfilPage() {
 
   return (
     <div className="min-h-screen bg-[#fbfdfc] pb-8">
-      <TopBar title="Profil" onBack={() => router.push("/dashboard")} />
+      <TopBar
+        title="Profil"
+        onBack={() => router.push("/dashboard")}
+      />
 
       <div className="px-6 pt-6 flex flex-col gap-6">
-        {isLoading ? (
+        {(isLoading || isCompanyLoading) && !user ? (
           <div className="flex-1 flex flex-col items-center justify-center h-[50vh]">
             <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
             <p className="text-[#4B5563] font-medium text-[14px]">Memuat profil...</p>
           </div>
-        ) : error ? (
+        ) : error && !user ? (
           <div className="flex-1 flex flex-col items-center justify-center h-[50vh] p-6 text-center">
             <p className="text-red-600 font-bold text-[16px] mb-2">{error}</p>
+            <button onClick={() => fetchUser(false)} className="mt-2 px-5 py-2 rounded-full bg-[#356E3B] text-white text-[13px] font-bold active:scale-95 transition-all shadow-sm">Coba Lagi</button>
           </div>
-        ) : user && (
+        ) : user ? (
           <>
         {/* Profile Header section */}
         <div className="flex items-center gap-5">
@@ -206,7 +219,11 @@ export default function ProfilPage() {
               className="absolute bottom-0 right-0 w-[26px] h-[26px] bg-[#1E4738] rounded-full border-[3px] border-white flex items-center justify-center cursor-pointer hover:bg-[#153428] transition-colors"
               onClick={() => !isUploadingAvatar && fileInputRef.current?.click()}
             >
-              <Camera className="w-3.5 h-3.5 text-white" />
+              {isUploadingAvatar ? (
+                <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+              ) : (
+                <Camera className="w-3.5 h-3.5 text-white" />
+              )}
             </div>
 
             {/* Loading Overlay for Avatar */}
@@ -223,16 +240,10 @@ export default function ProfilPage() {
               <User className="w-3.5 h-3.5" />
               <span className="text-[13px] font-medium">{getRoleDisplay()}</span>
             </div>
-            <div 
-              onClick={() => setIsContextDrawerOpen(true)}
-              className="flex items-center gap-1.5 text-[#6B7280] hover:text-[#183B2B] cursor-pointer transition-colors group"
-            >
+            <div className="flex items-center gap-1.5 text-[#6B7280]">
               <Building2 className="w-3.5 h-3.5" />
-              <span className="text-[13px] font-medium group-hover:underline">
+              <span className="text-[13px] font-medium">
                 {activeCompany?.name || user.company?.name || "Belum ada organisasi"}
-              </span>
-              <span className="text-[10px] font-bold text-[#183B2B] bg-[#EAF3ED] px-2 py-0.5 rounded-full ml-1">
-                Ganti
               </span>
             </div>
           </div>
@@ -279,40 +290,52 @@ export default function ProfilPage() {
           </div>
         </div>
 
-        {/* Profil Perusahaan Card */}
-        {(activeCompany || user?.company) && (
-          <div 
-            onClick={() => router.push("/perusahaan")}
-            className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-9 flex justify-center">
-                <Building2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[#111827] text-[14px] font-bold">Profil Perusahaan</span>
-                <span className="text-[#6B7280] text-[12px]">{activeCompany?.name || user?.company?.name || "Lihat profil & informasi organisasi"}</span>
-              </div>
+        {/* Informasi Perusahaan Card */}
+        <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
+          <div className="p-5 flex items-center gap-3 border-b border-[#F3F4F6]">
+            <div className="w-[34px] h-[34px] rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
+              <Building2 className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
             </div>
-            <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+            <h2 className="text-[#111827] text-[15px] font-bold">Informasi Perusahaan</h2>
           </div>
-        )}
 
-        {/* Akses & Perusahaan Card */}
-        <div 
-          onClick={() => setIsContextDrawerOpen(true)}
-          className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-9 flex justify-center">
-              <Building2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[#111827] text-[14px] font-bold">Akses & Perusahaan</span>
-              <span className="text-[#6B7280] text-[12px]">Kelola mode tampilan dan organisasi aktif.</span>
+          <div className="flex flex-col">
+            {/* Profil Perusahaan */}
+            {(activeCompany || user?.company) && (
+              <div 
+                onClick={() => router.push("/perusahaan")}
+                className="p-5 flex items-center justify-between border-b border-[#F3F4F6] active:bg-gray-50 cursor-pointer transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-9 flex justify-center">
+                    <Building2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.75} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[#111827] text-[14px] font-bold">Profil Perusahaan</span>
+                    <span className="text-[#6B7280] text-[12px]">{activeCompany?.name || user?.company?.name || "Lihat profil & informasi organisasi"}</span>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+              </div>
+            )}
+
+            {/* Ganti Perusahaan */}
+            <div 
+              onClick={() => setIsContextDrawerOpen(true)}
+              className="p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <ArrowLeftRight className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.75} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[#111827] text-[14px] font-bold">Ganti Perusahaan</span>
+                  <span className="text-[#6B7280] text-[12px]">Beralih ke organisasi atau perusahaan lain</span>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
         </div>
 
         {/* Keluar dari Akun Card */}
@@ -330,6 +353,11 @@ export default function ProfilPage() {
         </div>
 
           </>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center h-[50vh] p-6 text-center">
+            <p className="text-gray-500 font-medium text-[14px]">Data profil tidak tersedia</p>
+            <button onClick={() => router.push("/dashboard")} className="mt-2 px-5 py-2 rounded-full bg-[#356E3B] text-white text-[13px] font-bold active:scale-95 transition-all shadow-sm">Kembali ke Beranda</button>
+          </div>
         )}
       </div>
 

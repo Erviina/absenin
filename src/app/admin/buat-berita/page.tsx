@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { TopBar } from "@/components/TopBar";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { CustomSelect } from "@/components/CustomSelect";
 import { createClient } from "@supabase/supabase-js";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
@@ -103,6 +104,7 @@ function BuatBeritaForm() {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!title || !content) {
       showToast("Judul dan Isi Berita wajib diisi", "warning");
       return;
@@ -183,7 +185,7 @@ function BuatBeritaForm() {
   if (isLoading) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#f4f9f6] relative">
-        <TopBar title="Edit Berita" />
+        <TopBar title="Edit Berita" onBack={() => router.push("/admin/berita")} />
         <div className="flex-1 flex items-center justify-center">
           <span className="text-[#7d998c] text-[14px]">Memuat data...</span>
         </div>
@@ -195,17 +197,7 @@ function BuatBeritaForm() {
     <div className="flex flex-col min-h-[100dvh] bg-[#f4f9f6] relative">
       <TopBar 
         title={editingId ? "Edit Berita" : "Buat Berita"} 
-        rightAction={
-          <button
-            type="button"
-            onClick={() => setIsPreviewOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[12px] font-semibold transition-all active:scale-95"
-            title="Pratinjau Berita Langsung"
-          >
-            <Eye className="w-4 h-4" />
-            <span>Pratinjau</span>
-          </button>
-        }
+        onBack={() => router.push("/admin/berita")}
       />
 
       <div className="flex-1 px-5 py-5 flex flex-col z-10 pb-32">
@@ -226,16 +218,12 @@ function BuatBeritaForm() {
 
           <div className="flex flex-col gap-2 relative">
             <label className="text-[#1E4738] text-[13px] font-bold">Kategori</label>
-            <select
+            <CustomSelect
+              options={categories.map(cat => ({ value: cat.id, label: cat.name }))}
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="w-full border border-gray-200 rounded-[16px] px-4 py-3.5 text-[14px] text-[#1E4738] focus:border-[#356E3B] outline-none bg-white appearance-none"
-            >
-              <option value="">Pilih Kategori...</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
+              onChange={(val) => setCategoryId(val)}
+              placeholder="Pilih Kategori..."
+            />
           </div>
 
           <div className="flex flex-col gap-2">
@@ -292,7 +280,7 @@ function BuatBeritaForm() {
       </div>
 
       {/* Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md p-5 bg-gradient-to-t from-[#f4f9f6] via-[#f4f9f6] to-transparent pb-8 z-20 flex gap-3">
+      <div className="fixed bottom-0 left-0 right-0 mx-auto w-full sm:max-w-md p-5 bg-gradient-to-t from-[#f4f9f6] via-[#f4f9f6] to-transparent pb-8 z-20 flex gap-3">
         <button 
           type="button"
           onClick={() => setIsPreviewOpen(true)}
@@ -305,7 +293,7 @@ function BuatBeritaForm() {
           onClick={handleSubmit}
           disabled={isSubmitting || !title || !content}
           isLoading={isSubmitting}
-          loadingText="Menyimpan..."
+          loadingText={editingId ? "Menyimpan Perubahan..." : "Mengunggah..."}
           icon={<CheckCircle2 className="w-5 h-5" />}
           className="flex-[1.5]"
         >
@@ -320,7 +308,7 @@ function BuatBeritaForm() {
             className="fixed inset-0"
             onClick={() => setIsPreviewOpen(false)}
           />
-          <div className="bg-[#fbfdfc] w-full max-w-md rounded-t-[32px] sm:rounded-[28px] max-h-[88vh] flex flex-col shadow-2xl relative z-10 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 border border-[#eef5f0] overflow-hidden">
+          <div className="bg-[#fbfdfc] w-full sm:max-w-md rounded-t-[32px] sm:rounded-[28px] max-h-[88vh] flex flex-col shadow-2xl relative z-10 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 border border-[#eef5f0] overflow-hidden">
             {/* Header Modal */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#eef5f0] bg-white">
               <div className="flex items-center gap-2">

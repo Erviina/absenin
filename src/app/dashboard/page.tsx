@@ -16,16 +16,20 @@ import {
   Clock,
   ChevronRight,
   Plus,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle,
+  Loader2 
 } from "lucide-react";
 import { sanitizeText, truncateText } from "@/lib/sanitize";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { BottomNav } from "@/components/bottom-nav";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 import { getPersonalModePreference } from "@/lib/personalMode";
+import { getActiveCompanyId } from "@/lib/api";
 import { 
   evaluateSchedule, 
   getNextCheckInSchedule, 
@@ -33,6 +37,7 @@ import {
   CompanyScheduleData 
 } from "@/lib/schedule";
 import { Badge } from "@/components/Badge";
+import { ViewAllButton } from "@/components/ViewAllButton";
 import { getAgendaCategoryColor } from "@/app/agenda/page";
 
 export default function DashboardPage() {
@@ -56,11 +61,33 @@ export default function DashboardPage() {
     memberships, 
     switchCompany,
     isLoading: isCompanyLoading,
+    companyError,
+    refreshMemberships,
+    currentUser,
+    setCurrentUser,
   } = useCompany();
 
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!token) return;
+
+    if (currentUser) {
+      setUser(currentUser);
+    } else {
+      try {
+        const u = localStorage.getItem("user");
+        if (u) {
+          setUser(JSON.parse(u));
+        }
+      } catch {}
+    }
+  }, [currentUser]);
   const [news, setNews] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [agendas, setAgendas] = useState<any[]>([]);
@@ -95,6 +122,8 @@ export default function DashboardPage() {
     // ke /cek-perusahaan yang seharusnya terjadi.
     if (isCompanyLoading) return;
 
+    let isSubscribed = true;
+
     const fetchData = async () => {
       try {
         const token = localStorage.getItem("accessToken");
@@ -103,48 +132,39 @@ export default function DashboardPage() {
           return;
         }
 
+        const requestToken = token;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
         // Setelah isCompanyLoading selesai, activeCompanyId sudah terverifikasi dari backend
-        if (activeCompanyId) {
-          headers["x-company-id"] = activeCompanyId;
+        const compId = activeCompanyId || getActiveCompanyId();
+        if (compId) {
+          headers["x-company-id"] = compId;
         }
 
         const [authRes, newsRes, attendRes, notifRes, tasksRes, agendasRes] = await Promise.all([
           fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", { headers }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/news", { headers }),
+          fetch(process.env.NEXT_PUBLIC_API_URL + "/news?limit=2", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/attendances/today", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications/unread-count", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/agendas", { headers })
         ]);
 
+        // Isolasi request: Jika token telah berganti (pergantian akun) atau unmount, abaikan respons lama
+        if (!isSubscribed || localStorage.getItem("accessToken") !== requestToken) {
+          return;
+        }
+
         try {
           const authData = await authRes.json();
           if (authData.success) {
             setUser(authData.data.user);
+            setCurrentUser(authData.data.user);
             const skipCompanyPrompt = getPersonalModePreference(authData.data.user?.id);
             // activeCompanyId di sini sudah diverifikasi backend (isCompanyLoading sudah false),
             // jadi aman digunakan sebagai penentu apakah pengguna punya perusahaan aktif.
             if (!authData.data.user?.company && !activeCompanyId && !skipCompanyPrompt) {
               router.push("/cek-perusahaan");
               return;
-            }
-
-            // Cek jika pengguna baru saja di-ACC oleh admin dan belum melihat layar "Berhasil Bergabung!"
-            try {
-              const joinReqRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              const joinReqData = await joinReqRes.json();
-              if (joinReqData.success && joinReqData.data && joinReqData.data.status === 'approved') {
-                const seen = localStorage.getItem(`join_accepted_seen_${joinReqData.data.id}`);
-                if (!seen) {
-                  router.push("/gabung-perusahaan");
-                  return;
-                }
-              }
-            } catch (e) {
-              // Abaikan jika error
             }
           }
         } catch (e) {
@@ -170,21 +190,26 @@ export default function DashboardPage() {
         }
 
         try {
-          const attendData = await attendRes.json();
-          if (attendData.success && attendData.data) {
-            setAttendanceStatus(attendData.data.status);
+          if (!activeCompanyId) {
             setAttendanceError(false);
-            if (attendData.data.company) {
-              setCompanySchedule(attendData.data.company);
-              const offset = calculateServerOffsetMs(attendData.data.company.server_time);
-              setServerOffsetMs(offset);
-            }
+            setAttendanceStatus("NOT_CHECKED_IN");
           } else {
-            setAttendanceError(true);
+            const attendData = await attendRes.json();
+            if (attendData.success && attendData.data) {
+              setAttendanceStatus(attendData.data.status);
+              setAttendanceError(false);
+              if (attendData.data.company) {
+                setCompanySchedule(attendData.data.company);
+                const offset = calculateServerOffsetMs(attendData.data.company.server_time);
+                setServerOffsetMs(offset);
+              }
+            } else {
+              setAttendanceError(true);
+            }
           }
         } catch (e) {
           console.error("Failed to parse attendance data", e);
-          setAttendanceError(true);
+          if (activeCompanyId) setAttendanceError(true);
         }
 
         try {
@@ -212,12 +237,18 @@ export default function DashboardPage() {
         console.error("Failed to fetch dashboard data:", error);
         setAttendanceError(true);
       } finally {
-        setIsLoading(false);
-        setIsAttendanceLoading(false);
-        setIsTasksAgendasLoading(false);
+        if (isSubscribed) {
+          setIsLoading(false);
+          setIsAttendanceLoading(false);
+          setIsTasksAgendasLoading(false);
+        }
       }
     };
     fetchData();
+
+    return () => {
+      isSubscribed = false;
+    };
   }, [router, activeCompanyId, isCompanyLoading]);
 
   const todayStr = useMemo(() => {
@@ -251,11 +282,20 @@ export default function DashboardPage() {
     return todayTasks.filter((t) => !t.completed).length;
   }, [todayTasks]);
 
+  const [togglingTaskIds, setTogglingTaskIds] = useState<string[]>([]);
+
   const handleToggleTask = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (togglingTaskIds.includes(taskId)) return;
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
+      setIsContextDrawerOpen(true);
+      return;
+    }
     const target = tasks.find((t) => t.id === taskId);
     if (!target) return;
 
+    setTogglingTaskIds((prev) => [...prev, taskId]);
     const nextCompleted = !target.completed;
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, completed: nextCompleted } : t)));
 
@@ -263,7 +303,7 @@ export default function DashboardPage() {
       const token = localStorage.getItem("accessToken");
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: "Bearer " + token,
       };
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
@@ -275,6 +315,8 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Failed to toggle task", err);
       setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, completed: target.completed } : t)));
+    } finally {
+      setTogglingTaskIds((prev) => prev.filter((id) => id !== taskId));
     }
   };
 
@@ -308,6 +350,16 @@ export default function DashboardPage() {
     }
   };
 
+  const formatRoleLabel = (role?: string | null) => {
+    if (!role) return "Karyawan";
+    const r = role.toLowerCase();
+    if (r === "member") return "Karyawan";
+    if (r === "owner") return "Owner";
+    if (r === "admin") return "Admin";
+    if (r === "manager") return "Manajer";
+    return role;
+  };
+
   const scheduleEval = evaluateSchedule(
     companySchedule,
     serverOffsetMs,
@@ -329,7 +381,12 @@ export default function DashboardPage() {
   let btnHelperText: string | null = null;
   let btnColorClass = "bg-[#1E4738] hover:bg-[#153428] text-white active:scale-95 cursor-pointer";
 
-  if (isAttendanceLoading) {
+  if (!activeCompanyId) {
+    isBtnDisabled = false;
+    btnLabel = "Pilih Perusahaan";
+    btnColorClass = "bg-[#356E3B] hover:bg-[#1E4738] text-white active:scale-95 cursor-pointer";
+    btnHelperText = "Pilih atau gabung perusahaan untuk melakukan presensi";
+  } else if (isAttendanceLoading) {
     isBtnDisabled = true;
     btnLabel = "Memuat...";
     btnColorClass = "bg-[#1E4738] text-white opacity-70 cursor-not-allowed";
@@ -369,6 +426,11 @@ export default function DashboardPage() {
   }
 
   const handleCtaClick = () => {
+    if (!activeCompanyId) {
+      showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu sebelum melakukan presensi.", "warning");
+      setIsContextDrawerOpen(true);
+      return;
+    }
     if (isBtnDisabled) {
       if (btnHelperText) {
         showToast(btnHelperText, "info");
@@ -387,39 +449,67 @@ export default function DashboardPage() {
     router.push('/checkin');
   };
 
+  if (isCompanyLoading) {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] items-center justify-center p-6 gap-3">
+        <Loader2 className="w-8 h-8 text-[#1E4738] animate-spin" />
+        <p className="text-[#5C786C] text-[13px] font-medium">Memuat data perusahaan...</p>
+      </div>
+    );
+  }
+
+  if (companyError && memberships.length === 0 && !activeCompanyId) {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] items-center justify-center p-6 text-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-500 mb-1">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="text-[#111827] text-[16px] font-bold">Gagal Memvalidasi Perusahaan</h2>
+        <p className="text-[#6B7280] text-[13px] max-w-xs">{companyError}</p>
+        <button
+          onClick={() => refreshMemberships()}
+          className="mt-2 px-5 py-2.5 bg-[#1E4738] text-white rounded-full font-bold text-[13px] hover:bg-[#153428] transition-colors cursor-pointer"
+        >
+          Coba Lagi
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
+    <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-32">
       
       {/* Top Header: Profil & Notifikasi */}
-      <div className="flex justify-between items-center px-6 pt-9 sm:pt-10 pb-3.5 bg-[#fbfdfc]">
+      <div className="h-[72px] px-6 flex justify-between items-center bg-[#fbfdfc] shrink-0 sticky top-0 z-20">
         {/* Avatar & Greeting */}
         <div className="flex items-center gap-3 min-w-0">
-          <div 
-            onClick={() => router.push("/profil")}
+          <Link 
+            href="/profil"
+            prefetch={true}
             className="cursor-pointer shrink-0 relative group"
             title="Lihat Profil"
           >
-            {user?.avatarUrl && !avatarError ? (
+            {mounted && user?.avatarUrl && !avatarError ? (
               <img
                 src={user.avatarUrl}
                 alt="Avatar"
-                className="w-[46px] h-[46px] rounded-full shrink-0 object-cover border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 group-hover:ring-[#1E4738]/30 transition-all shadow-xs"
+                className="w-10 h-10 rounded-full shrink-0 object-cover border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 group-hover:ring-[#1E4738]/30 transition-all shadow-xs"
                 onError={() => setAvatarError(true)}
               />
             ) : (
-              <div className="w-[46px] h-[46px] bg-[#d3e5d9] rounded-full flex items-center justify-center text-[#1E4738] font-bold text-[16px] border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 shadow-xs">
-                {user?.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
+              <div className="w-10 h-10 bg-[#d3e5d9] rounded-full flex items-center justify-center text-[#1E4738] font-bold text-[15px] border-2 border-[#1E4738]/20 ring-2 ring-[#1E4738]/10 shadow-xs">
+                {mounted && user?.fullName ? user.fullName.charAt(0).toUpperCase() : "U"}
               </div>
             )}
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a859] border-2 border-white rounded-full"></div>
-          </div>
+            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#00a859] border-2 border-white rounded-full"></div>
+          </Link>
 
           <div className="flex flex-col min-w-0">
-            <span className="text-[#5C786C] text-[12px] font-medium leading-none mb-1">
+            <span className="text-[#5C786C] text-[11.5px] font-medium leading-none mb-1">
               Selamat datang,
             </span>
-            <h1 className="text-[#1E4738] text-[17px] font-bold leading-tight truncate">
-              {isLoading ? "Memuat..." : (user?.fullName || "Pengguna")}
+            <h1 className="text-[#1E4738] text-[16px] font-bold leading-tight truncate">
+              {mounted && user?.fullName ? user.fullName : (isLoading ? "Memuat..." : "Pengguna")}
             </h1>
           </div>
         </div>
@@ -461,7 +551,7 @@ export default function DashboardPage() {
                 </span>
                 {activeCompany && (
                   <span className={`text-[10px] px-2.5 py-0.5 rounded-full capitalize shrink-0 font-bold ${getRoleBadgeStyle(activeRole)}`}>
-                    {activeRole || "Member"}
+                    {formatRoleLabel(activeRole)}
                   </span>
                 )}
               </div>
@@ -544,48 +634,207 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Bagian 1: Tugas Hari Ini (Hanya yang belum dikerjakan) */}
+        {/* Aktivitas Hari Ini (Resume Tugas & Agenda) */}
         <div className="flex flex-col gap-3">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[17.5px] font-bold text-[#1E4738]">Tugas Hari Ini</h2>
-              {todayTasks.length > 0 && (
-                <span className="bg-[#EEF5F0] text-[#1E4738] text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  {todayTasks.length} belum selesai
-                </span>
-              )}
+          <div className="flex justify-between items-center gap-2 flex-wrap">
+            <h2 className="text-[17.5px] font-bold text-[#1E4738] shrink-0">Aktivitas Hari Ini</h2>
+
+            {/* Tab Filter Switcher */}
+            <div className="flex items-center gap-1 p-0.5 bg-[#EEF5F0] rounded-full shrink-0">
+              <button
+                type="button"
+                onClick={() => setResumeTab("all")}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                  resumeTab === "all" ? "bg-white text-[#1E4738] shadow-xs" : "text-[#5C786C] hover:text-[#1E4738]"
+                }`}
+              >
+                Semua {todayTasks.length + todayAgendas.length > 0 && `(${todayTasks.length + todayAgendas.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setResumeTab("tasks")}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                  resumeTab === "tasks" ? "bg-white text-[#1E4738] shadow-xs" : "text-[#5C786C] hover:text-[#1E4738]"
+                }`}
+              >
+                Tugas {todayTasks.length > 0 && `(${todayTasks.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setResumeTab("agendas")}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                  resumeTab === "agendas" ? "bg-white text-[#1E4738] shadow-xs" : "text-[#5C786C] hover:text-[#1E4738]"
+                }`}
+              >
+                Agenda {todayAgendas.length > 0 && `(${todayAgendas.length})`}
+              </button>
             </div>
-            <button
-              onClick={() => router.push("/tugas")}
-              className="text-[#356E3B] text-[12.5px] font-bold hover:underline cursor-pointer"
-            >
-              Lihat Semua
-            </button>
           </div>
 
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-3">
             {isTasksAgendasLoading ? (
-              <div className="text-center text-[#7d998c] text-[13px] font-medium py-3 animate-pulse">
-                Memuat tugas...
+              <div className="flex flex-col items-center justify-center py-8 text-gray-400 gap-2.5">
+                <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                <span className="text-[13px] font-medium text-[#7d998c]">Memuat aktivitas...</span>
               </div>
-            ) : todayTasks.length === 0 ? (
-              <div className="bg-white rounded-[20px] p-5 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-center gap-2 text-[#5C786C] text-[13px] font-medium">
-                <CheckCircle2 className="w-4 h-4 text-[#356E3B]" />
-                <span>Semua tugas hari ini telah selesai dikerjakan!</span>
-              </div>
-            ) : (() => {
-              const showTasks = resumeTab === "all" || resumeTab === "tasks";
-              const showAgendas = resumeTab === "all" || resumeTab === "agendas";
+            ) : resumeTab === "all" ? (
+              todayTasks.length === 0 && todayAgendas.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Belum ada tugas atau agenda untuk hari ini.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {/* Subheading Tugas */}
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex justify-between items-center px-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13.5px] font-bold text-[#1E4738]">Tugas</span>
+                        {todayTasks.length > 0 && (
+                          <span className="bg-[#EEF5F0] text-[#1E4738] text-[10.5px] font-bold px-2 py-0.5 rounded-full">
+                            {todayTasks.length} belum selesai
+                          </span>
+                        )}
+                      </div>
+                      <ViewAllButton onClick={() => router.push("/tugas")} />
+                    </div>
 
-              const itemsToRender: React.ReactNode[] = [];
+                    {todayTasks.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-3">
+                        Semua tugas hari ini telah selesai!
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {todayTasks.slice(0, 3).map((task) => (
+                          <div
+                            key={`task-${task.id}`}
+                            onClick={() => router.push(`/tugas/${task.id}`)}
+                            className="w-full bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
+                          >
+                            <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onTouchStart={(e) => e.stopPropagation()}
+                                onTouchEnd={(e) => e.stopPropagation()}
+                                onClick={(e) => handleToggleTask(task.id, e)}
+                                className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                                  task.completed
+                                    ? "bg-[#2D5A3F] border-[#2D5A3F]"
+                                    : "bg-white border-[#D1E0D6] hover:border-[#356E3B]"
+                                }`}
+                                title={task.completed ? "Tandai belum selesai" : "Tandai selesai"}
+                              >
+                                {togglingTaskIds.includes(task.id) ? (
+                                  <Loader2 className="w-3.5 h-3.5 text-[#356E3B] animate-spin" />
+                                ) : task.completed ? (
+                                  <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                                ) : null}
+                              </button>
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <h3
+                                  className={`text-[13.5px] font-bold leading-tight truncate ${
+                                    task.completed ? "text-[#6B7280]" : "text-[#111827]"
+                                  }`}
+                                >
+                                  {task.title}
+                                </h3>
+                                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
+                                  <span className="flex items-center gap-1 font-medium">
+                                    <Clock className="w-3 h-3 text-[#356E3B]" />
+                                    {task.time ? `Pukul ${task.time}` : "Hari Ini"}
+                                  </span>
+                                  <span className="text-gray-300">•</span>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#356E3B]">
+                                    {task.type === "group" ? "Tugas Grup" : "Personal"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-              if (showTasks) {
-                todayTasks.forEach((task) => {
-                  itemsToRender.push(
+                  {/* Subheading Agenda */}
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex justify-between items-center px-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13.5px] font-bold text-[#1E4738]">Agenda</span>
+                        {todayAgendas.length > 0 && (
+                          <span className="bg-[#EEF5F0] text-[#1E4738] text-[10.5px] font-bold px-2 py-0.5 rounded-full">
+                            {todayAgendas.length}
+                          </span>
+                        )}
+                      </div>
+                      <ViewAllButton onClick={() => router.push("/agenda")} />
+                    </div>
+
+                    {todayAgendas.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-3">
+                        Belum ada agenda untuk hari ini.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {todayAgendas.slice(0, 3).map((agenda) => {
+                          const catColor = getAgendaCategoryColor(agenda.category?.name || agenda.type);
+                          return (
+                            <div
+                              key={`agenda-${agenda.id}`}
+                              onClick={() => router.push(`/agenda/${agenda.id}`)}
+                              className={`w-full bg-white rounded-[20px] p-4 pl-5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3.5`}
+                            >
+                              <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                                  <Badge variant={catColor.variant} size="xs" uppercase>
+                                    {agenda.category?.name || agenda.type || "Kegiatan"}
+                                  </Badge>
+                                  <Badge
+                                    variant={agenda.scope === "company" || agenda.type === "COMPANY" ? "company" : "personal"}
+                                    size="xs"
+                                    uppercase
+                                  >
+                                    {agenda.scope === "company" || agenda.type === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
+                                  </Badge>
+                                </div>
+                                <h3 className="text-[13.5px] font-bold text-[#111827] leading-tight truncate">
+                                  {agenda.title}
+                                </h3>
+                                <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
+                                  <span className="flex items-center gap-1 font-medium shrink-0">
+                                    <Clock className="w-3 h-3 text-[#356E3B]" />
+                                    {agenda.time_range || "Hari ini"}
+                                  </span>
+                                  {agenda.link_or_location && (
+                                    <>
+                                      <span className="text-gray-300">•</span>
+                                      <span className="truncate max-w-[160px] font-medium">{agenda.link_or_location}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            ) : resumeTab === "tasks" ? (
+              todayTasks.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Semua tugas hari ini telah selesai dikerjakan!
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {todayTasks.slice(0, 6).map((task) => (
                     <div
                       key={`task-${task.id}`}
                       onClick={() => router.push(`/tugas/${task.id}`)}
-                      className="bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
+                      className="w-full bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
                     >
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
                         <button
@@ -600,7 +849,11 @@ export default function DashboardPage() {
                           }`}
                           title={task.completed ? "Tandai belum selesai" : "Tandai selesai"}
                         >
-                          {task.completed && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                          {togglingTaskIds.includes(task.id) ? (
+                            <Loader2 className="w-3.5 h-3.5 text-[#356E3B] animate-spin" />
+                          ) : task.completed ? (
+                            <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                          ) : null}
                         </button>
                         <div className="flex flex-col min-w-0 flex-1">
                           <h3
@@ -624,102 +877,101 @@ export default function DashboardPage() {
                       </div>
                       <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
                     </div>
-                  );
-                });
-              }
-
-              if (showAgendas) {
-                todayAgendas.forEach((agenda) => {
-                  const catColor = getAgendaCategoryColor(agenda.category?.name || agenda.type);
-                  itemsToRender.push(
-                    <div
-                      key={`agenda-${agenda.id}`}
-                      onClick={() => router.push(`/agenda/${agenda.id}`)}
-                      className={`bg-white rounded-[20px] p-4 pl-4.5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3`}
-                    >
-                      <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
-                      <div className="flex flex-col min-w-0 flex-1 pl-1">
-                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                          <Badge variant={catColor.variant} size="xs" uppercase>
-                            {agenda.category?.name || agenda.type || "Kegiatan"}
-                          </Badge>
-                          <Badge
-                            variant={agenda.scope === "company" || agenda.type === "COMPANY" ? "company" : "personal"}
-                            size="xs"
-                            uppercase
-                          >
-                            {agenda.scope === "company" || agenda.type === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
-                          </Badge>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/tugas")}
+                    className="w-full py-2.5 mt-1 text-center text-[#356E3B] text-[12px] font-bold bg-[#EEF5F0] hover:bg-[#E2EFE5] rounded-[14px] transition-colors cursor-pointer"
+                  >
+                    Buka Halaman Tugas
+                  </button>
+                </div>
+              )
+            ) : (
+              todayAgendas.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Belum ada agenda kegiatan untuk hari ini.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {todayAgendas.slice(0, 6).map((agenda) => {
+                    const catColor = getAgendaCategoryColor(agenda.category?.name || agenda.type);
+                    return (
+                      <div
+                        key={`agenda-${agenda.id}`}
+                        onClick={() => router.push(`/agenda/${agenda.id}`)}
+                        className={`w-full bg-white rounded-[20px] p-4 pl-5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3.5`}
+                      >
+                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                            <Badge variant={catColor.variant} size="xs" uppercase>
+                              {agenda.category?.name || agenda.type || "Kegiatan"}
+                            </Badge>
+                            <Badge
+                              variant={agenda.scope === "company" || agenda.type === "COMPANY" ? "company" : "personal"}
+                              size="xs"
+                              uppercase
+                            >
+                              {agenda.scope === "company" || agenda.type === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
+                            </Badge>
+                          </div>
+                          <h3 className="text-[13.5px] font-bold text-[#111827] leading-tight truncate">
+                            {agenda.title}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
+                            <span className="flex items-center gap-1 font-medium shrink-0">
+                              <Clock className="w-3 h-3 text-[#356E3B]" />
+                              {agenda.time_range || "Hari ini"}
+                            </span>
+                            {agenda.link_or_location && (
+                              <>
+                                <span className="text-gray-300">•</span>
+                                <span className="truncate max-w-[160px] font-medium">{agenda.link_or_location}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <h3 className="text-[13.5px] font-bold text-[#111827] leading-tight truncate">
-                          {agenda.title}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1.5 text-[11px] text-[#5C786C]">
-                          <span className="flex items-center gap-1 font-medium shrink-0">
-                            <Clock className="w-3 h-3 text-[#356E3B]" />
-                            {agenda.time_range || "Hari ini"}
-                          </span>
-                          {agenda.link_or_location && (
-                            <>
-                              <span className="text-gray-300">•</span>
-                              <span className="truncate max-w-[160px] font-medium">{agenda.link_or_location}</span>
-                            </>
-                          )}
-                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#1E4738] shrink-0 transition-colors" />
-                    </div>
-                  );
-                });
-              }
-
-              if (itemsToRender.length === 0) {
-                return (
-                  <div className="bg-white rounded-[20px] p-6 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col items-center justify-center">
-                    <p className="text-[#7d998c] text-[13px] font-medium">
-                      {resumeTab === "tasks"
-                        ? "Belum ada tugas untuk hari ini."
-                        : resumeTab === "agendas"
-                        ? "Belum ada agenda untuk hari ini."
-                        : "Belum ada tugas atau agenda untuk hari ini."}
-                    </p>
-                  </div>
-                );
-              }
-
-              return itemsToRender.slice(0, 4);
-            })()}
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/agenda")}
+                    className="w-full py-2.5 mt-1 text-center text-[#356E3B] text-[12px] font-bold bg-[#EEF5F0] hover:bg-[#E2EFE5] rounded-[14px] transition-colors cursor-pointer"
+                  >
+                    Buka Halaman Agenda
+                  </button>
+                </div>
+              )
+            )}
           </div>
         </div>
 
         {/* Berita Terbaru */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           <div className="flex justify-between items-center">
-            <h2 className="text-[18px] font-bold text-[#1E4738]">Berita Terbaru</h2>
-            <button 
-              onClick={() => router.push("/berita")}
-              className="text-[#356E3B] text-[13px] font-medium flex items-center gap-1 hover:underline active:scale-95 transition-transform"
-            >
-              Lihat Semua
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
+            <h2 className="text-[17.5px] font-bold text-[#1E4738]">Berita Terbaru</h2>
+            <ViewAllButton onClick={() => router.push("/berita")} />
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             {isLoading ? (
-              <div className="text-center text-[#7d998c] text-[13px] font-medium py-4 animate-pulse">Memuat berita...</div>
-            ) : news.length === 0 ? (
-              <div className="bg-white rounded-[20px] p-6 text-center border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-                <p className="text-[#7d998c] text-[13px] font-medium">Belum ada berita terbaru saat ini.</p>
+              <div className="flex flex-col items-center justify-center py-8 text-gray-400 gap-2.5">
+                <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                <span className="text-[13px] font-medium text-[#7d998c]">Memuat berita...</span>
               </div>
+            ) : news.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">
+                Belum ada berita terbaru saat ini.
+              </p>
             ) : (
               news.map((item, idx) => (
                 <div 
                   key={item.id || idx} 
-                  onClick={() => router.push(`/berita/${item.id}`)}
-                  className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#dce9df] hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
+                  onClick={() => router.push(`/berita/${item.id}?from=/dashboard`)}
+                  className="w-full bg-white rounded-[20px] p-4 flex items-center gap-3.5 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
                 >
                   {item.cover_image_url ? (
                     <img src={item.cover_image_url} alt={sanitizeText(item.title)} className="w-[72px] h-[72px] rounded-2xl shrink-0 object-cover" />
@@ -729,10 +981,10 @@ export default function DashboardPage() {
                     </div>
                   )}
                   <div className="flex flex-col justify-center flex-1 min-w-0 overflow-hidden">
-                    <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
+                    <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit mb-1.5">
                       {item.category?.name || "Pengumuman"}
                     </span>
-                    <h3 className="text-[#1E4738] group-hover:text-[#356E3B] transition-colors text-[13px] font-bold leading-snug mb-1 line-clamp-1 break-words [overflow-wrap:anywhere]">
+                    <h3 className="text-[#1E4738] group-hover:text-[#356E3B] transition-colors text-[13.5px] font-bold leading-snug mb-1 line-clamp-1 break-words [overflow-wrap:anywhere]">
                       {sanitizeText(item.title)}
                     </h3>
                     <p className="text-[#7d998c] text-[11px] line-clamp-1 break-words [overflow-wrap:anywhere]">

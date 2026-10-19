@@ -8,6 +8,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { useDialog } from "@/context/DialogContext";
+import { Pagination } from "@/components/Pagination";
 
 export default function LaporanKehadiranPage() {
   const router = useRouter();
@@ -25,6 +26,7 @@ export default function LaporanKehadiranPage() {
 
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportingType, setExportingType] = useState<"pdf" | "xlsx" | null>(null);
 
   const [dataKaryawan, setDataKaryawan] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -143,8 +145,9 @@ export default function LaporanKehadiranPage() {
   };
 
   const handleExport = (type: 'pdf' | 'xlsx') => {
-    if (selectedItems.length === 0) return;
+    if (isExporting || selectedItems.length === 0) return;
     setIsExporting(true);
+    setExportingType(type);
     
     try {
       const selectedData = dataKaryawan.filter(emp => selectedItems.includes(emp.id));
@@ -198,6 +201,7 @@ export default function LaporanKehadiranPage() {
       showToast("Gagal mengunduh laporan", "error");
     } finally {
       setIsExporting(false);
+      setExportingType(null);
       setSelectedItems([]);
     }
   };
@@ -360,7 +364,7 @@ export default function LaporanKehadiranPage() {
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100/60">
                     <div className="flex items-center gap-1.5">
                        <CheckCircle2 className="w-3.5 h-3.5 text-[#356E3B]" />
-                       <span className="text-[11px] text-[#1E4738] font-bold">{emp.hadir}/{emp.total} <span className="font-normal text-gray-500">Hadir</span></span>
+                       <span className="text-[11px] text-[#1E4738] font-bold">{emp.hadir} <span className="font-normal text-gray-500">Hadir</span></span>
                     </div>
                     <div className="flex items-center gap-1.5">
                        <Clock className="w-3.5 h-3.5 text-[#F59E0B]" />
@@ -382,23 +386,31 @@ export default function LaporanKehadiranPage() {
 
       {/* Floating Export Button */}
       {selectedItems.length > 0 && (
-        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md px-5 pb-6 pt-4 bg-gradient-to-t from-white via-white to-transparent z-50 animate-in slide-in-from-bottom-5 pointer-events-none">
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full sm:max-w-md px-5 pb-6 pt-4 bg-gradient-to-t from-white via-white to-transparent z-50 animate-in slide-in-from-bottom-5 pointer-events-none">
           <div className="w-full flex gap-3 pointer-events-auto">
             <button 
               onClick={() => handleExport('pdf')}
               disabled={isExporting}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-[#EF4444] text-white rounded-[16px] font-bold text-[14px] active:scale-95 transition-all shadow-lg shadow-[#EF4444]/20 disabled:opacity-70 disabled:scale-100"
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-[#EF4444] text-white rounded-[16px] font-bold text-[14px] active:scale-95 transition-all shadow-lg shadow-[#EF4444]/20 disabled:opacity-70 disabled:scale-100 disabled:cursor-not-allowed"
             >
-              <FileDown className="w-5 h-5" />
-              {isExporting ? "Memproses..." : "Export PDF"}
+              {exportingType === 'pdf' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <FileDown className="w-5 h-5" />
+              )}
+              {exportingType === 'pdf' ? "Mengekspor PDF..." : "Export PDF"}
             </button>
             <button 
               onClick={() => handleExport('xlsx')}
               disabled={isExporting}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-[#356E3B] text-white rounded-[16px] font-bold text-[14px] active:scale-95 transition-all shadow-lg shadow-[#356E3B]/20 disabled:opacity-70 disabled:scale-100"
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-[#356E3B] text-white rounded-[16px] font-bold text-[14px] active:scale-95 transition-all shadow-lg shadow-[#356E3B]/20 disabled:opacity-70 disabled:scale-100 disabled:cursor-not-allowed"
             >
-              <FileDown className="w-5 h-5" />
-              {isExporting ? "Memproses..." : "Export XLSX"}
+              {exportingType === 'xlsx' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <FileDown className="w-5 h-5" />
+              )}
+              {exportingType === 'xlsx' ? "Mengekspor Excel..." : "Export XLSX"}
             </button>
           </div>
         </div>

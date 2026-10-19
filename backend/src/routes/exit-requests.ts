@@ -4,6 +4,7 @@ import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import { resolveTenant } from "../utils/tenant";
+import { parsePaginationParams, buildPaginationMeta } from "../utils/pagination";
 
 const router = Router();
 
@@ -271,6 +272,30 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
     }
 
     const companyId = tenant.companyId;
+    const { limit, offset } = parsePaginationParams(req.query, 10, 100);
+    const { search } = req.query;
+
+    let searchCondition = sql``;
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const s = `%${search.trim().toLowerCase()}%`;
+      searchCondition = sql`AND (
+        LOWER(p.full_name) LIKE ${s}
+        OR LOWER(p.email) LIKE ${s}
+        OR LOWER(COALESCE(cer.reason, '')) LIKE ${s}
+      )`;
+    }
+
+    // 1. Total count
+    const countRes = await db.execute(sql`
+      SELECT count(*)::int as total
+      FROM company_exit_requests cer
+      JOIN profiles p ON p.id = cer.profile_id
+      WHERE cer.company_id = ${companyId}
+        AND cer.status = 'pending'
+        AND cer.deleted_at IS NULL
+        ${searchCondition}
+    `);
+    const total = Number(countRes.rows[0]?.total || 0);
 
     const listRes = await db.execute(sql`
       SELECT 
@@ -290,12 +315,18 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
       WHERE cer.company_id = ${companyId}
         AND cer.status = 'pending'
         AND cer.deleted_at IS NULL
-      ORDER BY cer.created_at ASC
+        ${searchCondition}
+      ORDER BY cer.created_at ASC, cer.id ASC
+      LIMIT ${limit} OFFSET ${offset}
     `);
+
+    const pagination = buildPaginationMeta(total, limit, offset);
 
     return res.status(200).json({
       success: true,
       data: listRes.rows,
+      pagination,
+      meta: pagination
     });
   } catch (error: any) {
     console.error("Get exit requests error:", error);

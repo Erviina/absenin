@@ -11,11 +11,18 @@ const backendUrl = process.env.BACKEND_URL || "http://localhost:3001";
 
 const nextConfig: NextConfig = {
   turbopack: {},
+  images: {
+    unoptimized: true,
+  },
   async rewrites() {
     return [
       {
         source: "/api/:path*",
         destination: `${backendUrl}/api/:path*`,
+      },
+      {
+        source: "/img/assets/logo.png",
+        destination: "/img/assets/Logo.png",
       },
     ];
   },

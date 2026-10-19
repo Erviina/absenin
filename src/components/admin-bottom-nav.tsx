@@ -1,9 +1,10 @@
 "use client";
 
 import { Home, FileText, ClipboardEdit } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { useState, useEffect } from "react";
+import { getActiveCompanyId } from "@/lib/api";
 
 interface AdminBottomNavProps {
   activeTab?: "beranda" | "absensi" | "izin" | "tugas" | "berita";
@@ -11,7 +12,6 @@ interface AdminBottomNavProps {
 }
 
 export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: AdminBottomNavProps) {
-  const router = useRouter();
   const [internalIzinCount, setInternalIzinCount] = useState<number>(pendingIzinCount ?? 0);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
         const token = localStorage.getItem("accessToken");
         if (!token) return;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        const activeCompanyId = localStorage.getItem("activeCompanyId");
+        const activeCompanyId = getActiveCompanyId();
         if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/badge-counts", { headers });
@@ -46,12 +46,6 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
 
     fetchBadge();
   }, [pendingIzinCount]);
-
-  const handleNav = (tab: string, path: string) => {
-    if (activeTab !== tab) {
-      router.push(path);
-    }
-  };
 
   const navItems = [
     {
@@ -99,13 +93,14 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md bg-white flex justify-between px-6 z-50 shadow-[0_-4px_24px_rgba(0,0,0,0.04)] h-[72px] border-x border-border/40">
+    <div className="fixed bottom-0 left-0 right-0 mx-auto w-full sm:max-w-md bg-white flex justify-between px-6 z-50 shadow-[0_-4px_24px_rgba(0,0,0,0.04)] h-[72px] border-t border-border/40 sm:border-x border-x-0">
       {navItems.map((item) => {
         const isActive = activeTab === item.id;
         return (
-          <button
+          <Link
             key={item.id}
-            onClick={() => handleNav(item.id, item.path)}
+            href={item.path}
+            prefetch={true}
             className={`flex flex-col items-center justify-center gap-1 min-w-[56px] relative h-full transition-colors ${
               isActive ? "text-[#1E4738]" : "text-[#7d998c] hover:text-[#5C786C]"
             }`}
@@ -124,7 +119,7 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
             {isActive && (
               <div className="absolute bottom-0 w-10 h-[4px] bg-[#1E4738] rounded-t-full" />
             )}
-          </button>
+          </Link>
         );
       })}
     </div>

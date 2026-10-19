@@ -6,6 +6,7 @@ import { authenticate } from "../middleware/auth";
 import { z } from "zod";
 import crypto from "crypto";
 import { resolveTenant } from "../utils/tenant";
+import { parsePaginationParams, buildPaginationMeta } from "../utils/pagination";
 
 const router = Router();
 
@@ -37,7 +38,42 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
     }
     
     const companyId = tenant.companyId;
+    const { limit, offset } = parsePaginationParams(req.query, 10, 100);
 
+    const { search, category, category_id, date } = req.query;
+
+    let searchCondition = sql``;
+    if (search && typeof search === "string" && search.trim()) {
+      const q = `%${search.trim()}%`;
+      searchCondition = sql`AND (n.title ILIKE ${q} OR n.content ILIKE ${q})`;
+    }
+
+    let categoryCondition = sql``;
+    if (category_id && typeof category_id === "string") {
+      categoryCondition = sql`AND n.news_category_id = ${category_id}`;
+    } else if (category && typeof category === "string" && category !== "Semua") {
+      categoryCondition = sql`AND (c.name ILIKE ${category} OR c.name ILIKE ${'%' + category + '%'})`;
+    }
+
+    let dateCondition = sql``;
+    if (date && typeof date === "string" && date.trim()) {
+      dateCondition = sql`AND (DATE(n.created_at AT TIME ZONE 'Asia/Jakarta') = ${date.trim()}::date)`;
+    }
+
+    // 1. Get total count
+    const countRes = await db.execute(sql`
+      SELECT COUNT(*) as total
+      FROM news n
+      LEFT JOIN news_categories c ON n.news_category_id = c.id
+      WHERE n.company_id = ${companyId} 
+        AND n.deleted_at IS NULL
+        ${searchCondition}
+        ${categoryCondition}
+        ${dateCondition}
+    `);
+    const total = parseInt(countRes.rows[0]?.total as string, 10) || 0;
+
+    // 2. Fetch paginated news
     const newsRes = await db.execute(sql`
       SELECT 
         n.id, 
@@ -55,7 +91,12 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
       LEFT JOIN profiles p ON COALESCE(n.author_id, n.created_by, n.profile_id) = p.id
       WHERE n.company_id = ${companyId} 
         AND n.deleted_at IS NULL
-      ORDER BY n.created_at DESC
+        ${searchCondition}
+        ${categoryCondition}
+        ${dateCondition}
+      ORDER BY n.created_at DESC, n.id DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `);
 
     const formattedNews = newsRes.rows.map((row: any) => ({
@@ -75,10 +116,18 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
       created_at: row.created_at
     }));
 
+    const paginationMeta = buildPaginationMeta(total, limit, offset);
+
     return res.status(200).json({
       success: true,
       message: "Berhasil mengambil daftar berita",
-      data: formattedNews
+      data: formattedNews,
+      pagination: paginationMeta,
+      meta: {
+        total,
+        limit,
+        offset,
+      }
     });
 
   } catch (error: any) {

@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import { notifications } from "../db/schema";
 import { resolveTenant } from "../utils/tenant";
+import { parsePaginationParams, buildPaginationMeta } from "../utils/pagination";
 
 const router = Router();
 
@@ -142,7 +143,7 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
 
     // 1. Check if there is a pending request
     const pendingRes = await db.execute(sql`
-      SELECT cjr.id, cjr.status, cjr.created_at, c.name as company_name 
+      SELECT cjr.id, cjr.company_id, cjr.status, cjr.created_at, c.name as company_name 
       FROM company_join_requests cjr
       JOIN companies c ON c.id = cjr.company_id
       WHERE cjr.profile_id = ${user.id} AND cjr.status = 'pending' AND cjr.deleted_at IS NULL
@@ -159,11 +160,18 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
     }
 
     // 2. If no pending request, check if there is an approved request
+    // Pastikan keanggotaan masih aktif dan belum diakui (deleted_at IS NULL), serta disetujui dalam 24 jam terakhir
     const approvedRes = await db.execute(sql`
-      SELECT cjr.id, cjr.status, cjr.created_at, c.name as company_name 
+      SELECT cjr.id, cjr.company_id, cjr.status, cjr.created_at, c.name as company_name 
       FROM company_join_requests cjr
       JOIN companies c ON c.id = cjr.company_id
-      WHERE cjr.profile_id = ${user.id} AND cjr.status = 'approved' AND cjr.deleted_at IS NULL
+      JOIN company_members cm ON cm.company_id = cjr.company_id AND cm.profile_id = cjr.profile_id
+      WHERE cjr.profile_id = ${user.id} 
+        AND cjr.status = 'approved' 
+        AND cjr.deleted_at IS NULL
+        AND cm.status = 'active'
+        AND cm.deleted_at IS NULL
+        AND (cjr.updated_at >= now() - interval '24 hours' OR cjr.reviewed_at >= now() - interval '24 hours')
       ORDER BY cjr.updated_at DESC
       LIMIT 1
     `);
@@ -184,6 +192,37 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
 
   } catch (error: any) {
     console.error("Get join request me error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      errors: [error.message],
+    });
+  }
+});
+
+// POST /api/company/join-requests/:requestId/acknowledge
+router.post("/:requestId/acknowledge", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+    const { requestId } = req.params;
+
+    // Tandai permintaan bergabung ini sudah diakui/dilihat oleh pengguna (arsip / soft-delete request)
+    // Keanggotaan di company_members tetap aktif
+    await db.execute(sql`
+      UPDATE company_join_requests 
+      SET deleted_at = now(), updated_at = now()
+      WHERE id = ${requestId} 
+        AND profile_id = ${user.id} 
+        AND status = 'approved' 
+        AND deleted_at IS NULL
+    `);
+
+    return res.status(200).json({
+      success: true,
+      message: "Permintaan bergabung telah diakui",
+    });
+  } catch (error: any) {
+    console.error("Acknowledge join request error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -215,8 +254,31 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
     }
 
     const companyId = tenant.companyId;
+    const { limit, offset } = parsePaginationParams(req.query, 10, 100);
+    const { search } = req.query;
 
-    // 3. Fetch the join requests for the company
+    let searchCondition = sql``;
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const s = `%${search.trim().toLowerCase()}%`;
+      searchCondition = sql`AND (
+        LOWER(p.full_name) LIKE ${s}
+        OR LOWER(p.email) LIKE ${s}
+      )`;
+    }
+
+    // 1. Total count
+    const countRes = await db.execute(sql`
+      SELECT count(*)::int as total
+      FROM company_join_requests cjr
+      JOIN profiles p ON p.id = cjr.profile_id
+      WHERE cjr.company_id = ${companyId} 
+        AND cjr.status = 'pending' 
+        AND cjr.deleted_at IS NULL
+        ${searchCondition}
+    `);
+    const total = Number(countRes.rows[0]?.total || 0);
+
+    // 2. Fetch the join requests for the company
     const requestsRes = await db.execute(sql`
       SELECT 
         cjr.id, 
@@ -232,13 +294,19 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
       WHERE cjr.company_id = ${companyId} 
         AND cjr.status = 'pending' 
         AND cjr.deleted_at IS NULL
-      ORDER BY cjr.created_at ASC
+        ${searchCondition}
+      ORDER BY cjr.created_at ASC, cjr.id ASC
+      LIMIT ${limit} OFFSET ${offset}
     `);
+
+    const pagination = buildPaginationMeta(total, limit, offset);
 
     return res.status(200).json({
       success: true,
       message: "Berhasil mengambil daftar request",
       data: requestsRes.rows,
+      pagination,
+      meta: pagination
     });
 
   } catch (error: any) {
@@ -369,7 +437,7 @@ router.post("/:requestId/approve", authenticate, async (req: Request, res: Respo
           recipient_id: joinRequest.profile_id as string,
           type: "JOIN_REQUEST_APPROVED",
           title: "Permintaan Bergabung Disetujui",
-          message: `Permintaan bergabung atas nama ${memberName} telah disetujui oleh ${approverName}. Selamat datang di ${companyName}!`,
+          message: "Permintaan bergabung Anda telah disetujui.",
           reference_id: joinRequest.id as string,
         });
 

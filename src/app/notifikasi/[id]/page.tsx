@@ -5,7 +5,7 @@ import { Bell, Clock, Calendar, Users, Megaphone, Info, UserCheck, ShieldCheck }
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { formatDateTime } from "@/lib/dateUtils";
-import { parseMembershipNotification } from "@/lib/membershipNotificationUtils";
+import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
 
 export default function NotifikasiDetailPage() {
   const router = useRouter();
@@ -71,7 +71,7 @@ export default function NotifikasiDetailPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#fbfdfc]">
-        <TopBar title="Detail Aktivitas" onBack={() => router.back()} />
+        <TopBar title="Detail Aktivitas" onBack={() => router.push("/notifikasi")} />
         <div className="flex justify-center mt-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#356E3B]"></div>
         </div>
@@ -82,10 +82,10 @@ export default function NotifikasiDetailPage() {
   if (error || !notif) {
     return (
       <div className="min-h-screen bg-[#fbfdfc]">
-        <TopBar title="Detail Aktivitas" onBack={() => router.back()} />
+        <TopBar title="Detail Aktivitas" onBack={() => router.push("/notifikasi")} />
         <div className="flex flex-col items-center justify-center mt-20 text-[#6B7280]">
           <p>{error || "Aktivitas tidak ditemukan."}</p>
-          <button onClick={() => router.back()} className="mt-4 text-[#356E3B] font-bold">
+          <button onClick={() => router.push("/notifikasi")} className="mt-4 text-[#356E3B] font-bold">
             Kembali
           </button>
         </div>
@@ -98,7 +98,7 @@ export default function NotifikasiDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#fbfdfc]">
-      <TopBar title="Detail Aktivitas" onBack={() => router.back()} />
+      <TopBar title="Detail Aktivitas" onBack={() => router.push("/notifikasi")} />
       
       <div className="p-6">
         <div className="bg-white rounded-[24px] shadow-sm border border-[#E5E7EB] p-6 flex flex-col items-center text-center">
@@ -121,7 +121,7 @@ export default function NotifikasiDetailPage() {
           <div className="w-full h-[1px] bg-[#E5E7EB] mb-6"></div>
 
           <p className="text-[#4B5563] text-[15px] leading-relaxed text-left w-full">
-            {notif.message}
+            {cleanNotificationMessage(notif.message)}
           </p>
 
           {/* Kartu Informasi Keanggotaan (Siapa yang bergabung & siapa yang meng-approve) */}

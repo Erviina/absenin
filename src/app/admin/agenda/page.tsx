@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { 
   ChevronLeft, 
+  ChevronRight,
   Plus, 
   Calendar as CalendarIcon, 
   Clock, 
@@ -16,7 +17,8 @@ import {
   ExternalLink,
   MoreVertical,
   FileText,
-  Share2
+  Share2,
+  Loader2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
@@ -26,6 +28,7 @@ import { useDialog } from "@/context/DialogContext";
 import { Badge } from "@/components/Badge";
 import { getAgendaCategoryColor, sortAgendaCategories, countWords, LocationPinIcon } from "@/app/agenda/page";
 import { shareContent } from "@/lib/shareUtils";
+import { AgendaCardSchedule, AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
 
 // Tipe Data untuk Agenda
 type AgendaItem = {
@@ -343,6 +346,7 @@ export default function AdminAgendaPage() {
   };
 
   const handleDeleteAgenda = async (id: string) => {
+    if (isDeletingId) return;
     const confirmed = await showConfirm({
       title: "Hapus Agenda?",
       message: "Apakah Anda yakin ingin menghapus agenda ini? Tindakan ini tidak dapat dibatalkan.",
@@ -397,6 +401,7 @@ export default function AdminAgendaPage() {
   };
 
   const handleSubmitAgenda = async () => {
+    if (isSubmitting) return;
     setSubmitError("");
     if (!formKegiatan.trim()) {
       setSubmitError("Judul agenda wajib diisi");
@@ -533,10 +538,18 @@ export default function AdminAgendaPage() {
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-8">
-      {/* Header */}
       <TopBar 
         title={isAddingAgenda ? (editingAgendaId ? "Ubah Agenda Karyawan" : "Tambah Agenda Karyawan") : "Kelola Agenda"}
-        onBack={() => isAddingAgenda ? setIsAddingAgenda(false) : router.push("/admin/dashboard")}
+        onBack={() => {
+          if (isAddingAgenda) {
+            setIsAddingAgenda(false);
+          } else if (selectedAgendaDetail) {
+            setSelectedAgendaDetail(null);
+            setIsDetailMenuOpen(false);
+          } else {
+            router.push("/admin/dashboard");
+          }
+        }}
         rightAction={
           !isAddingAgenda ? (
             <button 
@@ -551,17 +564,6 @@ export default function AdminAgendaPage() {
       />
 
       <div className="px-6 pt-6 flex flex-col flex-1">
-        
-        {/* Info Banner for Admin */}
-        {!isAddingAgenda && (
-          <div className="mb-4 bg-[#E8F3EB] border border-[#D1E5D5] rounded-xl p-3 flex items-start gap-2 shadow-sm">
-            <Info className="w-5 h-5 text-[#356E3B] shrink-0 mt-0.5" />
-            <p className="text-[#2D5A3F] text-[12px] font-medium leading-tight">
-              Agenda yang Anda buat di sini akan otomatis disiarkan dan terlihat pada jadwal <b>seluruh karyawan</b>.
-            </p>
-          </div>
-        )}
-
         {isAddingAgenda ? (
           /* FORM TAMBAH/UBAH AGENDA - TATA LETAK ASLI DENGAN ROLLER PICKER WAKTU SESUAI GAMBAR */
           <div className="flex flex-col gap-5">
@@ -638,6 +640,7 @@ export default function AdminAgendaPage() {
                     <DateTimeRollerPicker 
                       value={startTime}
                       isAllDay={isAllDay}
+                      agendasMap={agendasMap}
                       onChange={(newDate) => {
                         if (isAllDay) {
                           newDate.setHours(0, 0, 0, 0);
@@ -677,6 +680,7 @@ export default function AdminAgendaPage() {
                     <DateTimeRollerPicker 
                       value={endTime}
                       isAllDay={isAllDay}
+                      agendasMap={agendasMap}
                       onChange={(newDate) => {
                         if (isAllDay) {
                           newDate.setHours(23, 59, 59, 999);
@@ -738,9 +742,19 @@ export default function AdminAgendaPage() {
             <button 
               onClick={handleSubmitAgenda}
               disabled={isSubmitting || !formKegiatan.trim()}
-              className="w-full bg-[#356E3B] hover:bg-[#2A582F] disabled:bg-[#A3B8A8] text-white rounded-full py-4 mt-2 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98]"
+              className={`w-full text-white rounded-full py-4 mt-2 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98] ${
+                isSubmitting
+                  ? "bg-gray-400 cursor-wait pointer-events-none shadow-none"
+                  : !formKegiatan.trim()
+                  ? "bg-gray-300 cursor-not-allowed shadow-none"
+                  : "bg-[#356E3B] hover:bg-[#2A582F]"
+              }`}
             >
-              <CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5} />
+              {isSubmitting ? (
+                <Loader2 className="w-[18px] h-[18px] animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5} />
+              )}
               {isSubmitting ? "Menyimpan..." : editingAgendaId ? "Simpan Perubahan" : "Simpan Agenda ke Semua"}
             </button>
           </div>
@@ -768,18 +782,24 @@ export default function AdminAgendaPage() {
           <>
             {/* Kalender Card dengan Rentang Waktu (Date Range) */}
             <div className="mb-6 px-1">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-[16px] font-bold text-[#111827]">
+              <div className="flex items-center justify-between mb-4">
+                <button 
+                  onClick={handlePrevMonth} 
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-[#4B5563] hover:text-[#111827] hover:bg-gray-100 active:scale-95 transition-all cursor-pointer"
+                  aria-label="Bulan Sebelumnya"
+                >
+                  <ChevronLeft className="w-5 h-5 stroke-[2]" />
+                </button>
+                <h2 className="text-[14px] sm:text-[15px] font-bold text-[#111827] uppercase tracking-wider text-center select-none">
                   {currentDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}
                 </h2>
-                <div className="flex gap-2">
-                  <button onClick={handlePrevMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-[#4B5563] shadow-sm hover:bg-gray-50 border border-[#E5E7EB]">
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button onClick={handleNextMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-[#4B5563] shadow-sm hover:bg-gray-50 border border-[#E5E7EB] rotate-180">
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                </div>
+                <button 
+                  onClick={handleNextMonth} 
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-[#4B5563] hover:text-[#111827] hover:bg-gray-100 active:scale-95 transition-all cursor-pointer"
+                  aria-label="Bulan Berikutnya"
+                >
+                  <ChevronRight className="w-5 h-5 stroke-[2]" />
+                </button>
               </div>
               
               <div className="grid grid-cols-7 gap-y-2 text-center select-none">
@@ -890,25 +910,68 @@ export default function AdminAgendaPage() {
                   return (
                     <div 
                       key={agenda.id} 
-                      onClick={() => setSelectedAgendaDetail(agenda)}
-                      className={`bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 ${catColor.hoverBorder} transition-colors group relative overflow-hidden cursor-pointer`}
+                      className={`relative ${activeMenuId === agenda.id ? 'z-30' : ''}`}
                     >
-                      <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
-                      
-                      <div className="flex justify-between items-start pl-2">
-                        <div className="flex flex-col gap-1">
-                          <Badge 
-                            variant={catColor.variant}
-                            size="xs"
-                            uppercase
-                          >
-                            {agenda.type}
-                          </Badge>
-                          <h3 className="text-[#111827] text-[16px] font-bold leading-tight pr-4 mt-1">{agenda.title}</h3>
+                      <div
+                        onClick={() => setSelectedAgendaDetail(agenda)}
+                        className={`bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 ${catColor.hoverBorder} transition-colors group relative overflow-hidden cursor-pointer`}
+                      >
+                        <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
+                        
+                        <div className="flex justify-between items-start pl-2 pr-10">
+                          <div className="flex flex-col gap-1 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge 
+                                variant={catColor.variant}
+                                size="xs"
+                                uppercase
+                              >
+                                {agenda.type}
+                              </Badge>
+                              <Badge variant="company" size="xs" uppercase>
+                                PERUSAHAAN
+                              </Badge>
+                            </div>
+                            <h3 className="text-[#111827] text-[16px] font-bold leading-tight mt-1">{agenda.title}</h3>
+                          </div>
                         </div>
-                      
-                      {/* More Action Menu (Titik Tiga) */}
-                      <div className="relative">
+                        
+                        <div className="flex flex-col gap-2 pl-2">
+                          <AgendaCardSchedule
+                            startTime={agenda.start_time}
+                            endTime={agenda.end_time}
+                            isAllDay={agenda.is_all_day}
+                            fallbackTime={agenda.time}
+                          />
+                          {agenda.link_or_location ? (
+                            isAgendaUrl(agenda.link_or_location) ? (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <ExternalLink className="w-[14px] h-[14px] text-[#2563EB] shrink-0" strokeWidth={2.5} />
+                                <a
+                                  href={formatAgendaUrl(agenda.link_or_location)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-[#2563EB] hover:text-[#1D4ED8] hover:underline text-[12px] font-medium truncate max-w-[240px]"
+                                  title={agenda.link_or_location}
+                                >
+                                  {agenda.link_or_location}
+                                </a>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 min-w-0">
+                                <LocationPinIcon className="w-[14px] h-[14px] text-[#6B7280] shrink-0" />
+                                <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.link_or_location}>
+                                  {agenda.link_or_location}
+                                </span>
+                              </div>
+                            )
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* More Action Menu (Titik Tiga) — outside overflow-hidden card */}
+                      <div className="absolute top-3 right-3">
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
@@ -928,7 +991,7 @@ export default function AdminAgendaPage() {
                         {activeMenuId === agenda.id && (
                           <div 
                             onClick={(e) => e.stopPropagation()}
-                            className="absolute right-0 top-9 w-36 bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.12)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150"
+                            className="absolute right-0 top-9 w-36 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.18)] border border-gray-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
                           >
                             <button
                               onClick={(e) => {
@@ -960,48 +1023,20 @@ export default function AdminAgendaPage() {
                                 setActiveMenuId(null);
                                 handleDeleteAgenda(agenda.id);
                               }}
-                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors"
+                              disabled={isDeletingId === agenda.id}
+                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors disabled:opacity-50"
                             >
-                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                              <span>Hapus</span>
+                              {isDeletingId === agenda.id ? (
+                                <Loader2 className="w-3.5 h-3.5 text-red-500 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                              )}
+                              <span>{isDeletingId === agenda.id ? "Menghapus..." : "Hapus"}</span>
                             </button>
                           </div>
                         )}
                       </div>
                     </div>
-                    
-                    <div className="flex flex-col gap-2 pl-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
-                        <span className="text-[#4B5563] text-[12px] font-medium">{agenda.time}</span>
-                      </div>
-                      {agenda.link_or_location ? (
-                        isAgendaUrl(agenda.link_or_location) ? (
-                          <div className="flex items-center gap-2 min-w-0">
-                            <ExternalLink className="w-[14px] h-[14px] text-[#2563EB] shrink-0" strokeWidth={2.5} />
-                            <a
-                              href={formatAgendaUrl(agenda.link_or_location)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-[#2563EB] hover:text-[#1D4ED8] hover:underline text-[12px] font-medium truncate max-w-[240px]"
-                              title={agenda.link_or_location}
-                            >
-                              {agenda.link_or_location}
-                            </a>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 min-w-0">
-                            <LocationPinIcon className="w-[14px] h-[14px] text-[#6B7280] shrink-0" />
-                            <span className="text-[#4B5563] text-[12px] font-medium truncate" title={agenda.link_or_location}>
-                              {agenda.link_or_location}
-                            </span>
-                          </div>
-                        )
-                      ) : null}
-
-                    </div>
-                  </div>
                 );
               })
               ) : (
@@ -1021,13 +1056,18 @@ export default function AdminAgendaPage() {
           <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => setSelectedAgendaDetail(null)} />
           <div className="relative w-full max-w-sm bg-white rounded-[24px] shadow-xl z-10 p-6 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
-              <Badge 
-                variant={getAgendaCategoryColor(selectedAgendaDetail.type).variant}
-                size="sm"
-                uppercase
-              >
-                {selectedAgendaDetail.type}
-              </Badge>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Badge 
+                  variant={getAgendaCategoryColor(selectedAgendaDetail.type).variant}
+                  size="sm"
+                  uppercase
+                >
+                  {selectedAgendaDetail.type}
+                </Badge>
+                <Badge variant="company" size="sm" uppercase>
+                  PERUSAHAAN
+                </Badge>
+              </div>
               <div className="relative">
                 <button
                   onClick={(e) => {
@@ -1090,10 +1130,12 @@ export default function AdminAgendaPage() {
             <h2 className="text-[20px] font-bold text-[#111827] mb-4 leading-tight">{selectedAgendaDetail.title}</h2>
             
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">
-                <Clock className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
-                <span className="text-[#374151] text-[14px] font-medium">{selectedAgendaDetail.time}</span>
-              </div>
+              <AgendaDetailSchedule
+                startTime={selectedAgendaDetail.start_time}
+                endTime={selectedAgendaDetail.end_time}
+                isAllDay={selectedAgendaDetail.is_all_day}
+                fallbackTime={selectedAgendaDetail.time}
+              />
               
               {selectedAgendaDetail.link_or_location && (
                 <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">

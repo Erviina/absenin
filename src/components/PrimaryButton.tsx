@@ -56,15 +56,28 @@ export function PrimaryButton({
   }[size];
 
   // Varian tombol
+  const isPlainDisabled = disabled && !isLoading;
   const variantClasses = {
-    primary:
-      "bg-[#356E3B] hover:bg-[#2A582F] text-white shadow-[0_4px_16px_rgba(53,110,59,0.2)] active:scale-[0.98] disabled:bg-gray-300 disabled:text-gray-100 disabled:shadow-none disabled:pointer-events-none",
-    secondary:
-      "bg-[#E8F3EB] hover:bg-[#D5EAD9] text-[#356E3B] border border-[#D1E5D5] active:scale-[0.98] disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200",
-    outline:
-      "bg-transparent hover:bg-gray-50 text-[#374151] border border-[#E5E7EB] active:scale-[0.98] disabled:opacity-50",
-    danger:
-      "bg-[#DC2626] hover:bg-[#B91C1C] text-white shadow-sm active:scale-[0.98] disabled:opacity-50",
+    primary: isLoading
+      ? "bg-gray-400 text-white cursor-wait pointer-events-none shadow-none"
+      : isPlainDisabled
+      ? "bg-gray-300 text-gray-100 shadow-none pointer-events-none"
+      : "bg-[#356E3B] hover:bg-[#2A582F] text-white shadow-[0_4px_16px_rgba(53,110,59,0.2)] active:scale-[0.98]",
+    secondary: isLoading
+      ? "bg-gray-300 text-gray-600 border border-gray-300 cursor-wait pointer-events-none shadow-none"
+      : isPlainDisabled
+      ? "bg-gray-100 text-gray-400 border border-gray-200 pointer-events-none"
+      : "bg-[#E8F3EB] hover:bg-[#D5EAD9] text-[#356E3B] border border-[#D1E5D5] active:scale-[0.98]",
+    outline: isLoading
+      ? "bg-gray-100 text-gray-400 border border-gray-300 cursor-wait pointer-events-none"
+      : isPlainDisabled
+      ? "bg-transparent text-gray-400 border border-gray-200 opacity-50 pointer-events-none"
+      : "bg-transparent hover:bg-gray-50 text-[#374151] border border-[#E5E7EB] active:scale-[0.98]",
+    danger: isLoading
+      ? "bg-gray-400 text-white cursor-wait pointer-events-none shadow-none"
+      : isPlainDisabled
+      ? "bg-gray-300 text-gray-100 opacity-50 pointer-events-none"
+      : "bg-[#DC2626] hover:bg-[#B91C1C] text-white shadow-sm active:scale-[0.98]",
   }[variant];
 
   const widthClass = fullWidth ? "w-full" : "w-auto";
@@ -72,6 +85,7 @@ export function PrimaryButton({
   return (
     <button
       disabled={disabled || isLoading}
+      aria-busy={isLoading}
       className={`inline-flex items-center justify-center font-bold rounded-full transition-all duration-200 select-none ${widthClass} ${sizeClasses} ${variantClasses} ${className}`}
       {...props}
     >

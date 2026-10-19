@@ -151,7 +151,10 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-white relative">
       {/* Header */}
-      <TopBar title="Detail Kehadiran" />
+      <TopBar 
+        title="Detail Kehadiran" 
+        onBack={() => router.push("/kehadiran")} 
+      />
 
       {isLoading ? (
         <div className="flex-1 flex flex-col items-center justify-center h-[50vh]">
@@ -171,7 +174,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
             <RefreshCcw className="w-4 h-4" /> Coba Lagi
           </button>
         </div>
-      ) : data && (
+      ) : data ? (
         <div className="px-6 pt-6 pb-12 flex flex-col gap-6">
           {/* Title Section */}
         <div>
@@ -195,6 +198,13 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 <span className="text-[#111827] text-[14px] sm:text-[15px] font-bold leading-tight truncate">
                   {data.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
                 </span>
+                {data.is_pulang_cepat && (
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200/60 px-2 py-0.5 rounded-full">
+                      Pulang Cepat
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -219,10 +229,12 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 <span className="text-[#9CA3AF] text-[11px] font-bold">WIB</span>
               </div>
 
-              <div className="flex items-center">
-                <span className="text-[10.5px] font-bold text-[#15803D] bg-[#DCFCE7]/70 px-2.5 py-0.5 rounded-full">
-                  Tercatat
-                </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {data.is_terlambat && (
+                  <span className="text-[10.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200/60 px-2.5 py-0.5 rounded-full">
+                    Terlambat
+                  </span>
+                )}
               </div>
             </div>
             
@@ -241,10 +253,12 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                   <span className="text-[#9CA3AF] text-[11px] font-bold">WIB</span>
                 </div>
 
-                <div className="flex items-center">
-                  <span className="text-[10.5px] font-bold text-[#EA580C] bg-[#FFEDD5]/80 px-2.5 py-0.5 rounded-full">
-                    Selesai
-                  </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {data.is_pulang_cepat && (
+                    <span className="text-[10.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/60 px-2.5 py-0.5 rounded-full">
+                      Pulang Cepat
+                    </span>
+                  )}
                 </div>
               </div>
             ) : (
@@ -381,6 +395,11 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
         </div>
 
       </div>
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center h-[50vh] p-6 text-center">
+          <p className="text-gray-500 font-medium text-[14px]">Data kehadiran tidak ditemukan</p>
+          <button onClick={() => router.push("/kehadiran")} className="mt-2 px-5 py-2.5 rounded-full bg-[#356E3B] text-white text-[13px] font-bold active:scale-95 transition-all shadow-sm">Kembali ke Riwayat Kehadiran</button>
+        </div>
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import multer from "multer";
 import { calculateHaversineDistance } from "../utils/haversine";
 import { uploadAttendancePhoto } from "../utils/storage";
 import { resolveTenant } from "../utils/tenant";
+import { parsePaginationParams, buildPaginationMeta } from "../utils/pagination";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -51,7 +52,9 @@ router.post("/check-in", authenticate, upload.single("photo"), async (req: AuthR
 
     // 3. Fetch company configuration and validate work_days & work_start_time (15 menit sebelum masuk)
     const compRes = await db.execute(sql`
-      SELECT id, work_start_time, work_days,
+      SELECT id, 
+             COALESCE(work_start_time, '08:00:00'::time) as work_start_time, 
+             COALESCE(NULLIF(work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]) as work_days,
              (now() AT TIME ZONE 'Asia/Jakarta')::time as current_time_wib,
              EXTRACT(ISODOW FROM now() AT TIME ZONE 'Asia/Jakarta') as current_isodow
       FROM companies
@@ -69,7 +72,7 @@ router.post("/check-in", authenticate, upload.single("photo"), async (req: AuthR
     const currentDayName = dayNames[isodow - 1];
 
     // Validasi work_days
-    const workDays = compRow.work_days as string[] | null;
+    const workDays = (compRow.work_days as string[] | null) || ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
     if (workDays && Array.isArray(workDays) && workDays.length > 0) {
       if (!workDays.includes(currentDayName)) {
         return res.status(400).json({ 
@@ -276,7 +279,10 @@ router.get("/today", authenticate, async (req: AuthRequest, res: Response): Prom
     let companyData = null;
     if (tenant?.companyId) {
       const compRes = await db.execute(sql`
-        SELECT id, name, work_start_time, work_end_time, work_days,
+        SELECT id, name, 
+               COALESCE(work_start_time, '08:00:00'::time) as work_start_time, 
+               COALESCE(work_end_time, '17:00:00'::time) as work_end_time, 
+               COALESCE(NULLIF(work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]) as work_days,
                to_char(now() AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS"+07:00"') as server_time,
                to_char(now() AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD') as server_date,
                to_char(now() AT TIME ZONE 'Asia/Jakarta', 'HH24:MI') as server_clock,
@@ -333,48 +339,111 @@ router.get("/", authenticate, async (req: AuthRequest, res: Response): Promise<a
   try {
     const userId = req.user.id;
     const tenant = await resolveTenant(req, userId);
-    const { start_date, end_date } = req.query;
+    const { start_date, end_date, search } = req.query;
+    const { limit, offset } = parsePaginationParams(req.query, 10, 100);
 
-    const conditions = [
-      eq(attendances.profile_id, userId),
-      isNull(attendances.deleted_at)
-    ];
-
-    if (tenant) {
-      conditions.push(eq(attendances.company_id, tenant.companyId));
-    }
-
-
+    let dateConditions = sql``;
     if (start_date && typeof start_date === 'string') {
-      conditions.push(sql`DATE(check_in_time AT TIME ZONE 'Asia/Jakarta') >= ${start_date}`);
+      dateConditions = sql`${dateConditions} AND DATE(a.check_in_time AT TIME ZONE 'Asia/Jakarta') >= ${start_date}::date`;
     }
-    
     if (end_date && typeof end_date === 'string') {
-      conditions.push(sql`DATE(check_in_time AT TIME ZONE 'Asia/Jakarta') <= ${end_date}`);
+      dateConditions = sql`${dateConditions} AND DATE(a.check_in_time AT TIME ZONE 'Asia/Jakarta') <= ${end_date}::date`;
     }
 
-    const history = await db
-      .select({
-        id: attendances.id,
-        work_mode: attendances.work_mode,
-        check_in_time: attendances.check_in_time,
-        check_in_latitude: attendances.check_in_latitude,
-        check_in_longitude: attendances.check_in_longitude,
-        check_in_address: attendances.check_in_address,
-        check_in_photo_url: attendances.check_in_photo_url,
-        check_out_time: attendances.check_out_time,
-        check_out_latitude: attendances.check_out_latitude,
-        check_out_longitude: attendances.check_out_longitude,
-        check_out_address: attendances.check_out_address,
-        check_out_photo_url: attendances.check_out_photo_url
-      })
-      .from(attendances)
-      .where(and(...conditions))
-      .orderBy(desc(attendances.check_in_time));
+    let tenantCondition = sql``;
+    if (tenant?.companyId) {
+      tenantCondition = sql`AND a.company_id = ${tenant.companyId}`;
+    }
+
+    let searchCondition = sql``;
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const s = `%${search.trim().toLowerCase()}%`;
+      searchCondition = sql`AND (
+        LOWER(a.work_mode) LIKE ${s}
+        OR LOWER(COALESCE(a.check_in_address, '')) LIKE ${s}
+        OR LOWER(COALESCE(a.check_out_address, '')) LIKE ${s}
+      )`;
+    }
+
+    const countRes = await db.execute(sql`
+      SELECT count(*)::int as total
+      FROM attendances a
+      WHERE a.profile_id = ${userId}
+        AND a.deleted_at IS NULL
+        ${tenantCondition}
+        ${dateConditions}
+        ${searchCondition}
+    `);
+    const total = Number(countRes.rows[0]?.total || 0);
+
+    const query = sql`
+      SELECT 
+        a.id,
+        a.work_mode,
+        a.check_in_time,
+        a.check_in_latitude,
+        a.check_in_longitude,
+        a.check_in_address,
+        a.check_in_photo_url,
+        a.check_out_time,
+        a.check_out_latitude,
+        a.check_out_longitude,
+        a.check_out_address,
+        a.check_out_photo_url,
+        (CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time) 
+          AND (
+            CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
+        THEN true ELSE false END) as is_terlambat,
+        (CASE WHEN a.check_out_time IS NOT NULL 
+          AND (a.check_out_time AT TIME ZONE 'Asia/Jakarta')::time < COALESCE(c.work_end_time, '17:00:00'::time) 
+          AND (
+            CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
+        THEN true ELSE false END) as is_pulang_cepat
+      FROM attendances a
+      LEFT JOIN companies c ON a.company_id = c.id
+      WHERE a.profile_id = ${userId}
+        AND a.deleted_at IS NULL
+        ${tenantCondition}
+        ${dateConditions}
+        ${searchCondition}
+      ORDER BY a.check_in_time DESC, a.id DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    const historyRes = await db.execute(query);
+
+    const history = historyRes.rows.map(row => ({
+      id: row.id,
+      work_mode: row.work_mode,
+      check_in_time: row.check_in_time,
+      check_in_latitude: row.check_in_latitude,
+      check_in_longitude: row.check_in_longitude,
+      check_in_address: row.check_in_address,
+      check_in_photo_url: row.check_in_photo_url,
+      check_out_time: row.check_out_time,
+      check_out_latitude: row.check_out_latitude,
+      check_out_longitude: row.check_out_longitude,
+      check_out_address: row.check_out_address,
+      check_out_photo_url: row.check_out_photo_url,
+      is_terlambat: Boolean(row.is_terlambat),
+      is_pulang_cepat: Boolean(row.is_pulang_cepat),
+    }));
+
+    const pagination = buildPaginationMeta(total, limit, offset);
 
     return res.status(200).json({
       success: true,
-      data: history
+      data: history,
+      pagination,
+      meta: pagination
     });
 
   } catch (error: any) {
@@ -401,8 +470,28 @@ router.get("/management/summary", authenticate, async (req: AuthRequest, res: Re
       return res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses laporan" });
     }
     const companyId = tenant.companyId;
+    const { limit, offset } = parsePaginationParams(req.query, 10, 100);
+    const { search } = req.query;
 
-    // 2. Get all active members in the company
+    let searchCondition = sql``;
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const s = `%${search.trim().toLowerCase()}%`;
+      searchCondition = sql`AND LOWER(p.full_name) LIKE ${s}`;
+    }
+
+    // Total active employees matching filter
+    const countRes = await db.execute(sql`
+      SELECT count(*)::int as total
+      FROM company_members cm
+      JOIN profiles p ON p.id = cm.profile_id
+      WHERE cm.company_id = ${companyId}
+        AND cm.status = 'active'
+        AND cm.deleted_at IS NULL
+        ${searchCondition}
+    `);
+    const total = Number(countRes.rows[0]?.total || 0);
+
+    // 2. Get active members in the company with LIMIT and OFFSET
     const employeesRes = await db.execute(sql`
       SELECT p.id, p.full_name, cm.role
       FROM company_members cm
@@ -410,6 +499,9 @@ router.get("/management/summary", authenticate, async (req: AuthRequest, res: Re
       WHERE cm.company_id = ${companyId}
         AND cm.status = 'active'
         AND cm.deleted_at IS NULL
+        ${searchCondition}
+      ORDER BY cm.joined_at ASC, p.id ASC
+      LIMIT ${limit} OFFSET ${offset}
     `);
 
     const rolesMap: Record<string, string> = {};
@@ -431,20 +523,20 @@ router.get("/management/summary", authenticate, async (req: AuthRequest, res: Re
       SELECT 
         a.profile_id,
         sum(CASE WHEN 
-          (c.work_days IS NULL OR c.work_days = '{}' OR (
+          (
             CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
               WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
             END
-          ) = ANY(c.work_days))
+          ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
         THEN 1 ELSE 0 END) as hadir_count,
-        sum(CASE WHEN c.work_start_time IS NOT NULL AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > c.work_start_time 
-          AND (c.work_days IS NULL OR c.work_days = '{}' OR (
+        sum(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time) 
+          AND (
             CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
               WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
             END
-          ) = ANY(c.work_days))
+          ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
         THEN 1 ELSE 0 END) as terlambat_count
       FROM attendances a
       JOIN companies c ON a.company_id = c.id
@@ -506,9 +598,13 @@ router.get("/management/summary", authenticate, async (req: AuthRequest, res: Re
       };
     });
 
+    const pagination = buildPaginationMeta(total, limit, offset);
+
     return res.status(200).json({
       success: true,
-      data: summary
+      data: summary,
+      pagination,
+      meta: pagination
     });
   } catch (error: any) {
     console.error("Get management summary error:", error);
@@ -520,11 +616,7 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
   try {
     const userId = req.user.id;
     const { employeeId } = req.params;
-    const { month, year } = req.query;
-
-    if (!month || !year) {
-      return res.status(400).json({ success: false, message: "Month and year are required." });
-    }
+    const { month, year, startDate, endDate, date } = req.query;
 
     // 1. Resolve tenant
     const tenant = await resolveTenant(req, userId);
@@ -538,7 +630,7 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
 
     // 2. Get Employee info & Verify membership in this company
     const employeeRes = await db.execute(sql`
-      SELECT p.id, p.full_name, p.email, p.avatar_url, cm.role
+      SELECT p.id, p.full_name, p.email, p.avatar_url, cm.role, cm.status, cm.joined_at
       FROM company_members cm
       JOIN profiles p ON p.id = cm.profile_id
       WHERE cm.company_id = ${companyId}
@@ -554,30 +646,55 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
 
     const employee = employeeRes.rows[0];
 
-    // 4. Calculate Summary for the month/year
-    const monthNum = parseInt(month as string);
-    const yearNum = parseInt(year as string);
+    // 3. Dynamic Date Filter
+    const now = new Date();
+    const monthNum = month ? parseInt(month as string) : (now.getMonth() + 1);
+    const yearNum = year ? parseInt(year as string) : now.getFullYear();
+
+    let dateCondition = sql`
+      AND EXTRACT(MONTH FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${monthNum}
+      AND EXTRACT(YEAR FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${yearNum}
+    `;
+
+    if (date) {
+      dateCondition = sql`AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::date = ${date}::date`;
+    } else if (startDate && endDate) {
+      dateCondition = sql`
+        AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::date >= ${startDate}::date
+        AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::date <= ${endDate}::date
+      `;
+    } else if (startDate) {
+      dateCondition = sql`AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::date >= ${startDate}::date`;
+    }
 
     const attendancesRes = await db.execute(sql`
       SELECT 
         a.id, a.work_mode, a.check_in_time, a.check_in_latitude, a.check_in_longitude, 
         a.check_in_address, a.check_in_photo_url, a.check_out_time, a.check_out_latitude, 
         a.check_out_longitude, a.check_out_address, a.check_out_photo_url,
-        (CASE WHEN c.work_start_time IS NOT NULL AND (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > c.work_start_time 
-          AND (c.work_days IS NULL OR c.work_days = '{}' OR (
+        (CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time) 
+          AND (
             CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
               WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
             END
-          ) = ANY(c.work_days))
-        THEN 1 ELSE 0 END) as is_terlambat
+          ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
+        THEN 1 ELSE 0 END) as is_terlambat,
+        (CASE WHEN a.check_out_time IS NOT NULL 
+          AND (a.check_out_time AT TIME ZONE 'Asia/Jakarta')::time < COALESCE(c.work_end_time, '17:00:00'::time) 
+          AND (
+            CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
+        THEN 1 ELSE 0 END) as is_pulang_cepat
       FROM attendances a
       JOIN companies c ON a.company_id = c.id
       WHERE a.company_id = ${companyId}
         AND a.profile_id = ${employeeId}
         AND a.deleted_at IS NULL
-        AND EXTRACT(MONTH FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${monthNum}
-        AND EXTRACT(YEAR FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta') = ${yearNum}
+        ${dateCondition}
       ORDER BY a.check_in_time DESC
     `);
 
@@ -586,7 +703,9 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
     
     const attendancesList = attendancesRes.rows.map(row => {
       hadir++;
-      if (parseInt(row.is_terlambat as string) === 1) {
+      const isLate = parseInt(row.is_terlambat as string) === 1;
+      const isPulangCepat = parseInt(row.is_pulang_cepat as string) === 1;
+      if (isLate) {
         terlambat++;
       }
       return {
@@ -602,6 +721,8 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
         check_out_longitude: row.check_out_longitude,
         check_out_address: row.check_out_address,
         check_out_photo_url: row.check_out_photo_url,
+        is_terlambat: isLate,
+        is_pulang_cepat: isPulangCepat,
       };
     });
 
@@ -619,7 +740,7 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
         )
     `);
 
-    const izin = parseInt(leavesRes.rows[0].izin_count as string) || 0;
+    const izin = parseInt(leavesRes.rows[0]?.izin_count as string) || 0;
 
     return res.status(200).json({
       success: true,
@@ -629,7 +750,9 @@ router.get("/management/employees/:employeeId", authenticate, async (req: AuthRe
           full_name: employee.full_name || "Tanpa Nama",
           email: employee.email || "",
           avatar_url: employee.avatar_url || null,
-          role: employee.role || "Employee"
+          role: employee.role || "Employee",
+          status: employee.status || "active",
+          joined_at: employee.joined_at || null,
         },
         summary: {
           hadir,
@@ -658,52 +781,86 @@ router.get("/:id", authenticate, async (req: AuthRequest, res: Response): Promis
       return res.status(400).json({ success: false, message: "Invalid attendance ID format" });
     }
 
-    // User can view their own attendance (profile_id = userId),
-    // OR if user is in management (owner/admin/manager) in the company that owns the attendance record
-    const conditions = [
-      eq(attendances.id, id),
-      isNull(attendances.deleted_at),
-      or(
-        eq(attendances.profile_id, userId),
-        sql`EXISTS (
-          SELECT 1 FROM company_members cm 
-          WHERE cm.profile_id = ${userId} 
-            AND cm.company_id = ${attendances.company_id} 
-            AND cm.role IN ('owner', 'admin', 'manager') 
-            AND cm.status = 'active' 
-            AND cm.deleted_at IS NULL
-        )`
-      )
-    ];
+    const query = sql`
+      SELECT 
+        a.id,
+        a.work_mode,
+        a.check_in_time,
+        a.check_in_latitude,
+        a.check_in_longitude,
+        a.check_in_address,
+        a.check_in_photo_url,
+        a.check_out_time,
+        a.check_out_latitude,
+        a.check_out_longitude,
+        a.check_out_address,
+        a.check_out_photo_url,
+        a.created_at,
+        a.updated_at,
+        (CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time) 
+          AND (
+            CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
+        THEN true ELSE false END) as is_terlambat,
+        (CASE WHEN a.check_out_time IS NOT NULL 
+          AND (a.check_out_time AT TIME ZONE 'Asia/Jakarta')::time < COALESCE(c.work_end_time, '17:00:00'::time) 
+          AND (
+            CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
+        THEN true ELSE false END) as is_pulang_cepat
+      FROM attendances a
+      LEFT JOIN companies c ON a.company_id = c.id
+      WHERE a.id = ${id}
+        AND a.deleted_at IS NULL
+        AND (
+          a.profile_id = ${userId}
+          OR EXISTS (
+            SELECT 1 FROM company_members cm 
+            WHERE cm.profile_id = ${userId} 
+              AND cm.company_id = a.company_id 
+              AND cm.role IN ('owner', 'admin', 'manager') 
+              AND cm.status = 'active' 
+              AND cm.deleted_at IS NULL
+          )
+        )
+      LIMIT 1
+    `;
 
-    const detail = await db
-      .select({
-        id: attendances.id,
-        work_mode: attendances.work_mode,
-        check_in_time: attendances.check_in_time,
-        check_in_latitude: attendances.check_in_latitude,
-        check_in_longitude: attendances.check_in_longitude,
-        check_in_address: attendances.check_in_address,
-        check_in_photo_url: attendances.check_in_photo_url,
-        check_out_time: attendances.check_out_time,
-        check_out_latitude: attendances.check_out_latitude,
-        check_out_longitude: attendances.check_out_longitude,
-        check_out_address: attendances.check_out_address,
-        check_out_photo_url: attendances.check_out_photo_url,
-        created_at: attendances.created_at,
-        updated_at: attendances.updated_at
-      })
-      .from(attendances)
-      .where(and(...conditions))
-      .limit(1);
+    const detailRes = await db.execute(query);
 
-    if (detail.length === 0) {
+    if (detailRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Attendance not found" });
     }
 
+    const row = detailRes.rows[0];
+    const detail = {
+      id: row.id,
+      work_mode: row.work_mode,
+      check_in_time: row.check_in_time,
+      check_in_latitude: row.check_in_latitude,
+      check_in_longitude: row.check_in_longitude,
+      check_in_address: row.check_in_address,
+      check_in_photo_url: row.check_in_photo_url,
+      check_out_time: row.check_out_time,
+      check_out_latitude: row.check_out_latitude,
+      check_out_longitude: row.check_out_longitude,
+      check_out_address: row.check_out_address,
+      check_out_photo_url: row.check_out_photo_url,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      is_terlambat: Boolean(row.is_terlambat),
+      is_pulang_cepat: Boolean(row.is_pulang_cepat),
+    };
+
     return res.status(200).json({
       success: true,
-      data: detail[0]
+      data: detail
     });
 
   } catch (error: any) {

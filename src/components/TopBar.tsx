@@ -7,6 +7,7 @@ import { CompanySwitcher } from "./CompanySwitcher";
 interface TopBarProps {
   title: string;
   onBack?: () => void;
+  fallbackHref?: string;
   rightAction?: React.ReactNode;
   showCompanySwitcher?: boolean;
   bgColor?: string;
@@ -15,6 +16,7 @@ interface TopBarProps {
 export function TopBar({ 
   title, 
   onBack, 
+  fallbackHref,
   rightAction, 
   showCompanySwitcher = false,
   bgColor = "bg-[#356E3B]" 
@@ -24,13 +26,19 @@ export function TopBar({
   const handleBack = () => {
     if (onBack) {
       onBack();
+    } else if (fallbackHref) {
+      if (typeof window !== "undefined" && window.history.length > 1) {
+        router.back();
+      } else {
+        router.push(fallbackHref);
+      }
     } else {
       router.back();
     }
   };
 
   return (
-    <div className={`${bgColor} py-4 px-6 flex items-center justify-between sticky top-0 z-20 shrink-0`}>
+    <div className={`${bgColor} h-[72px] px-6 flex items-center justify-between sticky top-0 z-20 shrink-0`}>
       <button 
         onClick={handleBack}
         className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all z-10"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
@@ -31,13 +31,48 @@ interface NewsDetail {
 export default function BeritaDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
-  const { activeCompanyId } = useCompany();
+  const { activeCompanyId, activeRole } = useCompany();
   const { showToast } = useDialog();
 
   const [news, setNews] = useState<NewsDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const fromParam = searchParams.get("from");
+
+  const handleBack = () => {
+    // 1. Prioritaskan jika ada query param ?from= yang valid
+    if (fromParam && fromParam.startsWith("/") && !fromParam.startsWith(`/berita/${id}`)) {
+      router.push(fromParam);
+      return;
+    }
+
+    // 2. Jika ada riwayat navigasi di sesi browser
+    if (typeof window !== "undefined") {
+      const referrer = document.referrer;
+      if (referrer && referrer.startsWith(window.location.origin)) {
+        const refPath = referrer.replace(window.location.origin, "");
+        if (refPath && !refPath.startsWith(`/berita/${id}`)) {
+          router.back();
+          return;
+        }
+      }
+
+      if (window.history.length > 1) {
+        router.back();
+        return;
+      }
+    }
+
+    // 3. Fallback cerdas berdasarkan hak akses / role pengguna
+    if (activeRole === "admin" || activeRole === "owner" || activeRole === "manager") {
+      router.push("/admin/berita");
+    } else {
+      router.push("/berita");
+    }
+  };
 
   const handleShare = () => {
     if (!news) return;
@@ -118,7 +153,7 @@ export default function BeritaDetailPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-24">
       <TopBar 
         title="Baca Berita" 
-        onBack={() => router.back()} 
+        onBack={handleBack} 
         rightAction={
           news ? (
             <button
@@ -149,10 +184,14 @@ export default function BeritaDetailPage() {
             <h2 className="text-[#1E4738] text-[16px] font-bold">Berita Tidak Tersedia</h2>
             <p className="text-[#7d998c] text-[13px]">{error || "Berita yang Anda cari tidak dapat ditemukan."}</p>
             <button
-              onClick={() => router.push("/berita")}
+              onClick={handleBack}
               className="mt-2 px-5 py-2.5 rounded-full bg-[#1E4738] text-white text-[13px] font-semibold hover:bg-[#153428] transition-colors"
             >
-              Kembali ke Semua Berita
+              {fromParam === "/dashboard" 
+                ? "Kembali ke Beranda" 
+                : fromParam === "/admin/berita" 
+                  ? "Kembali ke Kelola Berita" 
+                  : "Kembali"}
             </button>
           </div>
         ) : (

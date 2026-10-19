@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { 
   ChevronLeft, 
+  ChevronRight,
   Calendar as CalendarIcon, 
   Clock, 
   MapPin, 
@@ -27,7 +28,9 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { shareContent } from "@/lib/shareUtils";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { getActiveCompanyId } from "@/lib/api";
 import { Badge } from "@/components/Badge";
+import { AgendaCardSchedule, AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
 
 // Tipe Data untuk Agenda
 type AgendaItem = {
@@ -163,7 +166,7 @@ function AgendaPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryAgendaId = searchParams.get("id");
-  const { activeCompanyId, activeCompany, canCreate } = useCompany();
+  const { activeCompanyId, activeCompany, canCreate, isLoading: isCompanyLoading } = useCompany();
   const { showConfirm, showToast } = useDialog();
   
   // State Data
@@ -231,12 +234,18 @@ function AgendaPageContent() {
   const [submitError, setSubmitError] = useState("");
 
   const fetchCategories = useCallback(async () => {
+    if (isCompanyLoading) return;
+    const compId = activeCompanyId || getActiveCompanyId();
     try {
+      if (!compId) {
+        setCategories([]);
+        return;
+      }
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
       const res = await fetch(`${apiUrl}/agendas/categories`, { headers });
       const data = await res.json();
       if (data.success) {
@@ -245,10 +254,18 @@ function AgendaPageContent() {
     } catch (err) {
       console.error("Fetch categories error:", err);
     }
-  }, [activeCompanyId]);
+  }, [activeCompanyId, isCompanyLoading]);
 
   const fetchAgendas = useCallback(async () => {
+    if (isCompanyLoading) return;
+    const compId = activeCompanyId || getActiveCompanyId();
     try {
+      if (!compId) {
+        setAgendasMap({});
+        setIsLoading(false);
+        setErrorMsg("");
+        return;
+      }
       setIsLoading(true);
       setErrorMsg("");
       const token = localStorage.getItem("accessToken");
@@ -262,7 +279,7 @@ function AgendaPageContent() {
       if (!apiUrl) throw new Error("API URL tidak ditemukan");
 
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(`${apiUrl}/agendas`, { headers });
       const data = await res.json();
@@ -396,6 +413,10 @@ function AgendaPageContent() {
   };
 
   const handleOpenAddModal = () => {
+    if (!activeCompanyId) {
+      showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu untuk membuat agenda.", "warning");
+      return;
+    }
     setFormId("");
     setFormScope("PERSONAL");
     setFormKegiatan("");
@@ -423,6 +444,10 @@ function AgendaPageContent() {
   };
 
   const handleOpenEditModal = (agenda: AgendaItem) => {
+    if (!activeCompanyId) {
+      showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     setFormId(agenda.id);
     const isCompany = (agenda.scope || "").toUpperCase() === "COMPANY" || agenda.type === "COMPANY";
     setFormScope(isCompany ? "COMPANY" : "PERSONAL");
@@ -444,7 +469,13 @@ function AgendaPageContent() {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     setSubmitError("");
+    if (!activeCompanyId) {
+      setSubmitError("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.");
+      showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     if (!formKegiatan.trim()) {
       setSubmitError("Judul agenda wajib diisi");
       return;
@@ -491,7 +522,8 @@ function AgendaPageContent() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`
       };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      const compId = activeCompanyId || getActiveCompanyId();
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(url, {
         method,
@@ -513,6 +545,12 @@ function AgendaPageContent() {
   };
 
   const handleDeleteAgenda = async (agendaId: string) => {
+    if (isSubmitting) return;
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) {
+      showToast("Silakan masuk atau bergabung ke perusahaan terlebih dahulu.", "warning");
+      return;
+    }
     const confirmed = await showConfirm({
       title: "Hapus Agenda?",
       message: "Apakah Anda yakin ingin menghapus agenda ini? Tindakan ini tidak dapat dibatalkan.",
@@ -529,7 +567,7 @@ function AgendaPageContent() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(`${apiUrl}/agendas/${agendaId}`, {
         method: "DELETE",
@@ -615,7 +653,16 @@ function AgendaPageContent() {
       {/* Header */}
       <TopBar 
         title="Agenda"
-        onBack={() => router.push("/dashboard")}
+        onBack={() => {
+          if (isFormModalOpen) {
+            setIsFormModalOpen(false);
+          } else if (selectedAgendaDetail) {
+            setSelectedAgendaDetail(null);
+            setIsDetailMenuOpen(false);
+          } else {
+            router.push("/dashboard");
+          }
+        }}
         rightAction={
           <button 
             onClick={handleOpenAddModal}
@@ -629,9 +676,9 @@ function AgendaPageContent() {
 
       <div className="px-6 pt-6 flex flex-col flex-1">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center flex-1 py-12">
-            <div className="w-8 h-8 border-4 border-[#356E3B] border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-[#6B7280] text-[14px] font-medium">Memuat data agenda...</p>
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2.5">
+            <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+            <span className="text-[13px] font-medium text-[#7d998c]">Memuat data agenda...</span>
           </div>
         ) : errorMsg ? (
           <div className="flex flex-col items-center justify-center flex-1 py-12 px-4 text-center">
@@ -651,18 +698,24 @@ function AgendaPageContent() {
           <>
             {/* Kalender Card dengan Rentang Waktu (Date Range) */}
             <div className="mb-6 px-1">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-[16px] font-bold text-[#111827]">
+              <div className="flex items-center justify-between mb-4">
+                <button 
+                  onClick={handlePrevMonth} 
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-[#4B5563] hover:text-[#111827] hover:bg-gray-100 active:scale-95 transition-all cursor-pointer"
+                  aria-label="Bulan Sebelumnya"
+                >
+                  <ChevronLeft className="w-5 h-5 stroke-[2]" />
+                </button>
+                <h2 className="text-[14px] sm:text-[15px] font-bold text-[#111827] uppercase tracking-wider text-center select-none">
                   {currentDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}
                 </h2>
-                <div className="flex gap-2">
-                  <button onClick={handlePrevMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-[#4B5563] shadow-sm hover:bg-gray-50 border border-[#E5E7EB]">
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button onClick={handleNextMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-[#4B5563] shadow-sm hover:bg-gray-50 border border-[#E5E7EB] rotate-180">
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                </div>
+                <button 
+                  onClick={handleNextMonth} 
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-[#4B5563] hover:text-[#111827] hover:bg-gray-100 active:scale-95 transition-all cursor-pointer"
+                  aria-label="Bulan Berikutnya"
+                >
+                  <ChevronRight className="w-5 h-5 stroke-[2]" />
+                </button>
               </div>
               
               <div className="grid grid-cols-7 gap-y-2 text-center select-none">
@@ -804,10 +857,12 @@ function AgendaPageContent() {
                         </div>
 
                         <div className="flex flex-col gap-2 pl-2">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-[14px] h-[14px] text-[#6B7280]" strokeWidth={2.5} />
-                            <span className="text-[#4B5563] text-[12px] font-medium">{agenda.time}</span>
-                          </div>
+                          <AgendaCardSchedule 
+                            startTime={agenda.start_time}
+                            endTime={agenda.end_time}
+                            isAllDay={agenda.is_all_day}
+                            fallbackTime={agenda.time}
+                          />
                           {agenda.link_or_location ? (
                             isAgendaUrl(agenda.link_or_location) ? (
                               <div className="flex items-center gap-2 min-w-0">
@@ -895,10 +950,9 @@ function AgendaPageContent() {
                 );
               })
               ) : (
-                <div className="flex flex-col items-center justify-center py-10 opacity-60">
-                  <CalendarIcon className="w-12 h-12 text-[#9CA3AF] mb-3" strokeWidth={1.5} />
-                  <p className="text-[#6B7280] font-medium">Tidak ada agenda.</p>
-                </div>
+                <p className="text-sm text-gray-500 text-center py-6">
+                  Belum ada agenda.
+                </p>
               )}
             </div>
           </>
@@ -913,13 +967,22 @@ function AgendaPageContent() {
           <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-200" onClick={() => setSelectedAgendaDetail(null)} />
           <div className="relative w-full max-w-sm bg-white rounded-[24px] shadow-xl z-10 p-6 animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start mb-4">
-              <Badge 
-                variant={getAgendaCategoryColor(selectedAgendaDetail.type).variant}
-                size="sm"
-                uppercase
-              >
-                {selectedAgendaDetail.type}
-              </Badge>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge 
+                  variant={getAgendaCategoryColor(selectedAgendaDetail.type).variant}
+                  size="sm"
+                  uppercase
+                >
+                  {selectedAgendaDetail.type}
+                </Badge>
+                <Badge
+                  variant={selectedAgendaDetail.scope === "COMPANY" ? "company" : "personal"}
+                  size="xs"
+                  uppercase
+                >
+                  {selectedAgendaDetail.scope === "COMPANY" ? "PERUSAHAAN" : "PRIBADI"}
+                </Badge>
+              </div>
               <div className="relative">
                 <button
                   onClick={(e) => {
@@ -980,10 +1043,12 @@ function AgendaPageContent() {
             <h2 className="text-[20px] font-bold text-[#111827] mb-4 leading-tight">{selectedAgendaDetail.title}</h2>
             
             <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">
-                <Clock className="w-5 h-5 text-[#356E3B] shrink-0" strokeWidth={2} />
-                <span className="text-[#374151] text-[14px] font-medium">{selectedAgendaDetail.time}</span>
-              </div>
+              <AgendaDetailSchedule
+                startTime={selectedAgendaDetail.start_time}
+                endTime={selectedAgendaDetail.end_time}
+                isAllDay={selectedAgendaDetail.is_all_day}
+                fallbackTime={selectedAgendaDetail.time}
+              />
               
               {selectedAgendaDetail.link_or_location && (
                 <div className="flex items-center gap-3 bg-[#F9FAFB] p-3 rounded-[14px]">
@@ -1168,6 +1233,7 @@ function AgendaPageContent() {
                     <DateTimeRollerPicker 
                       value={startTime}
                       isAllDay={isAllDay}
+                      agendasMap={agendasMap}
                       onChange={(newDate) => {
                         if (isAllDay) {
                           newDate.setHours(0, 0, 0, 0);
@@ -1207,6 +1273,7 @@ function AgendaPageContent() {
                     <DateTimeRollerPicker 
                       value={endTime}
                       isAllDay={isAllDay}
+                      agendasMap={agendasMap}
                       onChange={(newDate) => {
                         if (isAllDay) {
                           newDate.setHours(23, 59, 59, 999);

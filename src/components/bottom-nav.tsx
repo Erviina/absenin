@@ -1,21 +1,13 @@
 "use client";
 
 import { Home, FileText, ClipboardList, Calendar } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface BottomNavProps {
   activeTab?: "beranda" | "kehadiran" | "izin" | "tugas" | "agenda";
 }
 
 export function BottomNav({ activeTab = "beranda" }: BottomNavProps) {
-  const router = useRouter();
-
-  const handleNav = (tab: string, path: string) => {
-    if (activeTab !== tab) {
-      router.push(path);
-    }
-  };
-
   const navItems = [
     {
       id: "beranda",
@@ -69,13 +61,14 @@ export function BottomNav({ activeTab = "beranda" }: BottomNavProps) {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-md bg-white flex justify-between px-6 z-50 shadow-[0_-4px_24px_rgba(0,0,0,0.04)] h-[72px] border-x border-border/40">
+    <div className="fixed bottom-0 left-0 right-0 mx-auto w-full sm:max-w-md bg-white flex justify-between px-6 z-50 shadow-[0_-4px_24px_rgba(0,0,0,0.04)] h-[72px] border-t border-border/40 sm:border-x border-x-0">
       {navItems.map((item) => {
         const isActive = activeTab === item.id;
         return (
-          <button
+          <Link
             key={item.id}
-            onClick={() => handleNav(item.id, item.path)}
+            href={item.path}
+            prefetch={true}
             className={`flex flex-col items-center justify-center gap-1 min-w-[56px] relative h-full transition-colors ${
               isActive ? "text-[#1E4738]" : "text-[#7d998c] hover:text-[#5C786C]"
             }`}
@@ -89,7 +82,7 @@ export function BottomNav({ activeTab = "beranda" }: BottomNavProps) {
             {isActive && (
               <div className="absolute bottom-0 w-10 h-[4px] bg-[#1E4738] rounded-t-full" />
             )}
-          </button>
+          </Link>
         );
       })}
     </div>

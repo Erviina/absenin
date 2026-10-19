@@ -1,25 +1,32 @@
 "use client";
 
-import { ChevronLeft, ScanLine, QrCode, X, Zap, Hourglass, Building2, Check } from "lucide-react";
+import { ChevronLeft, ScanLine, QrCode, X, Zap, Hourglass, Building2, Check, AlertCircle, RefreshCw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense, useRef } from "react";
+import { useState, useEffect, Suspense, useRef, useCallback } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Html5Qrcode } from "html5-qrcode";
 import { useDialog } from "@/context/DialogContext";
+import { useCompany } from "@/context/CompanyContext";
+import { setActiveCompanyId } from "@/lib/api";
 
 function GabungPerusahaanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useDialog();
+  const { refreshMemberships, setCurrentUser, activeCompanyId, currentUser, memberships, isCompanyLoading, companyError } = useCompany();
   const [kode, setKode] = useState("");
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const [targetCompanyId, setTargetCompanyId] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'pending' | 'accepted'>('idle');
+  const [status, setStatus] = useState<'checking' | 'idle' | 'pending' | 'accepted' | 'error'>('checking');
   const [companyName, setCompanyName] = useState("Perusahaan");
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isFlashOn, setIsFlashOn] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isProcessingRef = useRef<boolean>(false);
+  const isScannerHandlingRef = useRef<boolean>(false);
+  const isRedirectingRef = useRef<boolean>(false);
 
   useEffect(() => {
     const codeFromUrl = searchParams.get("code");
@@ -28,48 +35,165 @@ function GabungPerusahaanContent() {
     }
   }, [searchParams]);
 
+  const handleLanjutKeBeranda = useCallback(async () => {
+    if (isRedirectingRef.current) return;
+    isRedirectingRef.current = true;
+    setIsLoading(true);
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+
+    // 1. Beritahu backend bahwa pengguna telah melihat dan mengakui keberhasilan bergabung
+    // Ini mengarsipkan join request (soft-delete) sehingga tidak akan pernah memicu layar sukses kembali
+    if (activeRequestId && token) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests/${activeRequestId}/acknowledge`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) {
+        console.error("Gagal acknowledge join request:", e);
+      }
+    }
+
+    let finalCompanyId = targetCompanyId || null;
+
+    if (token) {
+      try {
+        const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const meData = await meRes.json();
+        if (meData.success && meData.data?.user) {
+          localStorage.setItem("user", JSON.stringify(meData.data.user));
+          setCurrentUser(meData.data.user);
+          if (!finalCompanyId && meData.data.user.company?.id) {
+            finalCompanyId = meData.data.user.company.id;
+          }
+        }
+      } catch (e) {
+        console.error("Gagal refresh user di beranda:", e);
+      }
+    }
+
+    if (finalCompanyId) {
+      setActiveCompanyId(finalCompanyId);
+    }
+
+    try {
+      await refreshMemberships();
+    } catch (e) {
+      console.error("Gagal refresh memberships context:", e);
+    }
+
+    showToast("Berhasil bergabung dengan perusahaan!", "success");
+    router.replace("/dashboard");
+  }, [activeRequestId, targetCompanyId, setCurrentUser, refreshMemberships, showToast, router]);
+
   useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!token) {
+      setStatus('idle');
+      return;
+    }
+
+    // Tunggu validasi CompanyContext selesai sebelum menyimpulkan status keanggotaan
+    if (isCompanyLoading) {
+      setStatus('checking');
+      return;
+    }
+
+    if (companyError) {
+      setStatus('error');
+      setErrorMsg(companyError);
+      return;
+    }
+
+    const forceSuccess = searchParams.get("success") === "true";
+    const isFromProfile = searchParams.get("from") === "profil";
+
     const fetchStatus = async () => {
-      const token = localStorage.getItem("accessToken");
-      if (!token) return;
       try {
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
           headers: { Authorization: `Bearer ${token}` }
         });
+
+        if (!res.ok && res.status >= 500) {
+          setStatus('error');
+          setErrorMsg("Gagal menghubungi server untuk memvalidasi permintaan bergabung.");
+          return;
+        }
+
         const data = await res.json();
         if (data.success && data.data) {
           setActiveRequestId(data.data.id);
           setCompanyName(data.data.company_name || "Perusahaan");
+          setTargetCompanyId(data.data.company_id);
 
           if (data.data.status === 'pending') {
             setStatus('pending');
+            return;
           } else if (data.data.status === 'approved') {
-            const seen = localStorage.getItem(`join_accepted_seen_${data.data.id}`);
-            const forceSuccess = searchParams.get("success") === "true";
-            if (!seen || forceSuccess) {
-              setStatus('accepted');
+            const isAlreadyMember = memberships.some((m) => m.company_id === data.data.company_id);
+            const alreadySeen = typeof window !== "undefined" && Boolean(sessionStorage.getItem(`ack_seen_${data.data.id}`));
+
+            // Jika pengguna sudah menjadi anggota aktif dan ini adalah refresh, login ulang, atau sudah pernah melihat layar sukses:
+            if (isAlreadyMember && (alreadySeen || !forceSuccess)) {
+              if (data.data.id) {
+                fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests/${data.data.id}/acknowledge`, {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${token}` }
+                }).catch(() => {});
+              }
+
+              if (data.data.company_id) {
+                setActiveCompanyId(data.data.company_id);
+              }
+
+              if (isFromProfile) {
+                setStatus('idle');
+              } else {
+                router.replace("/dashboard");
+              }
+              return;
             } else {
-              setStatus('idle');
+              // Proses bergabung yang baru berhasil (pertama kali dibuka setelah di-ACC)
+              try {
+                sessionStorage.setItem(`ack_seen_${data.data.id}`, "true");
+                if (typeof window !== "undefined" && window.history.replaceState) {
+                  window.history.replaceState({}, '', isFromProfile ? '/gabung-perusahaan?from=profil' : '/gabung-perusahaan');
+                }
+              } catch {}
+              setStatus('accepted');
+              return;
             }
-          } else {
-            setStatus('idle');
           }
+        }
+
+        // Tidak ada pending atau approved request
+        if (memberships.length > 0 && !isFromProfile) {
+          if (!activeCompanyId && memberships[0]?.company_id) {
+            setActiveCompanyId(memberships[0].company_id);
+          }
+          router.replace("/dashboard");
         } else {
           setStatus('idle');
         }
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching join status:", err);
+        setStatus('error');
+        setErrorMsg("Terjadi kesalahan jaringan saat memvalidasi permintaan bergabung.");
       }
     };
-    fetchStatus();
-  }, [searchParams]);
 
-  // Polling saat status pending sehingga ketika admin meng-ACC langsung otomatis berubah ke Berhasil Bergabung
+    fetchStatus();
+  }, [searchParams, isCompanyLoading, companyError, memberships, activeCompanyId, router]);
+
+  // Polling saat status pending sehingga ketika admin meng-ACC langsung beralih ke layar Berhasil Bergabung
   useEffect(() => {
     if (status !== 'pending') return;
 
     const interval = setInterval(async () => {
-      const token = localStorage.getItem("accessToken");
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
       if (!token) return;
       try {
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
@@ -77,25 +201,14 @@ function GabungPerusahaanContent() {
         });
         const data = await res.json();
         if (data.success && data.data && data.data.status === 'approved') {
+          clearInterval(interval);
           setActiveRequestId(data.data.id);
           setCompanyName(data.data.company_name || "Perusahaan");
-          setStatus('accepted');
-
-          // Sinkronisasi data user dan company di localStorage
+          setTargetCompanyId(data.data.company_id);
           try {
-            const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            const meData = await meRes.json();
-            if (meData.success && meData.data?.user) {
-              localStorage.setItem("user", JSON.stringify(meData.data.user));
-              if (meData.data.user.company?.id) {
-                localStorage.setItem("activeCompanyId", meData.data.user.company.id);
-              }
-            }
-          } catch (e) {
-            console.error("Gagal update profil:", e);
-          }
+            sessionStorage.setItem(`ack_seen_${data.data.id}`, "true");
+          } catch {}
+          setStatus('accepted'); // Tampilkan halaman Berhasil Bergabung!
         }
       } catch (err) {
         console.error("Polling join status error:", err);
@@ -105,43 +218,151 @@ function GabungPerusahaanContent() {
     return () => clearInterval(interval);
   }, [status]);
 
+  const handleGabung = async (codeOverride?: string) => {
+    if (isLoading || isProcessingRef.current) {
+      isScannerHandlingRef.current = false;
+      return;
+    }
+    const codeToJoin = (typeof codeOverride === "string" ? codeOverride : kode).trim().toUpperCase();
+    if (!codeToJoin) {
+      setErrorMsg("Masukkan kode perusahaan terlebih dahulu");
+      isScannerHandlingRef.current = false;
+      return;
+    }
+    setErrorMsg("");
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!token) {
+      setErrorMsg("Anda belum login");
+      showToast("Anda belum login", "error");
+      isScannerHandlingRef.current = false;
+      return;
+    }
+    
+    setIsLoading(true);
+    isProcessingRef.current = true;
+
+    try {
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ join_code: codeToJoin })
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        // Ambil detail request terkini dari backend
+        const resMe = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const dataMe = await resMe.json();
+        const requestData = (dataMe.success && dataMe.data) ? dataMe.data : data.data;
+
+        if (requestData) {
+          if (requestData.id) setActiveRequestId(requestData.id);
+          if (requestData.company_name) setCompanyName(requestData.company_name);
+          if (requestData.company_id) setTargetCompanyId(requestData.company_id);
+
+          // Jika request langsung disetujui (misal auto-join)
+          if (requestData.status === 'approved') {
+            try {
+              sessionStorage.setItem(`ack_seen_${requestData.id}`, "true");
+            } catch {}
+            setStatus('accepted');
+            return;
+          }
+        }
+        setStatus('pending');
+      } else {
+        const errorText = data.errors?.[0] || data.message || "Gagal bergabung";
+        setErrorMsg(errorText);
+        showToast(errorText, "error");
+      }
+    } catch (err) {
+      console.error("Join company error:", err);
+      setErrorMsg("Terjadi kesalahan jaringan");
+      showToast("Terjadi kesalahan jaringan", "error");
+    } finally {
+      setIsLoading(false);
+      isProcessingRef.current = false;
+      isScannerHandlingRef.current = false;
+    }
+  };
+
   useEffect(() => {
     if (isScannerOpen) {
+      isProcessingRef.current = false;
+      isScannerHandlingRef.current = false;
       const html5QrCode = new Html5Qrcode("qr-reader");
       scannerRef.current = html5QrCode;
 
       const onScanSuccess = (decodedText: string) => {
+        if (isProcessingRef.current || isRedirectingRef.current || isScannerHandlingRef.current) return;
+        isScannerHandlingRef.current = true;
+
+        try {
+          if (html5QrCode.getState() === 2) { // 2 = SCANNING
+            html5QrCode.stop().then(() => {
+              try { html5QrCode.clear(); } catch {}
+            }).catch(console.error);
+          } else {
+            html5QrCode.clear();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+
+        setIsScannerOpen(false);
+
+        let cleanCode = "";
         try {
           const url = new URL(decodedText);
-          const codeFromUrl = url.searchParams.get("code");
-          if (codeFromUrl) {
-            setKode(codeFromUrl.toUpperCase());
-          } else {
-            setKode(decodedText.toUpperCase());
+          const codeFromUrl = url.searchParams.get("code") || url.searchParams.get("join_code");
+          cleanCode = (codeFromUrl || "").trim().toUpperCase();
+          if (!cleanCode) {
+            showToast("Kode QR tidak berisi tautan perusahaan yang valid.", "error");
+            setErrorMsg("Kode QR tidak valid atau bukan QR AbsenIN.");
+            isScannerHandlingRef.current = false;
+            return;
           }
         } catch {
-          // If not URL
-          setKode(decodedText.toUpperCase());
+          cleanCode = decodedText.trim().toUpperCase();
         }
-        setIsScannerOpen(false);
+
+        if (!cleanCode) {
+          showToast("Kode QR tidak valid atau kosong.", "error");
+          setErrorMsg("Kode QR tidak valid atau kosong.");
+          isScannerHandlingRef.current = false;
+          return;
+        }
+
+        setKode(cleanCode);
+        handleGabung(cleanCode);
       };
 
       html5QrCode.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        { fps: 10 },
         onScanSuccess,
         () => {} // onScanFailure ignore
       ).catch(err => {
         console.error("Camera error", err);
         showToast("Kamera tidak dapat diakses atau izin kamera ditolak.", "error");
         setIsScannerOpen(false);
+        isProcessingRef.current = false;
+        isScannerHandlingRef.current = false;
       });
 
       return () => {
         setIsFlashOn(false);
+        isScannerHandlingRef.current = false;
         try {
-          if (html5QrCode.getState() === 2) { // 2 = SCANNING
-            html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
+          if (html5QrCode.getState() === 2) {
+            html5QrCode.stop().then(() => {
+              try { html5QrCode.clear(); } catch {}
+            }).catch(console.error);
           } else {
             html5QrCode.clear();
           }
@@ -169,73 +390,6 @@ function GabungPerusahaanContent() {
     }
   };
 
-  const handleGabung = async () => {
-    if (!kode) return;
-    setErrorMsg("");
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      setErrorMsg("Anda belum login");
-      return;
-    }
-    
-    setIsLoading(true);
-    try {
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ join_code: kode })
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        // Re-fetch to get company name properly
-        const resMe = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const dataMe = await resMe.json();
-        if (dataMe.success && dataMe.data) {
-          setCompanyName(dataMe.data.company_name);
-          setActiveRequestId(dataMe.data.id);
-        }
-        setStatus('pending');
-      } else {
-        setErrorMsg(data.errors?.[0] || data.message || "Gagal bergabung");
-      }
-    } catch (err) {
-      console.error(err);
-      setErrorMsg("Terjadi kesalahan jaringan");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleLanjutKeBeranda = async () => {
-    if (activeRequestId) {
-      localStorage.setItem(`join_accepted_seen_${activeRequestId}`, "true");
-    }
-    const token = localStorage.getItem("accessToken");
-    if (token) {
-      try {
-        const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const meData = await meRes.json();
-        if (meData.success && meData.data?.user) {
-          localStorage.setItem("user", JSON.stringify(meData.data.user));
-          if (meData.data.user.company?.id) {
-            localStorage.setItem("activeCompanyId", meData.data.user.company.id);
-          }
-        }
-      } catch (e) {
-        console.error("Gagal refresh user di beranda:", e);
-      }
-    }
-    router.push("/dashboard");
-  };
-
   const handleBack = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
@@ -244,6 +398,69 @@ function GabungPerusahaanContent() {
       router.replace(from ? `/cek-perusahaan?from=${from}` : "/cek-perusahaan");
     }
   };
+
+  if (isCompanyLoading || status === 'checking') {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1E4738]"></div>
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] items-center justify-center px-6 text-center">
+        <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+        <h2 className="text-[17px] font-bold text-[#1E293B] mb-2">Gagal Memverifikasi Permintaan</h2>
+        <p className="text-[13.5px] text-gray-500 mb-6 max-w-xs">
+          {errorMsg || companyError || "Terjadi kesalahan jaringan atau server saat memeriksa status bergabung."}
+        </p>
+        <button
+          onClick={() => {
+            setStatus('checking');
+            refreshMemberships();
+          }}
+          className="px-6 py-2.5 bg-[#1E4738] text-white rounded-full font-semibold text-[14px] hover:bg-[#16352b] transition-all flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Coba Lagi
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'accepted') {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-white items-center justify-center px-6 text-center animate-in zoom-in-95 duration-500 relative">
+        {/* Success Icon */}
+        <div className="w-[84px] h-[84px] bg-[#2D5A3F] rounded-full flex items-center justify-center shadow-[0_8px_24px_rgba(45,90,63,0.25)] mb-8">
+          <Check className="w-10 h-10 text-white stroke-[3]" />
+        </div>
+
+        {/* Text Content */}
+        <h1 className="text-[22px] font-bold text-[#111827] mb-1.5">Berhasil Bergabung!</h1>
+        <h2 className="text-[#2D5A3F] font-bold text-[16px] mb-3.5">
+          {companyName}
+        </h2>
+        
+        <p className="text-[#6B7280] text-[13.5px] px-6 leading-relaxed max-w-[290px]">
+          Selamat datang di tim! Sekarang Anda sudah menjadi anggota dari perusahaan ini.
+        </p>
+
+        {/* Bottom Button */}
+        <div className="absolute bottom-8 left-6 right-6 flex justify-center w-full max-w-md mx-auto">
+          <button 
+            onClick={handleLanjutKeBeranda}
+            disabled={isLoading}
+            className="w-full bg-[#2D5A3F] hover:bg-[#234731] text-white py-4 rounded-full text-[15px] font-bold transition-all shadow-[0_6px_20px_rgba(45,90,63,0.25)] active:scale-[0.98] cursor-pointer disabled:opacity-50"
+          >
+            {isLoading ? "Memproses..." : "Lanjut ke Beranda"}
+          </button>
+        </div>
+
+      </div>
+    );
+  }
 
   if (status === 'pending') {
     return (
@@ -281,39 +498,6 @@ function GabungPerusahaanContent() {
     );
   }
 
-  if (status === 'accepted') {
-    return (
-      <div className="flex flex-col min-h-[100dvh] bg-white items-center justify-center px-6 text-center animate-in zoom-in-95 duration-500 relative">
-        
-        {/* Success Icon */}
-        <div className="w-[84px] h-[84px] bg-[#2D5A3F] rounded-full flex items-center justify-center shadow-[0_8px_24px_rgba(45,90,63,0.25)] mb-8">
-          <Check className="w-10 h-10 text-white stroke-[3]" />
-        </div>
-
-        {/* Text Content */}
-        <h1 className="text-[22px] font-bold text-[#111827] mb-1.5">Berhasil Bergabung!</h1>
-        <h2 className="text-[#2D5A3F] font-bold text-[16px] mb-3.5">
-          {companyName}
-        </h2>
-        
-        <p className="text-[#6B7280] text-[13.5px] px-6 leading-relaxed max-w-[290px]">
-          Selamat datang di tim! Sekarang Anda sudah menjadi anggota dari perusahaan ini.
-        </p>
-
-        {/* Bottom Button */}
-        <div className="absolute bottom-8 left-6 right-6 flex justify-center max-w-md mx-auto">
-          <button 
-            onClick={handleLanjutKeBeranda}
-            className="w-full bg-[#2D5A3F] hover:bg-[#234731] text-white py-4 rounded-full text-[15px] font-bold transition-all shadow-[0_6px_20px_rgba(45,90,63,0.25)] active:scale-[0.98] cursor-pointer"
-          >
-            Lanjut ke Beranda
-          </button>
-        </div>
-
-      </div>
-    );
-  }
-
   if (isScannerOpen) {
     return (
       <div className="fixed inset-0 z-50 bg-[#12161A] flex flex-col animate-in fade-in duration-200">
@@ -337,23 +521,46 @@ function GabungPerusahaanContent() {
 
         {/* Scanner Area */}
         <div className="flex-1 flex flex-col items-center justify-center pb-20">
+          <style>{`
+            #qr-shaded-region {
+              display: none !important;
+            }
+            #qr-reader {
+              border: none !important;
+              width: 100% !important;
+              height: 100% !important;
+            }
+            #qr-reader video {
+              width: 100% !important;
+              height: 100% !important;
+              object-fit: cover !important;
+              border-radius: 1rem !important;
+            }
+            @keyframes qrScan {
+              0% { top: 8%; opacity: 0.7; }
+              50% { top: 92%; opacity: 1; }
+              100% { top: 8%; opacity: 0.7; }
+            }
+            .animate-qr-scan {
+              animation: qrScan 2.4s ease-in-out infinite;
+            }
+          `}</style>
           
           <div className="relative w-[280px] h-[280px] mb-8">
             
-            {/* Corner Brackets */}
-            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#76d8a3] rounded-tl-[24px] z-10"></div>
-            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#76d8a3] rounded-tr-[24px] z-10"></div>
-            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#76d8a3] rounded-bl-[24px] z-10"></div>
-            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#76d8a3] rounded-br-[24px] z-10"></div>
+            {/* Corner Brackets - Only Green Border */}
+            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-[#76d8a3] rounded-tl-[24px] z-10 pointer-events-none"></div>
+            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-[#76d8a3] rounded-tr-[24px] z-10 pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-[#76d8a3] rounded-bl-[24px] z-10 pointer-events-none"></div>
+            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-[#76d8a3] rounded-br-[24px] z-10 pointer-events-none"></div>
             
-            {/* White Background with QR (Simulating camera focus area) */}
-            <div className="absolute inset-2 bg-[#f4f6f5] rounded-2xl flex items-center justify-center overflow-hidden relative">
-              <div id="qr-reader" className="w-full h-full object-cover"></div>
+            {/* Camera Viewfinder */}
+            <div className="absolute inset-2 bg-black rounded-2xl flex items-center justify-center overflow-hidden">
+              <div id="qr-reader" className="w-full h-full"></div>
               
               {/* Scan Line glow */}
               <div 
-                className="absolute left-0 right-0 h-1 bg-[#76d8a3] shadow-[0_0_16px_8px_rgba(118,216,163,0.5)] z-20"
-                style={{ top: '50%', transform: 'translateY(-50%)' }}
+                className="absolute left-0 right-0 h-1 bg-[#76d8a3] shadow-[0_0_16px_8px_rgba(118,216,163,0.5)] z-20 pointer-events-none animate-qr-scan"
               ></div>
             </div>
             
@@ -410,7 +617,8 @@ function GabungPerusahaanContent() {
         {/* Scan QR Button */}
         <button 
           onClick={() => setIsScannerOpen(true)}
-          className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white py-4 rounded-[20px] text-[15px] font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-[0_4px_16px_rgba(53,110,59,0.15)]"
+          disabled={isLoading}
+          className={`w-full bg-[#356E3B] hover:bg-[#2b5930] text-white py-4 rounded-[20px] text-[15px] font-bold flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-[0_4px_16px_rgba(53,110,59,0.15)] ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           <ScanLine className="w-5 h-5" strokeWidth={2} />
           Scan QR
@@ -433,22 +641,36 @@ function GabungPerusahaanContent() {
               type="text" 
               placeholder="Contoh: ABC123"
               value={kode}
+              disabled={isLoading}
               onChange={(e) => setKode(e.target.value.toUpperCase())}
-              className="w-full border border-gray-200 rounded-[16px] px-5 py-4 text-[15px] text-[#1E293B] font-bold tracking-wider placeholder-gray-400 placeholder:font-normal placeholder:tracking-normal outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white"
+              className="w-full border border-gray-200 rounded-[16px] px-5 py-4 text-[15px] text-[#1E293B] font-bold tracking-wider placeholder-gray-400 placeholder:font-normal placeholder:tracking-normal outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all bg-white disabled:bg-gray-50 disabled:text-gray-400"
             />
           </div>
 
-          {errorMsg && (
+          {isLoading && (
+            <div className="flex items-center justify-center gap-2.5 py-3 px-4 bg-emerald-50 text-[#1E4738] rounded-2xl text-[13.5px] font-semibold border border-emerald-100 animate-in fade-in">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#1E4738] border-t-transparent" />
+              <span>Memproses verifikasi perusahaan...</span>
+            </div>
+          )}
+
+          {errorMsg && !isLoading && (
             <p className="text-red-500 text-sm font-medium px-1">{errorMsg}</p>
           )}
 
           <button 
-            onClick={handleGabung}
+            onClick={() => handleGabung()}
             disabled={!kode || isLoading}
-            className={`w-full py-4 rounded-[20px] text-[15px] font-bold transition-all shadow-[0_4px_16px_rgba(53,110,59,0.15)] flex items-center justify-center gap-2 ${kode && !isLoading ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' : 'bg-gray-300 text-gray-100 shadow-none'}`}
+            className={`w-full py-4 rounded-[20px] text-[15px] font-bold transition-all shadow-[0_4px_16px_rgba(53,110,59,0.15)] flex items-center justify-center gap-2 ${
+              kode && !isLoading 
+                ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' 
+                : isLoading
+                  ? 'bg-[#356E3B]/90 text-white cursor-wait'
+                  : 'bg-gray-300 text-gray-100 shadow-none cursor-not-allowed'
+            }`}
           >
             {isLoading ? (
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
