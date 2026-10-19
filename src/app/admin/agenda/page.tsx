@@ -742,7 +742,13 @@ export default function AdminAgendaPage() {
             <button 
               onClick={handleSubmitAgenda}
               disabled={isSubmitting || !formKegiatan.trim()}
-              className="w-full bg-[#356E3B] hover:bg-[#2A582F] disabled:bg-[#A3B8A8] text-white rounded-full py-4 mt-2 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98] disabled:cursor-not-allowed"
+              className={`w-full text-white rounded-full py-4 mt-2 flex items-center justify-center gap-2 font-bold text-[15px] shadow-sm transition-colors active:scale-[0.98] ${
+                isSubmitting
+                  ? "bg-gray-400 cursor-wait pointer-events-none shadow-none"
+                  : !formKegiatan.trim()
+                  ? "bg-gray-300 cursor-not-allowed shadow-none"
+                  : "bg-[#356E3B] hover:bg-[#2A582F]"
+              }`}
             >
               {isSubmitting ? (
                 <Loader2 className="w-[18px] h-[18px] animate-spin" />

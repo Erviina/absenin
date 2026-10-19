@@ -59,22 +59,22 @@ export function PrimaryButton({
   const isPlainDisabled = disabled && !isLoading;
   const variantClasses = {
     primary: isLoading
-      ? "bg-[#2A582F] text-white/95 opacity-90 cursor-wait pointer-events-none shadow-[0_4px_16px_rgba(53,110,59,0.15)]"
+      ? "bg-gray-400 text-white cursor-wait pointer-events-none shadow-none"
       : isPlainDisabled
       ? "bg-gray-300 text-gray-100 shadow-none pointer-events-none"
       : "bg-[#356E3B] hover:bg-[#2A582F] text-white shadow-[0_4px_16px_rgba(53,110,59,0.2)] active:scale-[0.98]",
     secondary: isLoading
-      ? "bg-[#D5EAD9] text-[#356E3B] border border-[#D1E5D5] opacity-90 cursor-wait pointer-events-none"
+      ? "bg-gray-300 text-gray-600 border border-gray-300 cursor-wait pointer-events-none shadow-none"
       : isPlainDisabled
       ? "bg-gray-100 text-gray-400 border border-gray-200 pointer-events-none"
       : "bg-[#E8F3EB] hover:bg-[#D5EAD9] text-[#356E3B] border border-[#D1E5D5] active:scale-[0.98]",
     outline: isLoading
-      ? "bg-gray-50 text-[#374151] border border-[#E5E7EB] opacity-90 cursor-wait pointer-events-none"
+      ? "bg-gray-100 text-gray-400 border border-gray-300 cursor-wait pointer-events-none"
       : isPlainDisabled
       ? "bg-transparent text-gray-400 border border-gray-200 opacity-50 pointer-events-none"
       : "bg-transparent hover:bg-gray-50 text-[#374151] border border-[#E5E7EB] active:scale-[0.98]",
     danger: isLoading
-      ? "bg-[#B91C1C] text-white/95 opacity-90 cursor-wait pointer-events-none shadow-sm"
+      ? "bg-gray-400 text-white cursor-wait pointer-events-none shadow-none"
       : isPlainDisabled
       ? "bg-gray-300 text-gray-100 opacity-50 pointer-events-none"
       : "bg-[#DC2626] hover:bg-[#B91C1C] text-white shadow-sm active:scale-[0.98]",

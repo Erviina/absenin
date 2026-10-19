@@ -1199,7 +1199,11 @@ function AdminKaryawanView() {
               <button 
                 onClick={handleSimpanRole}
                 disabled={isSavingRole}
-                className="w-full py-3.5 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-full font-bold text-[14px] active:scale-[0.98] transition-all shadow-md shadow-[#356E3B]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className={`w-full py-3.5 text-white rounded-full font-bold text-[14px] active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${
+                  isSavingRole
+                    ? "bg-gray-400 cursor-wait pointer-events-none shadow-none"
+                    : "bg-[#356E3B] hover:bg-[#2A582F] shadow-md shadow-[#356E3B]/20"
+                }`}
               >
                 {isSavingRole ? (
                   <>
