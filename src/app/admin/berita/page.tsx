@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Eye, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Eye, MoreVertical, Share2, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
@@ -236,45 +236,103 @@ export default function KelolaBeritaPage() {
                       <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
                         {item.category.name}
                       </span>
+                    ) : (
+                      <div />
                     )}
-                    <h3 
-                      onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                      className="text-[#1E4738] hover:text-[#356E3B] hover:underline cursor-pointer text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors"
-                      title="Klik untuk langsung melihat berita"
-                    >
-                      {sanitizeText(item.title)}
-                    </h3>
-                    <p className="text-[#7d998c] text-[11px] font-medium line-clamp-1 mb-2">
+
+                    {/* More Action Menu (Titik Tiga) */}
+                    <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button 
+                        type="button"
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setActiveMenuId(activeMenuId === item.id ? null : item.id); 
+                        }}
+                        className="w-8 h-8 rounded-full hover:bg-gray-100 active:bg-gray-200 text-gray-500 hover:text-[#1E4738] flex items-center justify-center transition-colors cursor-pointer"
+                        aria-label="Menu Opsi Berita"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+
+                      {activeMenuId === item.id && (
+                        <div 
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-9 w-40 bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.12)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuId(null);
+                              router.push(`/berita/${item.id}`);
+                            }}
+                            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-gray-500" />
+                            <span>Pratinjau</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuId(null);
+                              handleOpenEdit(item);
+                            }}
+                            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                            <span>Edit Berita</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuId(null);
+                              shareContent({
+                                title: item.title,
+                                text: item.title,
+                                path: `/berita/${item.id}`,
+                                onToast: showToast,
+                              });
+                            }}
+                            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                          >
+                            <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                            <span>Bagikan</span>
+                          </button>
+
+                          <div className="h-[1px] bg-gray-100 mx-2 my-1" />
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuId(null);
+                              handleDelete(item.id);
+                            }}
+                            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            <span>Hapus Berita</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <h3 className="text-[#1E4738] group-hover:text-[#356E3B] text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors">
+                    {sanitizeText(item.title)}
+                  </h3>
+
+                  <div className="flex items-center justify-between mt-auto pt-1">
+                    <p className="text-[#7d998c] text-[11px] font-medium line-clamp-1">
                       {formatDate(item.created_at)}
                     </p>
-                    
-                    <div className="flex gap-2 mt-auto flex-wrap">
-                      <button 
-                        onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                        className="text-[#1E4738] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
-                        title="Lihat Berita"
-                      >
-                        <Eye className="w-3 h-3 text-[#1E4738]" /> Lihat
-                      </button>
-                      <button 
-                        onClick={() => handleOpenEdit(item)}
-                        className="text-[#356E3B] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
-                      >
-                        <Edit2 className="w-3 h-3" /> Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(item.id)}
-                        disabled={isDeletingId === item.id}
-                        className="text-[#e11d48] text-[11px] font-bold bg-[#ffe4e6] hover:bg-[#fecdd3] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isDeletingId === item.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3 h-3" />
-                        )}
-                        {isDeletingId === item.id ? "Menghapus..." : "Hapus"}
-                      </button>
-                    </div>
+                    <span className="text-[#356E3B] text-[11px] font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                      Lihat <ChevronRight className="w-3.5 h-3.5" />
+                    </span>
                   </div>
                 </div>
               ))}

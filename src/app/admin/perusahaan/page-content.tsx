@@ -1206,7 +1206,11 @@ export default function KelolaPerusahaanPage() {
                   type="button"
                   onClick={handleSaveInfo}
                   disabled={isSaving}
-                  className="w-full bg-[#356E3B] hover:bg-[#2b5930] text-white font-bold text-[14px] py-3.5 rounded-[16px] flex items-center justify-center gap-2 transition-transform active:scale-[0.98] shadow-sm cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+                  className={`w-full font-bold text-[14px] py-3.5 rounded-[16px] flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-sm cursor-pointer ${
+                    isSaving
+                      ? "bg-gray-400 text-white cursor-wait pointer-events-none shadow-none"
+                      : "bg-[#356E3B] hover:bg-[#2b5930] text-white"
+                  }`}
                 >
                   {isSaving ? (
                     <>

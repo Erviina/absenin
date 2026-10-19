@@ -355,7 +355,7 @@ export default function BuatPerusahaanPage() {
             nama && alamat && !isLoading 
               ? 'bg-[#356E3B] hover:bg-[#2b5930] text-white active:scale-[0.98]' 
               : isLoading
-                ? 'bg-[#356E3B]/90 text-white cursor-wait'
+                ? 'bg-gray-400 text-white cursor-wait pointer-events-none shadow-none'
                 : 'bg-gray-300 text-gray-100 shadow-none cursor-not-allowed'
           }`}
         >

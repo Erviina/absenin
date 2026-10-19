@@ -13,32 +13,66 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 router.post("/google", async (req: Request, res: Response): Promise<any> => {
   try {
-    const { idToken } = req.body;
+    const { idToken, accessToken: googleAccessToken } = req.body;
 
-    if (!idToken) {
+    if (!idToken && !googleAccessToken) {
       return res.status(400).json({
         success: false,
         message: "Validasi gagal",
-        errors: ["idToken is required"],
+        errors: ["idToken or accessToken is required"],
       });
     }
 
-    // Verify Google ID token
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
+    let email = "";
+    let fullName = "";
+    let avatarUrl = "";
 
-    const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid Google ID Token",
-        errors: [],
+    if (idToken) {
+      // Verify Google ID token
+      const ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
       });
-    }
 
-    const { email, name: fullName, picture: avatarUrl } = payload;
+      const payload = ticket.getPayload();
+      if (!payload || !payload.email) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid Google ID Token",
+          errors: [],
+        });
+      }
+
+      email = payload.email;
+      fullName = payload.name || "";
+      avatarUrl = payload.picture || "";
+    } else if (googleAccessToken) {
+      // Verify Google Access Token via Google OAuth2 UserInfo API
+      const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { Authorization: `Bearer ${googleAccessToken}` },
+      });
+
+      if (!userInfoRes.ok) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid Google Access Token",
+          errors: [],
+        });
+      }
+
+      const userInfo = await userInfoRes.json();
+      if (!userInfo || !userInfo.email) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid user info from Google",
+          errors: [],
+        });
+      }
+
+      email = userInfo.email;
+      fullName = userInfo.name || "";
+      avatarUrl = userInfo.picture || "";
+    }
 
     // Check if profile exists
     let profileResult = await db.select().from(profiles).where(eq(profiles.email, email));
