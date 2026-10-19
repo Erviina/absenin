@@ -16,8 +16,10 @@ import {
   Clock,
   ChevronRight,
   Plus,
-  CheckCircle2
-, Loader2 } from "lucide-react";
+  CheckCircle2,
+  AlertCircle,
+  Loader2 
+} from "lucide-react";
 import { sanitizeText, truncateText } from "@/lib/sanitize";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -59,6 +61,8 @@ export default function DashboardPage() {
     memberships, 
     switchCompany,
     isLoading: isCompanyLoading,
+    companyError,
+    refreshMemberships,
     currentUser,
     setCurrentUser,
   } = useCompany();
@@ -70,6 +74,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMounted(true);
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!token) return;
+
     if (currentUser) {
       setUser(currentUser);
     } else {
@@ -115,6 +122,8 @@ export default function DashboardPage() {
     // ke /cek-perusahaan yang seharusnya terjadi.
     if (isCompanyLoading) return;
 
+    let isSubscribed = true;
+
     const fetchData = async () => {
       try {
         const token = localStorage.getItem("accessToken");
@@ -123,6 +132,7 @@ export default function DashboardPage() {
           return;
         }
 
+        const requestToken = token;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
         // Setelah isCompanyLoading selesai, activeCompanyId sudah terverifikasi dari backend
         const compId = activeCompanyId || getActiveCompanyId();
@@ -138,6 +148,11 @@ export default function DashboardPage() {
           fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", { headers }),
           fetch(process.env.NEXT_PUBLIC_API_URL + "/agendas", { headers })
         ]);
+
+        // Isolasi request: Jika token telah berganti (pergantian akun) atau unmount, abaikan respons lama
+        if (!isSubscribed || localStorage.getItem("accessToken") !== requestToken) {
+          return;
+        }
 
         try {
           const authData = await authRes.json();
@@ -222,12 +237,18 @@ export default function DashboardPage() {
         console.error("Failed to fetch dashboard data:", error);
         setAttendanceError(true);
       } finally {
-        setIsLoading(false);
-        setIsAttendanceLoading(false);
-        setIsTasksAgendasLoading(false);
+        if (isSubscribed) {
+          setIsLoading(false);
+          setIsAttendanceLoading(false);
+          setIsTasksAgendasLoading(false);
+        }
       }
     };
     fetchData();
+
+    return () => {
+      isSubscribed = false;
+    };
   }, [router, activeCompanyId, isCompanyLoading]);
 
   const todayStr = useMemo(() => {
@@ -427,6 +448,33 @@ export default function DashboardPage() {
     }
     router.push('/checkin');
   };
+
+  if (isCompanyLoading) {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] items-center justify-center p-6 gap-3">
+        <Loader2 className="w-8 h-8 text-[#1E4738] animate-spin" />
+        <p className="text-[#5C786C] text-[13px] font-medium">Memuat data perusahaan...</p>
+      </div>
+    );
+  }
+
+  if (companyError && memberships.length === 0 && !activeCompanyId) {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] items-center justify-center p-6 text-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-500 mb-1">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="text-[#111827] text-[16px] font-bold">Gagal Memvalidasi Perusahaan</h2>
+        <p className="text-[#6B7280] text-[13px] max-w-xs">{companyError}</p>
+        <button
+          onClick={() => refreshMemberships()}
+          className="mt-2 px-5 py-2.5 bg-[#1E4738] text-white rounded-full font-bold text-[13px] hover:bg-[#153428] transition-colors cursor-pointer"
+        >
+          Coba Lagi
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-32">

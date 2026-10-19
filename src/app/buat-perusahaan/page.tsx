@@ -235,7 +235,6 @@ export default function BuatPerusahaanPage() {
             showJoinCodeBox={true}
             onCopy={handleSalinKode}
             isCopied={isCopied}
-            instructionText="Pindai QR ini atau gunakan kode bergabung untuk mengundang anggota"
           />
         </div>
 

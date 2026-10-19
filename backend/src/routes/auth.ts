@@ -212,12 +212,20 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
     }
 
     // Resolve tenant for multi-tenancy
-    const tenant = await resolveTenant(req, userId);
-    let targetCompanyId = tenant?.companyId || null;
+    let tenant = await resolveTenant(req, userId);
 
-    if (!targetCompanyId && profile.company_id) {
-      await db.execute(sql`UPDATE profiles SET company_id = NULL WHERE id = ${userId}`);
+    // Jika header x-company-id yang dikirim tidak valid untuk user ini (misal sisa sesi lama),
+    // coba selesaikan tenant tanpa header usang tersebut agar user tetap menerima company aktif yang sah
+    if (!tenant) {
+      const headerCompanyId = req.headers["x-company-id"] as string | undefined;
+      if (headerCompanyId) {
+        const reqWithoutHeader = { ...req, headers: { ...req.headers } };
+        delete (reqWithoutHeader.headers as any)["x-company-id"];
+        tenant = await resolveTenant(reqWithoutHeader as any, userId);
+      }
     }
+
+    let targetCompanyId = tenant?.companyId || null;
 
     // Fetch company if available
     let company = null;

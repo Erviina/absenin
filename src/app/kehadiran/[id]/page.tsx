@@ -254,9 +254,6 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10.5px] font-bold text-[#EA580C] bg-[#FFEDD5]/80 px-2.5 py-0.5 rounded-full">
-                    Selesai
-                  </span>
                   {data.is_pulang_cepat && (
                     <span className="text-[10.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/60 px-2.5 py-0.5 rounded-full">
                       Pulang Cepat

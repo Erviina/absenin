@@ -1,28 +1,31 @@
 "use client";
 
-import { ChevronLeft, ScanLine, QrCode, X, Zap, Hourglass, Building2 } from "lucide-react";
+import { ChevronLeft, ScanLine, QrCode, X, Zap, Hourglass, Building2, Check, AlertCircle, RefreshCw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useRef, useCallback } from "react";
 import { TopBar } from "@/components/TopBar";
 import { Html5Qrcode } from "html5-qrcode";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
+import { setActiveCompanyId } from "@/lib/api";
 
 function GabungPerusahaanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useDialog();
-  const { refreshMemberships, setCurrentUser, activeCompanyId, currentUser } = useCompany();
+  const { refreshMemberships, setCurrentUser, activeCompanyId, currentUser, memberships, isCompanyLoading, companyError } = useCompany();
   const [kode, setKode] = useState("");
-  const [, setActiveRequestId] = useState<string | null>(null);
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const [targetCompanyId, setTargetCompanyId] = useState<string | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'pending'>('idle');
+  const [status, setStatus] = useState<'checking' | 'idle' | 'pending' | 'accepted' | 'error'>('checking');
   const [companyName, setCompanyName] = useState("Perusahaan");
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isFlashOn, setIsFlashOn] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isProcessingRef = useRef<boolean>(false);
+  const isScannerHandlingRef = useRef<boolean>(false);
   const isRedirectingRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -32,112 +35,160 @@ function GabungPerusahaanContent() {
     }
   }, [searchParams]);
 
-  const completeJoinAndGoToDashboard = useCallback(
-    async (requestId?: string | null, targetCompanyId?: string | null) => {
-      if (isRedirectingRef.current) return;
-      isRedirectingRef.current = true;
-      setIsLoading(true);
+  const handleLanjutKeBeranda = useCallback(async () => {
+    if (isRedirectingRef.current) return;
+    isRedirectingRef.current = true;
+    setIsLoading(true);
 
-      if (requestId) {
-        try {
-          localStorage.setItem(`join_accepted_seen_${requestId}`, "true");
-        } catch (e) {
-          console.error("Gagal menyimpan flag join_accepted_seen:", e);
-        }
-      }
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
 
-      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-      let finalCompanyId = targetCompanyId || null;
-
-      if (token) {
-        try {
-          const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const meData = await meRes.json();
-          if (meData.success && meData.data?.user) {
-            localStorage.setItem("user", JSON.stringify(meData.data.user));
-            setCurrentUser(meData.data.user);
-            if (meData.data.user.company?.id) {
-              finalCompanyId = meData.data.user.company.id;
-            }
-          }
-        } catch (e) {
-          console.error("Gagal refresh user di beranda:", e);
-        }
-      }
-
-      if (finalCompanyId) {
-        try {
-          localStorage.setItem("activeCompanyId", finalCompanyId);
-        } catch (e) {
-          console.error("Gagal simpan activeCompanyId:", e);
-        }
-      }
-
-      // Pastikan context memberships diperbarui sebelum berpindah ke dashboard
+    // 1. Beritahu backend bahwa pengguna telah melihat dan mengakui keberhasilan bergabung
+    // Ini mengarsipkan join request (soft-delete) sehingga tidak akan pernah memicu layar sukses kembali
+    if (activeRequestId && token) {
       try {
-        await refreshMemberships();
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests/${activeRequestId}/acknowledge`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` }
+        });
       } catch (e) {
-        console.error("Gagal refresh memberships context:", e);
+        console.error("Gagal acknowledge join request:", e);
       }
+    }
 
-      showToast("Berhasil bergabung dengan perusahaan!", "success");
-      router.replace("/dashboard");
-    },
-    [router, refreshMemberships, setCurrentUser, showToast]
-  );
+    let finalCompanyId = targetCompanyId || null;
+
+    if (token) {
+      try {
+        const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const meData = await meRes.json();
+        if (meData.success && meData.data?.user) {
+          localStorage.setItem("user", JSON.stringify(meData.data.user));
+          setCurrentUser(meData.data.user);
+          if (!finalCompanyId && meData.data.user.company?.id) {
+            finalCompanyId = meData.data.user.company.id;
+          }
+        }
+      } catch (e) {
+        console.error("Gagal refresh user di beranda:", e);
+      }
+    }
+
+    if (finalCompanyId) {
+      setActiveCompanyId(finalCompanyId);
+    }
+
+    try {
+      await refreshMemberships();
+    } catch (e) {
+      console.error("Gagal refresh memberships context:", e);
+    }
+
+    showToast("Berhasil bergabung dengan perusahaan!", "success");
+    router.replace("/dashboard");
+  }, [activeRequestId, targetCompanyId, setCurrentUser, refreshMemberships, showToast, router]);
 
   useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!token) {
+      setStatus('idle');
+      return;
+    }
+
+    // Tunggu validasi CompanyContext selesai sebelum menyimpulkan status keanggotaan
+    if (isCompanyLoading) {
+      setStatus('checking');
+      return;
+    }
+
+    if (companyError) {
+      setStatus('error');
+      setErrorMsg(companyError);
+      return;
+    }
+
+    const forceSuccess = searchParams.get("success") === "true";
+    const isFromProfile = searchParams.get("from") === "profil";
+
     const fetchStatus = async () => {
-      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-      if (!token) return;
       try {
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
           headers: { Authorization: `Bearer ${token}` }
         });
+
+        if (!res.ok && res.status >= 500) {
+          setStatus('error');
+          setErrorMsg("Gagal menghubungi server untuk memvalidasi permintaan bergabung.");
+          return;
+        }
+
         const data = await res.json();
         if (data.success && data.data) {
           setActiveRequestId(data.data.id);
           setCompanyName(data.data.company_name || "Perusahaan");
+          setTargetCompanyId(data.data.company_id);
 
           if (data.data.status === 'pending') {
             setStatus('pending');
+            return;
           } else if (data.data.status === 'approved') {
-            const seen = localStorage.getItem(`join_accepted_seen_${data.data.id}`);
-            const forceSuccess = searchParams.get("success") === "true";
-            const isFromProfile = searchParams.get("from") === "profil";
-            const hasActiveCompany = !!(activeCompanyId || currentUser?.company);
+            const isAlreadyMember = memberships.some((m) => m.company_id === data.data.company_id);
+            const alreadySeen = typeof window !== "undefined" && Boolean(sessionStorage.getItem(`ack_seen_${data.data.id}`));
 
-            // Layar sukses / auto-redirect ke dashboard hanya boleh berjalan jika:
-            // 1. Ada parameter eksplisit ?success=true (dari notifikasi ACC atau transisi polling)
-            // 2. ATAU pengguna benar-benar belum memiliki perusahaan aktif sama sekali dan belum pernah melihat konfirmasi
-            if (forceSuccess || (!seen && !hasActiveCompany && !isFromProfile)) {
-              await completeJoinAndGoToDashboard(data.data.id, data.data.company_id);
+            // Jika pengguna sudah menjadi anggota aktif dan ini adalah refresh, login ulang, atau sudah pernah melihat layar sukses:
+            if (isAlreadyMember && (alreadySeen || !forceSuccess)) {
+              if (data.data.id) {
+                fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests/${data.data.id}/acknowledge`, {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${token}` }
+                }).catch(() => {});
+              }
+
+              if (data.data.company_id) {
+                setActiveCompanyId(data.data.company_id);
+              }
+
+              if (isFromProfile) {
+                setStatus('idle');
+              } else {
+                router.replace("/dashboard");
+              }
               return;
             } else {
-              // Jika sudah menjadi anggota aktif atau sudah pernah melihat konfirmasi, tandai seen dan tetap idle
-              if (data.data.id) {
-                try {
-                  localStorage.setItem(`join_accepted_seen_${data.data.id}`, "true");
-                } catch {}
-              }
-              setStatus('idle');
+              // Proses bergabung yang baru berhasil (pertama kali dibuka setelah di-ACC)
+              try {
+                sessionStorage.setItem(`ack_seen_${data.data.id}`, "true");
+                if (typeof window !== "undefined" && window.history.replaceState) {
+                  window.history.replaceState({}, '', isFromProfile ? '/gabung-perusahaan?from=profil' : '/gabung-perusahaan');
+                }
+              } catch {}
+              setStatus('accepted');
+              return;
             }
-          } else {
-            setStatus('idle');
           }
+        }
+
+        // Tidak ada pending atau approved request
+        if (memberships.length > 0 && !isFromProfile) {
+          if (!activeCompanyId && memberships[0]?.company_id) {
+            setActiveCompanyId(memberships[0].company_id);
+          }
+          router.replace("/dashboard");
         } else {
           setStatus('idle');
         }
       } catch (err) {
         console.error("Error fetching join status:", err);
+        setStatus('error');
+        setErrorMsg("Terjadi kesalahan jaringan saat memvalidasi permintaan bergabung.");
       }
     };
-    fetchStatus();
-  }, [searchParams, completeJoinAndGoToDashboard, activeCompanyId, currentUser]);
 
-  // Polling saat status pending sehingga ketika admin meng-ACC langsung otomatis masuk ke Dashboard
+    fetchStatus();
+  }, [searchParams, isCompanyLoading, companyError, memberships, activeCompanyId, router]);
+
+  // Polling saat status pending sehingga ketika admin meng-ACC langsung beralih ke layar Berhasil Bergabung
   useEffect(() => {
     if (status !== 'pending') return;
 
@@ -153,7 +204,11 @@ function GabungPerusahaanContent() {
           clearInterval(interval);
           setActiveRequestId(data.data.id);
           setCompanyName(data.data.company_name || "Perusahaan");
-          await completeJoinAndGoToDashboard(data.data.id, data.data.company_id);
+          setTargetCompanyId(data.data.company_id);
+          try {
+            sessionStorage.setItem(`ack_seen_${data.data.id}`, "true");
+          } catch {}
+          setStatus('accepted'); // Tampilkan halaman Berhasil Bergabung!
         }
       } catch (err) {
         console.error("Polling join status error:", err);
@@ -161,13 +216,17 @@ function GabungPerusahaanContent() {
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [status, completeJoinAndGoToDashboard]);
+  }, [status]);
 
   const handleGabung = async (codeOverride?: string) => {
-    if (isLoading || isProcessingRef.current) return;
+    if (isLoading || isProcessingRef.current) {
+      isScannerHandlingRef.current = false;
+      return;
+    }
     const codeToJoin = (typeof codeOverride === "string" ? codeOverride : kode).trim().toUpperCase();
     if (!codeToJoin) {
       setErrorMsg("Masukkan kode perusahaan terlebih dahulu");
+      isScannerHandlingRef.current = false;
       return;
     }
     setErrorMsg("");
@@ -175,7 +234,7 @@ function GabungPerusahaanContent() {
     if (!token) {
       setErrorMsg("Anda belum login");
       showToast("Anda belum login", "error");
-      isProcessingRef.current = false;
+      isScannerHandlingRef.current = false;
       return;
     }
     
@@ -204,10 +263,14 @@ function GabungPerusahaanContent() {
         if (requestData) {
           if (requestData.id) setActiveRequestId(requestData.id);
           if (requestData.company_name) setCompanyName(requestData.company_name);
+          if (requestData.company_id) setTargetCompanyId(requestData.company_id);
 
-          // Jika request langsung disetujui
+          // Jika request langsung disetujui (misal auto-join)
           if (requestData.status === 'approved') {
-            await completeJoinAndGoToDashboard(requestData.id, requestData.company_id);
+            try {
+              sessionStorage.setItem(`ack_seen_${requestData.id}`, "true");
+            } catch {}
+            setStatus('accepted');
             return;
           }
         }
@@ -224,18 +287,20 @@ function GabungPerusahaanContent() {
     } finally {
       setIsLoading(false);
       isProcessingRef.current = false;
+      isScannerHandlingRef.current = false;
     }
   };
 
   useEffect(() => {
     if (isScannerOpen) {
       isProcessingRef.current = false;
+      isScannerHandlingRef.current = false;
       const html5QrCode = new Html5Qrcode("qr-reader");
       scannerRef.current = html5QrCode;
 
       const onScanSuccess = (decodedText: string) => {
-        if (isProcessingRef.current || isRedirectingRef.current) return;
-        isProcessingRef.current = true;
+        if (isProcessingRef.current || isRedirectingRef.current || isScannerHandlingRef.current) return;
+        isScannerHandlingRef.current = true;
 
         try {
           if (html5QrCode.getState() === 2) { // 2 = SCANNING
@@ -254,8 +319,14 @@ function GabungPerusahaanContent() {
         let cleanCode = "";
         try {
           const url = new URL(decodedText);
-          const codeFromUrl = url.searchParams.get("code");
-          cleanCode = (codeFromUrl || decodedText).trim().toUpperCase();
+          const codeFromUrl = url.searchParams.get("code") || url.searchParams.get("join_code");
+          cleanCode = (codeFromUrl || "").trim().toUpperCase();
+          if (!cleanCode) {
+            showToast("Kode QR tidak berisi tautan perusahaan yang valid.", "error");
+            setErrorMsg("Kode QR tidak valid atau bukan QR AbsenIN.");
+            isScannerHandlingRef.current = false;
+            return;
+          }
         } catch {
           cleanCode = decodedText.trim().toUpperCase();
         }
@@ -263,7 +334,7 @@ function GabungPerusahaanContent() {
         if (!cleanCode) {
           showToast("Kode QR tidak valid atau kosong.", "error");
           setErrorMsg("Kode QR tidak valid atau kosong.");
-          isProcessingRef.current = false;
+          isScannerHandlingRef.current = false;
           return;
         }
 
@@ -281,10 +352,12 @@ function GabungPerusahaanContent() {
         showToast("Kamera tidak dapat diakses atau izin kamera ditolak.", "error");
         setIsScannerOpen(false);
         isProcessingRef.current = false;
+        isScannerHandlingRef.current = false;
       });
 
       return () => {
         setIsFlashOn(false);
+        isScannerHandlingRef.current = false;
         try {
           if (html5QrCode.getState() === 2) {
             html5QrCode.stop().then(() => {
@@ -325,6 +398,69 @@ function GabungPerusahaanContent() {
       router.replace(from ? `/cek-perusahaan?from=${from}` : "/cek-perusahaan");
     }
   };
+
+  if (isCompanyLoading || status === 'checking') {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1E4738]"></div>
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] items-center justify-center px-6 text-center">
+        <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+        <h2 className="text-[17px] font-bold text-[#1E293B] mb-2">Gagal Memverifikasi Permintaan</h2>
+        <p className="text-[13.5px] text-gray-500 mb-6 max-w-xs">
+          {errorMsg || companyError || "Terjadi kesalahan jaringan atau server saat memeriksa status bergabung."}
+        </p>
+        <button
+          onClick={() => {
+            setStatus('checking');
+            refreshMemberships();
+          }}
+          className="px-6 py-2.5 bg-[#1E4738] text-white rounded-full font-semibold text-[14px] hover:bg-[#16352b] transition-all flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Coba Lagi
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'accepted') {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-white items-center justify-center px-6 text-center animate-in zoom-in-95 duration-500 relative">
+        {/* Success Icon */}
+        <div className="w-[84px] h-[84px] bg-[#2D5A3F] rounded-full flex items-center justify-center shadow-[0_8px_24px_rgba(45,90,63,0.25)] mb-8">
+          <Check className="w-10 h-10 text-white stroke-[3]" />
+        </div>
+
+        {/* Text Content */}
+        <h1 className="text-[22px] font-bold text-[#111827] mb-1.5">Berhasil Bergabung!</h1>
+        <h2 className="text-[#2D5A3F] font-bold text-[16px] mb-3.5">
+          {companyName}
+        </h2>
+        
+        <p className="text-[#6B7280] text-[13.5px] px-6 leading-relaxed max-w-[290px]">
+          Selamat datang di tim! Sekarang Anda sudah menjadi anggota dari perusahaan ini.
+        </p>
+
+        {/* Bottom Button */}
+        <div className="absolute bottom-8 left-6 right-6 flex justify-center w-full max-w-md mx-auto">
+          <button 
+            onClick={handleLanjutKeBeranda}
+            disabled={isLoading}
+            className="w-full bg-[#2D5A3F] hover:bg-[#234731] text-white py-4 rounded-full text-[15px] font-bold transition-all shadow-[0_6px_20px_rgba(45,90,63,0.25)] active:scale-[0.98] cursor-pointer disabled:opacity-50"
+          >
+            {isLoading ? "Memproses..." : "Lanjut ke Beranda"}
+          </button>
+        </div>
+
+      </div>
+    );
+  }
 
   if (status === 'pending') {
     return (

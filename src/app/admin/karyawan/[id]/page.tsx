@@ -778,7 +778,7 @@ export default function DetailKaryawanMonitoringPage() {
                               <div className="flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
                                 <span className="text-[#1E4738] text-[12px] font-bold uppercase tracking-wider">
-                                  Detail Masuk (Check-In)
+                                  Detail Masuk 
                                 </span>
                               </div>
                               <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
@@ -885,7 +885,7 @@ export default function DetailKaryawanMonitoringPage() {
                                 <span className={`text-[12px] font-bold uppercase tracking-wider ${
                                   att.check_out_time ? "text-orange-800" : "text-gray-400"
                                 }`}>
-                                  Detail Keluar (Check-Out)
+                                  Detail Keluar
                                 </span>
                               </div>
                               {att.check_out_time ? (

@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
-import { getActiveCompanyId, setActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, setActiveCompanyId, clearAuthSession } from "@/lib/api";
 
 export default function ProfilPage() {
   const router = useRouter();
@@ -121,10 +121,7 @@ export default function ProfilPage() {
     });
     if (!confirmed) return;
 
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("user");
-    setActiveCompanyId(null);
-    localStorage.removeItem("companyMemberships");
+    clearAuthSession();
     router.push("/login");
   };
 

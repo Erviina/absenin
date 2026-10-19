@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 
 import { getPersonalModePreference, isTokenValid } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
-import { setActiveCompanyId } from "@/lib/api";
+import { setActiveCompanyId, clearAuthSession } from "@/lib/api";
 
 function LoginForm() {
   const router = useRouter();
@@ -18,16 +18,17 @@ function LoginForm() {
 
   // Jika terdapat target redirectParam dari tautan eksternal dan pengguna sudah memiliki token valid, arahkan ke target tersebut
   useEffect(() => {
-    if (!redirectParam || !redirectParam.startsWith("/")) return;
-
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
     if (token) {
       if (isTokenValid(token)) {
-        router.replace(redirectParam);
+        if (redirectParam && redirectParam.startsWith("/")) {
+          router.replace(redirectParam);
+        } else {
+          router.replace("/dashboard");
+        }
       } else {
-        // Token tidak valid atau kedaluwarsa: bersihkan sesi usang
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("user");
+        // Token tidak valid atau kedaluwarsa: bersihkan sesi usang secara menyeluruh
+        clearAuthSession();
       }
     }
   }, [redirectParam, router]);
@@ -56,21 +57,38 @@ function LoginForm() {
       }
 
       if (data?.success) {
-        localStorage.setItem("accessToken", data.data.accessToken);
-        localStorage.setItem("user", JSON.stringify(data.data.user));
-        if (data.data.user?.company?.id) {
-          setActiveCompanyId(data.data.user.company.id);
+        // 1. Bersihkan sesi lama secara menyeluruh agar tidak ada residu data/perusahaan akun sebelumnya
+        clearAuthSession();
+
+        const user = data.data.user;
+        const accessToken = data.data.accessToken;
+
+        // 2. Simpan token & user akun baru
+        localStorage.setItem("accessToken", accessToken);
+        localStorage.setItem("user", JSON.stringify(user));
+
+        if (user?.company?.id) {
+          setActiveCompanyId(user.company.id);
+        } else {
+          setActiveCompanyId(null);
         }
+
+        // 3. Beritahu CompanyContext agar memuat konteks akun yang baru
+        window.dispatchEvent(new CustomEvent("authSessionUpdated", { detail: data.data }));
+
         showToast("Login berhasil!", "success");
 
         // Cek jika terdapat target redirect dari tautan yang dibagikan
         if (redirectParam && redirectParam.startsWith("/")) {
+          if (redirectParam.startsWith("/gabung-perusahaan") && user?.company?.id) {
+            router.replace("/dashboard");
+            return;
+          }
           router.replace(redirectParam);
           return;
         }
 
-        // Redirect default sesuai PRD
-        const user = data.data.user;
+        // Redirect default sesuai alur aplikasi
         const skipCompany = getPersonalModePreference(user.id);
         if (!user.company && !skipCompany) {
           router.replace("/cek-perusahaan"); // "Halaman belum terdaftar"

@@ -38,6 +38,33 @@ export function setActiveCompanyId(companyId: string | null): void {
   } catch {}
 }
 
+export function clearAuthSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
+    localStorage.removeItem("companyMemberships");
+
+    // Bersihkan hanya key sessionStorage yang berkaitan dengan autentikasi & status perusahaan aktif
+    try {
+      sessionStorage.removeItem("activeCompanyId");
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (key.startsWith("ack_seen_") || key === "activeCompanyId")) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((k) => sessionStorage.removeItem(k));
+    } catch {}
+
+    setActiveCompanyId(null);
+    window.dispatchEvent(new CustomEvent("authSessionCleared"));
+  } catch (e) {
+    console.error("Failed to clear auth session:", e);
+  }
+}
+
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("accessToken") || null;
@@ -50,7 +77,7 @@ export function getAuthHeaders(customHeaders: Record<string, string> = {}): Reco
   if (token && !headers["Authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  if (companyId && !headers["x-company-id"]) {
+  if (token && companyId && !headers["x-company-id"]) {
     headers["x-company-id"] = companyId;
   }
   return headers;
@@ -72,7 +99,7 @@ export async function fetchApi(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  if (companyId && !headers.has("x-company-id")) {
+  if (token && companyId && !headers.has("x-company-id")) {
     headers.set("x-company-id", companyId);
   }
 

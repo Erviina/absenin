@@ -11,7 +11,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
-import { formatDate, formatDateWithDay, formatDateRange } from "@/lib/dateUtils";
+import { formatDate, formatDateWithDay } from "@/lib/dateUtils";
 import { Pagination } from "@/components/Pagination";
 import { getActiveCompanyId } from "@/lib/api";
 
@@ -420,15 +420,6 @@ export default function KehadiranPage() {
           label="riwayat"
           isLoading={isLoading}
         />
-
-        {/* Footer Text */}
-        {attendances.length > 0 && (
-          <p className="text-center text-[#9CA3AF] text-[13px] font-medium mt-2 mb-2">
-            {appliedStartDate && appliedEndDate 
-              ? `Menampilkan riwayat periode ${formatDateRange(appliedStartDate, appliedEndDate)}`
-              : "Menampilkan riwayat kehadiran"}
-          </p>
-        )}
 
       </div>
 

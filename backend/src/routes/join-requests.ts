@@ -160,7 +160,7 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
     }
 
     // 2. If no pending request, check if there is an approved request
-    // Pastikan keanggotaan masih aktif dan belum dicabut/dihapus
+    // Pastikan keanggotaan masih aktif dan belum diakui (deleted_at IS NULL), serta disetujui dalam 24 jam terakhir
     const approvedRes = await db.execute(sql`
       SELECT cjr.id, cjr.company_id, cjr.status, cjr.created_at, c.name as company_name 
       FROM company_join_requests cjr
@@ -171,6 +171,7 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
         AND cjr.deleted_at IS NULL
         AND cm.status = 'active'
         AND cm.deleted_at IS NULL
+        AND (cjr.updated_at >= now() - interval '24 hours' OR cjr.reviewed_at >= now() - interval '24 hours')
       ORDER BY cjr.updated_at DESC
       LIMIT 1
     `);
@@ -191,6 +192,37 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
 
   } catch (error: any) {
     console.error("Get join request me error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      errors: [error.message],
+    });
+  }
+});
+
+// POST /api/company/join-requests/:requestId/acknowledge
+router.post("/:requestId/acknowledge", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+    const { requestId } = req.params;
+
+    // Tandai permintaan bergabung ini sudah diakui/dilihat oleh pengguna (arsip / soft-delete request)
+    // Keanggotaan di company_members tetap aktif
+    await db.execute(sql`
+      UPDATE company_join_requests 
+      SET deleted_at = now(), updated_at = now()
+      WHERE id = ${requestId} 
+        AND profile_id = ${user.id} 
+        AND status = 'approved' 
+        AND deleted_at IS NULL
+    `);
+
+    return res.status(200).json({
+      success: true,
+      message: "Permintaan bergabung telah diakui",
+    });
+  } catch (error: any) {
+    console.error("Acknowledge join request error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

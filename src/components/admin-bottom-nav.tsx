@@ -4,6 +4,7 @@ import { Home, FileText, ClipboardEdit } from "lucide-react";
 import Link from "next/link";
 
 import { useState, useEffect } from "react";
+import { getActiveCompanyId } from "@/lib/api";
 
 interface AdminBottomNavProps {
   activeTab?: "beranda" | "absensi" | "izin" | "tugas" | "berita";
@@ -24,7 +25,7 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
         const token = localStorage.getItem("accessToken");
         if (!token) return;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        const activeCompanyId = localStorage.getItem("activeCompanyId");
+        const activeCompanyId = getActiveCompanyId();
         if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/badge-counts", { headers });

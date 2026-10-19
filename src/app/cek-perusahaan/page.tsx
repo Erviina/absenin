@@ -1,18 +1,22 @@
 "use client";
 
-import { Building2, Plus, Hourglass, ChevronLeft } from "lucide-react";
+import { Building2, Plus, Hourglass, ChevronLeft, AlertCircle, RefreshCw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { setPersonalModePreference } from "@/lib/personalMode";
+import { clearAuthSession, setActiveCompanyId } from "@/lib/api";
+import { useCompany } from "@/context/CompanyContext";
 
 function CekPerusahaanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get("from");
+  const { isCompanyLoading, memberships, activeCompanyId, companyError, refreshMemberships, currentUser } = useCompany();
 
-  const [status, setStatus] = useState<'idle' | 'pending' | 'checking'>('checking');
+  const [status, setStatus] = useState<'checking' | 'idle' | 'pending' | 'error'>('checking');
   const [companyName, setCompanyName] = useState("");
   const [userName, setUserName] = useState("User");
+  const [errorMsg, setErrorMsg] = useState("");
 
   const handleBack = () => {
     if (from === "profil") {
@@ -22,82 +26,109 @@ function CekPerusahaanContent() {
         router.replace("/profil");
       }
     } else {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("user");
-      localStorage.removeItem("activeCompanyId");
-      localStorage.removeItem("companyMemberships");
+      clearAuthSession();
       router.replace("/login");
     }
   };
 
   useEffect(() => {
-    const fetchStatus = async () => {
-      const token = localStorage.getItem("accessToken");
-      if (!token) {
-        setStatus('idle');
+    if (currentUser?.fullName) {
+      setUserName(currentUser.fullName);
+    } else {
+      try {
+        const u = localStorage.getItem("user");
+        if (u) {
+          const parsed = JSON.parse(u);
+          if (parsed.fullName) setUserName(parsed.fullName);
+        }
+      } catch {}
+    }
+  }, [currentUser]);
+
+  const verifyStatus = useCallback(async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!token) {
+      clearAuthSession();
+      router.replace("/login");
+      return;
+    }
+
+    // Jika CompanyContext masih loading memvalidasi membership, tunggu
+    if (isCompanyLoading) {
+      setStatus('checking');
+      return;
+    }
+
+    // Jika terjadi error jaringan/server dari CompanyContext, tampilkan error dan opsi coba lagi
+    if (companyError) {
+      setStatus('error');
+      setErrorMsg(companyError);
+      return;
+    }
+
+    // 1. Pengguna sudah memiliki perusahaan aktif yang diverifikasi backend
+    if (memberships.length > 0 || activeCompanyId) {
+      if (from !== "profil") {
+        if (!activeCompanyId && memberships[0]?.company_id) {
+          setActiveCompanyId(memberships[0].company_id);
+        }
+        router.replace("/dashboard");
+        return;
+      }
+    }
+
+    // 2. Jika belum memiliki perusahaan aktif, periksa apakah ada permintaan bergabung (pending)
+    try {
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok && res.status >= 500) {
+        setStatus('error');
+        setErrorMsg("Gagal menghubungi server untuk memvalidasi status keanggotaan.");
         return;
       }
 
-      let hasActiveCompany = false;
-
-      // 1. Periksa profil pengguna terlebih dahulu: jika sudah memiliki perusahaan aktif, langsung ke dashboard
-      try {
-        const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const meData = await meRes.json();
-        if (meData.success && meData.data.user) {
-          localStorage.setItem("user", JSON.stringify(meData.data.user));
-          setUserName(meData.data.user.fullName || "User");
-          
-          if (meData.data.user.company) {
-            hasActiveCompany = true;
-            if (from !== "profil") {
-              router.replace("/dashboard");
-              return;
-            }
+      const data = await res.json();
+      if (data.success && data.data) {
+        if (data.data.status === 'pending') {
+          setCompanyName(data.data.company_name || "Perusahaan");
+          setStatus('pending');
+          return;
+        } else if (data.data.status === 'approved') {
+          // Permintaan disetujui: akui permintaan, pulihkan perusahaan aktif, dan arahkan ke dashboard
+          if (data.data.id) {
+            fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests/${data.data.id}/acknowledge`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` }
+            }).catch(() => {});
           }
-        }
-      } catch (e) {
-        console.error("Error fetching /auth/me:", e);
-      }
-
-      // 2. Jika belum memiliki perusahaan aktif, periksa apakah ada permintaan bergabung (pending atau baru di-ACC)
-      if (!hasActiveCompany) {
-        try {
-          const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const data = await res.json();
-          
-          if (data.success && data.data) {
-            if (data.data.status === 'pending') {
-              setCompanyName(data.data.company_name || "Perusahaan");
-              setStatus('pending');
-              return;
-            } else if (data.data.status === 'approved') {
-              // Pengguna baru saja disetujui, arahkan ke alur sukses satu kali
-              router.replace("/gabung-perusahaan?success=true");
-              return;
-            }
+          if (data.data.company_id) {
+            setActiveCompanyId(data.data.company_id);
           }
-        } catch (err) {
-          console.error("Error fetching join requests in cek-perusahaan:", err);
+          await refreshMemberships();
+          router.replace("/dashboard");
+          return;
         }
       }
-
       setStatus('idle');
-    };
-    
-    fetchStatus();
-  }, [router, from]);
+    } catch (err) {
+      console.error("Error fetching join requests in cek-perusahaan:", err);
+      setStatus('error');
+      setErrorMsg("Terjadi kesalahan jaringan saat memvalidasi status keanggotaan.");
+    }
+  }, [isCompanyLoading, companyError, memberships, activeCompanyId, from, router, refreshMemberships]);
+
+  useEffect(() => {
+    verifyStatus();
+  }, [verifyStatus]);
 
   // Polling saat status pending sehingga ketika admin meng-ACC langsung dialihkan ke layar sukses
   useEffect(() => {
     if (status !== 'pending') return;
 
     const interval = setInterval(async () => {
-      const token = localStorage.getItem("accessToken");
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
       if (!token) return;
       try {
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
@@ -105,6 +136,7 @@ function CekPerusahaanContent() {
         });
         const data = await res.json();
         if (data.success && data.data && data.data.status === 'approved') {
+          clearInterval(interval);
           router.replace("/gabung-perusahaan?success=true");
         }
       } catch (e) {
@@ -119,6 +151,28 @@ function CekPerusahaanContent() {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1E4738]"></div>
+      </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-[#f7fbf8] items-center justify-center px-6 text-center">
+        <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+        <h2 className="text-[17px] font-bold text-[#1E293B] mb-2">Gagal Memeriksa Status Perusahaan</h2>
+        <p className="text-[13.5px] text-gray-500 mb-6 max-w-xs">
+          {errorMsg || companyError || "Terjadi kesalahan jaringan atau server saat memeriksa keanggotaan Anda."}
+        </p>
+        <button
+          onClick={() => {
+            setStatus('checking');
+            refreshMemberships();
+          }}
+          className="px-6 py-2.5 bg-[#1E4738] text-white rounded-full font-semibold text-[14px] hover:bg-[#16352b] transition-all flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Coba Lagi
+        </button>
       </div>
     );
   }

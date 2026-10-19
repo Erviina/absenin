@@ -660,18 +660,13 @@ function AdminKaryawanView() {
           </button>
           <button
             onClick={() => setActiveTab("karyawan")}
-            className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center gap-1 ${
+            className={`py-2 px-1 rounded-full text-[12px] font-bold transition-all text-center flex items-center justify-center ${
               activeTab === "karyawan"
                 ? "bg-[#356E3B] text-white shadow-sm"
                 : "bg-white text-[#4B5563] border border-[#E5E7EB] hover:bg-gray-50"
             }`}
           >
             <span className="truncate">Karyawan</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] shrink-0 ${
-              activeTab === "karyawan" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
-            }`}>
-              {filteredEmployees.length}
-            </span>
           </button>
           <button
             onClick={() => setActiveTab("keluar")}

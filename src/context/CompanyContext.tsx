@@ -1,9 +1,9 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { clearPersonalModePreference } from "@/lib/personalMode";
-import { getActiveCompanyId, setActiveCompanyId as setActiveCompanyIdStorage } from "@/lib/api";
+import { getActiveCompanyId, setActiveCompanyId as setActiveCompanyIdStorage, clearAuthSession } from "@/lib/api";
 
 export type CompanyCategoryCode = "community" | "organization" | "business";
 
@@ -43,6 +43,7 @@ interface CompanyContextType {
   activeRole: CompanyRole | null;
   isLoading: boolean;
   isCompanyLoading: boolean;
+  companyError: string | null;
   switchCompany: (companyId: string) => void;
   refreshMemberships: () => Promise<void>;
   canCreate: (feature: "agendas" | "news") => boolean;
@@ -59,7 +60,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [memberships, setMemberships] = useState<CompanyMembership[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(getActiveCompanyId);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [companyError, setCompanyError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const updateCurrentUser = useCallback((user: any) => {
     setCurrentUser(user);
@@ -74,26 +77,41 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Hydrate from localStorage cache immediately after mounting on client (avoids SSR mismatch).
-  // Cache hanya digunakan untuk tampilan sementara (optimistik) — isLoading tetap true
-  // sampai fetchMemberships dari backend selesai, agar tidak ada keputusan routing berdasarkan data basi.
+  // Hydrate from localStorage cache immediately after mounting on client.
+  // Cache hanya digunakan jika sesuai dengan profile_id sesi yang sedang aktif.
   useEffect(() => {
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      if (!token) {
+        setCurrentUser(null);
+        setMemberships([]);
+        setActiveCompanyId(null);
+        setIsLoading(false);
+        return;
+      }
+
       const userStr = localStorage.getItem("user");
+      let parsedUser: any = null;
       if (userStr) {
         try {
-          setCurrentUser(JSON.parse(userStr));
+          parsedUser = JSON.parse(userStr);
+          setCurrentUser(parsedUser);
         } catch {}
       }
+
       const cached = localStorage.getItem(MEMBERSHIPS_CACHE_KEY);
       const storedActiveId = getActiveCompanyId();
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMemberships(parsed);
-          // Sengaja TIDAK memanggil setIsLoading(false) di sini.
-          // isLoading hanya dimatikan oleh fetchMemberships setelah verifikasi backend.
-        }
+      if (cached && parsedUser?.id) {
+        try {
+          const parsed = JSON.parse(cached);
+          // Validasi ketat: pastikan cache membership milik akun yang sedang login!
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].profile_id === parsedUser.id) {
+            setMemberships(parsed);
+          } else {
+            // Cache milik akun lain/lama, hapus segera agar tidak bocor
+            localStorage.removeItem(MEMBERSHIPS_CACHE_KEY);
+          }
+        } catch {}
       }
       if (storedActiveId) {
         setActiveCompanyId(storedActiveId);
@@ -119,112 +137,160 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const fetchMemberships = useCallback(async () => {
-    setIsLoading(true);
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!token) {
+      setMemberships([]);
+      setActiveCompanyId(null);
+      setCurrentUser(null);
+      setIsLoading(false);
+      setCompanyError(null);
+      return;
+    }
+
+    // Batalkan request in-flight sebelumnya jika ada
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    setIsLoading(true);
+    setCompanyError(null);
+    const tokenAtStart = token;
     const profileId = getCurrentProfileId();
 
     try {
       let formatted: CompanyMembership[] = [];
       let backendLoaded = false;
+      let isNetworkOrServerError = false;
 
-      // 1. Try Backend API first (handles auto-sync and bypasses client RLS limitations)
-      if (token) {
-        try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/memberships`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const json = await res.json();
-          if (json.success && Array.isArray(json.data)) {
-            formatted = json.data;
-            backendLoaded = true;
-          }
-        } catch (apiErr) {
-          console.warn("Backend /companies/memberships failed, trying direct Supabase:", apiErr);
+      // 1. Coba Endpoint Backend terlebih dahulu
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/memberships`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: abortController.signal,
+        });
+
+        const currentToken = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+        if (currentToken !== tokenAtStart) {
+          // Token berubah di tengah request (pergantian akun), abaikan hasil lama
+          return;
         }
+
+        if (res.status === 401) {
+          clearAuthSession();
+          return;
+        }
+
+        const json = await res.json();
+        if (res.ok && json.success && Array.isArray(json.data)) {
+          formatted = json.data;
+          backendLoaded = true;
+        } else {
+          isNetworkOrServerError = true;
+        }
+      } catch (apiErr: any) {
+        if (apiErr.name === "AbortError") {
+          return;
+        }
+        console.warn("Backend /companies/memberships failed, trying direct Supabase:", apiErr);
+        isNetworkOrServerError = true;
       }
 
-      // 2. Direct Supabase query fallback (only if backend API failed or unavailable)
+      // 2. Direct Supabase query fallback (hanya jika backend tidak merespons)
       if (!backendLoaded && profileId) {
-        const { data, error } = await supabase
-          .from("company_members")
-          .select(`
-            id,
-            company_id,
-            profile_id,
-            role,
-            status,
-            joined_at,
-            deleted_at,
-            companies:company_id (
+        try {
+          const { data, error } = await supabase
+            .from("company_members")
+            .select(`
               id,
-              name,
-              category_id,
-              avatar_company_url,
+              company_id,
+              profile_id,
+              role,
+              status,
+              joined_at,
               deleted_at,
-              company_categories:category_id (
+              companies:company_id (
                 id,
-                code,
                 name,
-                description
+                category_id,
+                avatar_company_url,
+                deleted_at,
+                company_categories:category_id (
+                  id,
+                  code,
+                  name,
+                  description
+                )
               )
-            )
-          `)
-          .eq("profile_id", profileId)
-          .eq("status", "active")
-          .is("deleted_at", null);
+            `)
+            .eq("profile_id", profileId)
+            .eq("status", "active")
+            .is("deleted_at", null);
 
-        if (!error && data && data.length > 0) {
-          formatted = (data || [])
-            .filter((item: any) => item.companies && !item.companies.deleted_at)
-            .map((item: any) => {
-              const comp = item.companies;
-              const cat = comp.company_categories;
+          const currentToken = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+          if (currentToken !== tokenAtStart) return;
 
-              let normRole: CompanyRole = "member";
-              const r = (item.role || "").toLowerCase();
-              if (r === "owner") normRole = "owner";
-              else if (r === "admin") normRole = "admin";
-              else if (r === "manager") normRole = "manager";
-              else normRole = "member";
+          if (!error && data && data.length > 0) {
+            formatted = (data || [])
+              .filter((item: any) => item.companies && !item.companies.deleted_at)
+              .map((item: any) => {
+                const comp = item.companies;
+                const cat = comp.company_categories;
 
-              return {
-                id: item.id,
-                company_id: item.company_id,
-                profile_id: item.profile_id,
-                role: normRole,
-                status: item.status,
-                joined_at: item.joined_at,
-                deleted_at: item.deleted_at,
-                company: {
-                  id: comp.id,
-                  name: comp.name || "Perusahaan",
-                  category_id: comp.category_id,
-                  avatar_company_url: comp.avatar_company_url,
-                  category: cat
-                    ? {
-                        id: cat.id,
-                        code: cat.code as CompanyCategoryCode,
-                        name: cat.name,
-                        description: cat.description,
-                      }
-                    : null,
-                },
-              };
-            });
+                let normRole: CompanyRole = "member";
+                const r = (item.role || "").toLowerCase();
+                if (r === "owner") normRole = "owner";
+                else if (r === "admin") normRole = "admin";
+                else if (r === "manager") normRole = "manager";
+                else normRole = "member";
+
+                return {
+                  id: item.id,
+                  company_id: item.company_id,
+                  profile_id: item.profile_id,
+                  role: normRole,
+                  status: item.status,
+                  joined_at: item.joined_at,
+                  deleted_at: item.deleted_at,
+                  company: {
+                    id: comp.id,
+                    name: comp.name || "Perusahaan",
+                    category_id: comp.category_id,
+                    avatar_company_url: comp.avatar_company_url,
+                    category: cat
+                      ? {
+                          id: cat.id,
+                          code: cat.code as CompanyCategoryCode,
+                          name: cat.name,
+                          description: cat.description,
+                        }
+                      : null,
+                  },
+                };
+              });
+            backendLoaded = true;
+            isNetworkOrServerError = false;
+          } else if (error) {
+            isNetworkOrServerError = true;
+          }
+        } catch {
+          isNetworkOrServerError = true;
         }
       }
 
-      // CRITICAL: If both backend API and Supabase direct query failed to return data (e.g. temporary network error),
-      // DO NOT wipe the active company or memberships cache! Retain existing state.
-      if (!backendLoaded && formatted.length === 0) {
-        console.warn("Unable to reach backend or Supabase for memberships. Retaining current active company state.");
+      // Jika terjadi kesalahan jaringan atau server sementara:
+      // JANGAN hapus perusahaan aktif atau cache secara permanen!
+      if (!backendLoaded && formatted.length === 0 && isNetworkOrServerError) {
+        console.warn("Gagal menghubungi server untuk memvalidasi membership. Mempertahankan state saat ini.");
+        setCompanyError("Gagal menghubungi server untuk memvalidasi status perusahaan.");
         return;
       }
 
-      // Filter only active, non-deleted memberships
+      // Filter hanya membership yang aktif dan tidak dihapus
       const activeList = formatted.filter((m: any) => m.status === "active" && !m.deleted_at);
 
-      // If user has no active memberships at all, clear any cached company in local user
+      // Jika user tidak memiliki membership aktif sama sekali, bersihkan info perusahaan di user lokal
       if (activeList.length === 0 && typeof window !== "undefined") {
         try {
           const userStr = localStorage.getItem("user");
@@ -252,15 +318,14 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
       setMemberships(activeList);
 
-      // Validate activeCompanyId against active memberships
+      // Validasi activeCompanyId terhadap membership yang benar-benar aktif
       const storedId = getActiveCompanyId();
       const matched = activeList.find((m) => m.company_id === storedId);
 
       if (storedId && matched) {
-        // Active company is valid and confirmed by server
+        // Perusahaan aktif masih valid dan dikonfirmasi oleh server
         setActiveCompanyId(storedId);
         setActiveCompanyIdStorage(storedId);
-        // Sync local user object with verified active company
         try {
           const userStr = localStorage.getItem("user");
           if (userStr) {
@@ -272,9 +337,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
           }
         } catch {}
       } else if (storedId && !matched) {
-        // Previously chosen company is NO LONGER ACTIVE (membership revoked/deleted)
-        // Per rules: Handle explicitly, do NOT silently select another company
-        console.warn(`Previously selected company ${storedId} is no longer active for user.`);
+        // Perusahaan yang tersimpan sudah TIDAK AKTIF (membership dicabut/dihapus)
+        // Jangan diam-diam memilih perusahaan lain bagi pengguna multi-perusahaan
+        console.warn(`Perusahaan tersimpan ${storedId} tidak lagi aktif untuk user.`);
         setActiveCompanyId(null);
         setActiveCompanyIdStorage(null);
         try {
@@ -282,21 +347,35 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
           if (userStr) {
             const u = JSON.parse(userStr);
             u.company = null;
+            u.activeRole = null;
             localStorage.setItem("user", JSON.stringify(u));
             setCurrentUser(u);
           }
         } catch {}
       } else if (!storedId && activeList.length > 0) {
-        // User had no stored choice yet (first login)
-        const defaultId = activeList[0].company_id;
+        // Belum ada pilihan tersimpan (misal sesi awal atau login pertama kali):
+        let defaultChoice = activeList[0];
+        try {
+          const userStr = localStorage.getItem("user");
+          if (userStr) {
+            const u = JSON.parse(userStr);
+            const userCompId = u?.company?.id;
+            const profileMatched = userCompId ? activeList.find((m) => m.company_id === userCompId) : null;
+            if (profileMatched) {
+              defaultChoice = profileMatched;
+            }
+          }
+        } catch {}
+
+        const defaultId = defaultChoice.company_id;
         setActiveCompanyId(defaultId);
         setActiveCompanyIdStorage(defaultId);
         try {
           const userStr = localStorage.getItem("user");
           if (userStr) {
             const u = JSON.parse(userStr);
-            u.company = activeList[0].company;
-            u.activeRole = activeList[0].role;
+            u.company = defaultChoice.company;
+            u.activeRole = defaultChoice.role;
             localStorage.setItem("user", JSON.stringify(u));
             setCurrentUser(u);
           }
@@ -314,6 +393,42 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchMemberships();
+  }, [fetchMemberships]);
+
+  // Listener event sesi (logout & login dari tab manapun atau komponen lain)
+  useEffect(() => {
+    const handleSessionCleared = () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      setMemberships([]);
+      setActiveCompanyId(null);
+      setCurrentUser(null);
+      setIsLoading(false);
+      setCompanyError(null);
+    };
+
+    const handleSessionUpdated = (e: any) => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const newUser = e?.detail?.user || null;
+      if (newUser) {
+        setCurrentUser(newUser);
+      }
+      const newCompanyId = newUser?.company?.id || null;
+      setActiveCompanyId(newCompanyId);
+      setCompanyError(null);
+      fetchMemberships();
+    };
+
+    window.addEventListener("authSessionCleared", handleSessionCleared);
+    window.addEventListener("authSessionUpdated", handleSessionUpdated);
+
+    return () => {
+      window.removeEventListener("authSessionCleared", handleSessionCleared);
+      window.removeEventListener("authSessionUpdated", handleSessionUpdated);
+    };
   }, [fetchMemberships]);
 
   // Handle company switch
@@ -420,6 +535,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       activeRole,
       isLoading,
       isCompanyLoading: isLoading,
+      companyError,
       switchCompany,
       refreshMemberships: fetchMemberships,
       canCreate,
@@ -434,6 +550,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       activeCompany,
       activeRole,
       isLoading,
+      companyError,
       switchCompany,
       fetchMemberships,
       canCreate,
