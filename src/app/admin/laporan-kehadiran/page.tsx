@@ -57,8 +57,13 @@ export default function LaporanKehadiranPage() {
         
         const data = await res.json();
         
-        if (res.status === 401 || res.status === 403) {
-          router.push("/dashboard"); // fallback if not admin
+        if (res.status === 401) {
+          router.push("/login");
+          return;
+        }
+
+        if (res.status === 403) {
+          router.push("/unauthorized");
           return;
         }
 

@@ -75,12 +75,16 @@ export default function AdminDashboardPage() {
   const [pendingLeavesCount, setPendingLeavesCount] = useState<number>(0);
   const [karyawanBadgeCount, setKaryawanBadgeCount] = useState<number>(0);
 
-  // Guard: If activeRole is member, redirect back to dashboard immediately
+  // Guard: If activeRole is member, redirect to /unauthorized immediately
   useEffect(() => {
     if (!isCompanyLoading && activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
-      router.replace("/dashboard");
+      router.replace("/unauthorized");
     }
   }, [activeRole, isCompanyLoading, router]);
+
+  if (!isCompanyLoading && activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
+    return null;
+  }
 
   const formatRelativeTime = (dateString: string) => {
     const diff = Date.now() - new Date(dateString).getTime();

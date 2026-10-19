@@ -230,8 +230,8 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
           company_id: companyId as string,
           recipient_id: targetId,
           type: "LEAVE_PENDING",
-          title: "Pengajuan Izin Baru",
-          message: `${requesterName} telah mengajukan permohonan ${categoryName} baru.`,
+          title: "Pengajuan Izin",
+          message: `${requesterName} mengajukan permohonan ${categoryName}.`,
           reference_id: createdLeave.id as string,
         }));
         await db.insert(notifications).values(notifData);

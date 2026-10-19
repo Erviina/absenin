@@ -25,7 +25,7 @@ export default function KelolaKaryawanPage() {
       if (["owner", "admin", "manager"].includes(activeRole)) {
         setIsAuthorized(true);
       } else {
-        router.replace("/dashboard");
+        router.replace("/unauthorized");
       }
       return;
     }
@@ -60,7 +60,7 @@ export default function KelolaKaryawanPage() {
         if (data.success && isMgmt) {
           setIsAuthorized(true);
         } else {
-          router.replace("/dashboard");
+          router.replace("/unauthorized");
         }
       } catch (err) {
         router.push("/login");
@@ -72,8 +72,8 @@ export default function KelolaKaryawanPage() {
 
   if (!isAuthorized) {
     return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] items-center justify-center">
-        <div className="text-gray-400 text-[14px]">Memverifikasi akses...</div>
+      <div className="flex flex-col min-h-[100dvh] bg-[#FAFCF9] items-center justify-center">
+        {/* Blank state saat verifikasi/redirect */}
       </div>
     );
   }
@@ -89,10 +89,10 @@ function AdminKaryawanView() {
   const { activeCompanyId, activeCompany, activeRole, refreshMemberships } = useCompany();
   const { showToast } = useDialog();
 
-  // If user switches to a company where they are just a member, redirect back to dashboard
+  // If user switches to a company where they are just a member, redirect back to unauthorized
   useEffect(() => {
     if (activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
-      router.replace("/dashboard");
+      router.replace("/unauthorized");
     }
   }, [activeRole, router]);
 

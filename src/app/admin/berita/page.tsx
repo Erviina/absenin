@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Eye, Loader2 } from "lucide-react";
+import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Loader2, MoreVertical, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
@@ -29,8 +29,20 @@ export default function KelolaBeritaPage() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Semua");
+
+  // Close dropdown menu when clicking anywhere outside
+  useEffect(() => {
+    const handleOutsideClick = () => {
+      setActiveMenuId(null);
+    };
+    if (activeMenuId) {
+      window.addEventListener("click", handleOutsideClick);
+      return () => window.removeEventListener("click", handleOutsideClick);
+    }
+  }, [activeMenuId]);
 
   // Pagination states
   const [offset, setOffset] = useState(0);
@@ -181,70 +193,111 @@ export default function KelolaBeritaPage() {
           ) : (
             <>
               {news.map(item => (
-                <div key={item.id} className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#dce9df]">
-                  <div 
-                    onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                    className="cursor-pointer shrink-0 group/img"
-                    title="Klik untuk langsung melihat berita"
-                  >
+                <div 
+                  key={item.id} 
+                  onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
+                  className="bg-white rounded-[22px] p-4 flex gap-3.5 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all hover:border-[#356E3B]/40 hover:shadow-md active:scale-[0.99] cursor-pointer relative group"
+                  title="Klik untuk langsung melihat pratinjau berita"
+                >
+                  {/* Thumbnail / Image */}
+                  <div className="shrink-0">
                     {item.cover_image_url ? (
                       <img 
                         src={item.cover_image_url} 
                         alt={item.title} 
-                        className="w-[80px] h-[80px] rounded-[16px] object-cover group-hover/img:opacity-90 transition-opacity" 
+                        className="w-[84px] h-[84px] rounded-[16px] object-cover group-hover:opacity-95 transition-opacity" 
                         style={{ objectFit: 'cover' }}
                       />
                     ) : (
-                      <div className="w-[80px] h-[80px] bg-[#f4f9f6] rounded-[16px] flex items-center justify-center border border-[#eef5f0]">
-                        <ImageIcon className="w-6 h-6 text-[#7d998c]" />
+                      <div className="w-[84px] h-[84px] bg-[#f4f9f6] rounded-[16px] flex items-center justify-center border border-[#eef5f0] text-[#7d998c]">
+                        <ImageIcon className="w-7 h-7" />
                       </div>
                     )}
                   </div>
                   
-                  <div className="flex flex-col flex-1 justify-center min-w-0">
-                    {item.category?.name && (
-                      <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
-                        {item.category.name}
-                      </span>
-                    )}
-                    <h3 
-                      onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                      className="text-[#1E4738] hover:text-[#356E3B] hover:underline cursor-pointer text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors"
-                      title="Klik untuk langsung melihat berita"
-                    >
-                      {sanitizeText(item.title)}
-                    </h3>
-                    <p className="text-[#7d998c] text-[11px] font-medium line-clamp-1 mb-2">
-                      {formatDate(item.created_at)}
-                    </p>
-                    
-                    <div className="flex gap-2 mt-auto flex-wrap">
-                      <button 
-                        onClick={() => router.push(`/berita/${item.id}?from=/admin/berita`)}
-                        className="text-[#1E4738] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
-                        title="Lihat Berita"
-                      >
-                        <Eye className="w-3 h-3 text-[#1E4738]" /> Lihat
-                      </button>
-                      <button 
-                        onClick={() => handleOpenEdit(item)}
-                        className="text-[#356E3B] text-[11px] font-bold bg-[#eef5f0] hover:bg-[#e2ece5] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all"
-                      >
-                        <Edit2 className="w-3 h-3" /> Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(item.id)}
-                        disabled={isDeletingId === item.id}
-                        className="text-[#e11d48] text-[11px] font-bold bg-[#ffe4e6] hover:bg-[#fecdd3] px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isDeletingId === item.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3 h-3" />
-                        )}
-                        {isDeletingId === item.id ? "Menghapus..." : "Hapus"}
-                      </button>
+                  {/* News Info */}
+                  <div className="flex flex-col flex-1 justify-between min-w-0 pr-1">
+                    <div>
+                      {item.category?.name && (
+                        <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit inline-block mb-1.5">
+                          {item.category.name}
+                        </span>
+                      )}
+                      <h3 className="text-[#1E4738] group-hover:text-[#356E3B] text-[14px] font-bold leading-snug line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors">
+                        {sanitizeText(item.title)}
+                      </h3>
                     </div>
+
+                    <div className="flex items-center justify-between text-[#7d998c] text-[11px] font-medium pt-2 mt-auto">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                        <span>{formatDate(item.created_at)}</span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-[#356E3B] opacity-0 group-hover:opacity-100 transition-opacity">
+                        Pratinjau &rarr;
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* More Action Menu (Titik Tiga) */}
+                  <div 
+                    className="relative shrink-0 self-start -mr-1 -mt-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuId(activeMenuId === item.id ? null : item.id);
+                      }}
+                      disabled={isDeletingId === item.id}
+                      className="w-8 h-8 rounded-full hover:bg-gray-100 active:scale-95 text-gray-500 hover:text-gray-700 flex items-center justify-center transition-all cursor-pointer"
+                      aria-label="Menu Aksi"
+                      title="Opsi Berita"
+                    >
+                      {isDeletingId === item.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-[#e11d48]" />
+                      ) : (
+                        <MoreVertical className="w-4 h-4" />
+                      )}
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {activeMenuId === item.id && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-0 top-9 w-36 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.15)] border border-gray-100 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-150"
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuId(null);
+                            handleOpenEdit(item);
+                          }}
+                          className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                          <span>Edit</span>
+                        </button>
+
+                        <div className="h-[1px] bg-gray-100 mx-2" />
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuId(null);
+                            handleDelete(item.id);
+                          }}
+                          disabled={isDeletingId === item.id}
+                          className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#e11d48] hover:bg-rose-50 flex items-center gap-2.5 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-[#e11d48]" />
+                          <span>Hapus</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

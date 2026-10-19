@@ -47,7 +47,7 @@ export function getNotificationDestination(
   switch (normType) {
     // === PERIZINAN / CUTI ===
     case "LEAVE_PENDING":
-      // Pengajuan izin baru yang perlu ditinjau oleh pengelola
+      // Pengajuan izin yang perlu ditinjau oleh pengelola
       if (isManagement) {
         return { route: "/admin/izin", targetCompanyId };
       }

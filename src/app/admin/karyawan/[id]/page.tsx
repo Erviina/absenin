@@ -204,10 +204,13 @@ export default function DetailKaryawanMonitoringPage() {
   useEffect(() => {
     if (isCompanyLoading) return;
     if (activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
-      showToast("Akses ditolak: Hanya Manajemen yang dapat melihat profil karyawan", "error");
-      router.replace("/dashboard");
+      router.replace("/unauthorized");
     }
-  }, [activeRole, isCompanyLoading, router, showToast]);
+  }, [activeRole, isCompanyLoading, router]);
+
+  if (!isCompanyLoading && activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
+    return null;
+  }
 
   const getHeaders = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
