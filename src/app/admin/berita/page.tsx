@@ -10,6 +10,9 @@ import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
 import { shareContent } from "@/lib/shareUtils";
 import { Pagination } from "@/components/Pagination";
+import { CardListSkeleton } from "@/components/CardSkeleton";
+import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
+import { getActiveCompanyId } from "@/lib/api";
 
 type NewsItem = {
   id: string;
@@ -40,6 +43,11 @@ export default function KelolaBeritaPage() {
   const limit = 10;
 
   useEffect(() => {
+    setNews([]);
+    setOffset(0);
+  }, [activeCompanyId]);
+
+  useEffect(() => {
     setOffset(0);
   }, [searchQuery, activeFilter]);
 
@@ -55,12 +63,27 @@ export default function KelolaBeritaPage() {
 
   const fetchNews = useCallback(async () => {
     try {
-      setIsLoading(true);
+      const compId = activeCompanyId || getActiveCompanyId();
+      const cacheKey = buildCacheKey("admin_news", compId, {
+        limit,
+        offset,
+        searchQuery,
+        activeFilter
+      });
+      const cached = getCachedData<NewsItem[]>(cacheKey);
+      if (cached) {
+        setNews(cached.data);
+        if (typeof cached.total === "number") setTotalNews(cached.total);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       
       const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-      if (companyId) headers["x-company-id"] = companyId;
+      if (compId) headers["x-company-id"] = compId;
 
       const params = new URLSearchParams();
       params.set("limit", String(limit));
