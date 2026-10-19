@@ -13,7 +13,7 @@ const router = Router();
 const newsSchema = z.object({
   title: z.string().min(1, "Judul tidak boleh kosong"),
   content: z.string().min(1, "Konten tidak boleh kosong"),
-  cover_image_url: z.string().url().optional().or(z.literal('')).or(z.null()),
+  cover_image_url: z.string().min(1, "Sampul berita wajib diisi"),
   news_category_id: z.string().uuid().optional().nullable(),
 });
 

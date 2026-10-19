@@ -105,8 +105,13 @@ function BuatBeritaForm() {
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
-    if (!title || !content) {
+    if (!title.trim() || !content.trim()) {
       showToast("Judul dan Isi Berita wajib diisi", "warning");
+      return;
+    }
+
+    if (!fileObj && !previewUrl) {
+      showToast("Sampul Berita wajib diunggah", "warning");
       return;
     }
 
@@ -246,7 +251,7 @@ function BuatBeritaForm() {
 
           <div className="flex flex-col gap-2">
             <label className="text-[#1E4738] text-[13px] font-bold">
-              Sampul Berita
+              Sampul Berita <span className="text-red-500">*</span>
             </label>
             <div 
               onClick={() => fileInputRef.current?.click()}

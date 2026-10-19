@@ -96,7 +96,7 @@ function LoginForm() {
   });
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-x-hidden overflow-y-auto">
+    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
 
       {/* Top Section */}
       <div className="flex flex-col items-center pt-20 px-6 z-10">

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Eye, MoreVertical, Share2, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Edit2, Trash2, Image as ImageIcon, Search, MoreVertical, Share2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
@@ -9,6 +9,7 @@ import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
 import { shareContent } from "@/lib/shareUtils";
+import { Pagination } from "@/components/Pagination";
 
 type NewsItem = {
   id: string;
@@ -33,6 +34,15 @@ export default function KelolaBeritaPage() {
   const [activeFilter, setActiveFilter] = useState("Semua");
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
+  // Pagination states
+  const [totalNews, setTotalNews] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const limit = 10;
+
+  useEffect(() => {
+    setOffset(0);
+  }, [searchQuery, activeFilter]);
+
   useEffect(() => {
     const handleClickOutside = () => {
       setActiveMenuId(null);
@@ -43,7 +53,7 @@ export default function KelolaBeritaPage() {
     }
   }, [activeMenuId]);
 
-  const fetchNews = async () => {
+  const fetchNews = useCallback(async () => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem("accessToken");
@@ -180,135 +190,138 @@ export default function KelolaBeritaPage() {
               Belum ada berita yang diterbitkan.
             </p>
           ) : (
-            filteredNews.map((item) => (
-              <div 
-                key={item.id} 
-                onClick={() => router.push(`/berita/${item.id}`)}
-                className="bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all hover:border-[#356E3B]/30 hover:shadow-md cursor-pointer active:scale-[0.99] group relative"
-              >
-                {/* Thumbnail / Cover Image */}
-                <div className="shrink-0">
-                  {item.cover_image_url ? (
-                    <img 
-                      src={item.cover_image_url} 
-                      alt={item.title} 
-                      className="w-[84px] h-[84px] rounded-[16px] object-cover group-hover:opacity-95 transition-opacity" 
-                      style={{ objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div className="w-[84px] h-[84px] bg-[#f4f9f6] rounded-[16px] flex items-center justify-center border border-[#eef5f0] text-[#7d998c]">
-                      <ImageIcon className="w-6 h-6" />
-                    </div>
-                  )}
-                </div>
-                
-                {/* Details */}
-                <div className="flex flex-col flex-1 justify-center min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    {item.category?.name ? (
-                      <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit">
-                        {item.category.name}
-                      </span>
-                    ) : (
-                      <div />
-                    )}
-
-                    {/* More Action Menu (Titik Tiga) */}
-                    <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <button 
-                        type="button"
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          setActiveMenuId(activeMenuId === item.id ? null : item.id); 
-                        }}
-                        className="w-8 h-8 rounded-full hover:bg-gray-100 active:bg-gray-200 text-gray-500 hover:text-[#1E4738] flex items-center justify-center transition-colors cursor-pointer"
-                        aria-label="Menu Opsi Berita"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-
-                      {activeMenuId === item.id && (
-                        <div 
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute right-0 top-9 w-40 bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.12)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150"
-                        >
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuId(null);
-                              router.push(`/berita/${item.id}`);
-                            }}
-                            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-gray-500" />
-                            <span>Pratinjau</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuId(null);
-                              handleOpenEdit(item);
-                            }}
-                            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="w-3.5 h-3.5 text-gray-500" />
-                            <span>Edit Berita</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuId(null);
-                              shareContent({
-                                title: item.title,
-                                text: item.title,
-                                path: `/berita/${item.id}`,
-                                onToast: showToast,
-                              });
-                            }}
-                            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
-                          >
-                            <Share2 className="w-3.5 h-3.5 text-gray-500" />
-                            <span>Bagikan</span>
-                          </button>
-
-                          <div className="h-[1px] bg-gray-100 mx-2 my-1" />
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuId(null);
-                              handleDelete(item.id);
-                            }}
-                            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                            <span>Hapus Berita</span>
-                          </button>
+            <>
+              {news.map((item, index) => {
+                const isNearBottom = index >= news.length - 2 && news.length > 2;
+                return (
+                  <div 
+                    key={item.id} 
+                    onClick={() => router.push(`/berita/${item.id}`)}
+                    className={`bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all hover:border-[#356E3B]/30 hover:shadow-md cursor-pointer active:scale-[0.99] group relative ${
+                      activeMenuId === item.id ? "z-30" : "z-0"
+                    }`}
+                  >
+                    {/* Thumbnail / Cover Image */}
+                    <div className="shrink-0">
+                      {item.cover_image_url ? (
+                        <img 
+                          src={item.cover_image_url} 
+                          alt={item.title} 
+                          className="w-[84px] h-[84px] rounded-[16px] object-cover group-hover:opacity-95 transition-opacity" 
+                          style={{ objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <div className="w-[84px] h-[84px] bg-[#f4f9f6] rounded-[16px] flex items-center justify-center border border-[#eef5f0] text-[#7d998c]">
+                          <ImageIcon className="w-6 h-6" />
                         </div>
                       )}
                     </div>
-                  </div>
+                    
+                    {/* Details */}
+                    <div className="flex flex-col flex-1 justify-center min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        {item.category?.name ? (
+                          <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-0.5 rounded-full w-fit">
+                            {item.category.name}
+                          </span>
+                        ) : (
+                          <div />
+                        )}
+
+                        {/* More Action Menu (Titik Tiga) */}
+                        <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button 
+                            type="button"
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setActiveMenuId(activeMenuId === item.id ? null : item.id); 
+                            }}
+                            className="w-8 h-8 rounded-full hover:bg-gray-100 active:bg-gray-200 text-gray-500 hover:text-[#1E4738] flex items-center justify-center transition-colors cursor-pointer"
+                            aria-label="Menu Opsi Berita"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {activeMenuId === item.id && (
+                            <>
+                              {/* Backdrop for closing */}
+                              <div 
+                                className="fixed inset-0 z-30" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuId(null);
+                                }} 
+                              />
+                              <div 
+                                onClick={(e) => e.stopPropagation()}
+                                className={`absolute right-0 ${
+                                  isNearBottom ? "bottom-full mb-1" : "top-full mt-1"
+                                } w-36 bg-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.18),0_8px_10px_-6px_rgba(0,0,0,0.1)] border border-gray-100 py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenuId(null);
+                                    handleOpenEdit(item);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                                  <span>Edit Berita</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenuId(null);
+                                    shareContent({
+                                      title: item.title,
+                                      text: item.title,
+                                      path: `/berita/${item.id}`,
+                                      onToast: showToast,
+                                    });
+                                  }}
+                                  className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                                >
+                                  <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                                  <span>Bagikan</span>
+                                </button>
+
+                                <div className="h-[1px] bg-gray-100 mx-2 my-1" />
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenuId(null);
+                                    handleDelete(item.id);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                  <span>Hapus Berita</span>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
 
                   <h3 className="text-[#1E4738] group-hover:text-[#356E3B] text-[14px] font-bold leading-snug mb-1 line-clamp-2 break-words [overflow-wrap:anywhere] transition-colors">
                     {sanitizeText(item.title)}
                   </h3>
 
-                  <div className="flex items-center justify-between mt-auto pt-1">
+                  <div className="flex items-center mt-auto pt-1">
                     <p className="text-[#7d998c] text-[11px] font-medium line-clamp-1">
                       {formatDate(item.created_at)}
                     </p>
-                    <span className="text-[#356E3B] text-[11px] font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                      Lihat <ChevronRight className="w-3.5 h-3.5" />
-                    </span>
                   </div>
                 </div>
-              ))}
+              </div>
+            );
+          })}
 
               <Pagination
                 total={totalNews}
