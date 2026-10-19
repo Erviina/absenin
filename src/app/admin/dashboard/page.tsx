@@ -362,11 +362,11 @@ export default function AdminDashboardPage() {
         rightAction={
           <button
             onClick={() => router.push("/notifikasi")}
-            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all flex items-center justify-center relative text-white cursor-pointer"
+            className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all relative cursor-pointer"
             title="Notifikasi"
             aria-label="Notifikasi"
           >
-            <Bell className="w-5 h-5 text-white" />
+            <Bell className="w-6 h-6 text-white" />
             {unreadNotifCount > 0 && (
               <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#EF4444] border-2 border-[#356E3B] rounded-full"></div>
             )}
