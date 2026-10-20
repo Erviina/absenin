@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
-import { getActiveCompanyId, setActiveCompanyId, clearAuthSession } from "@/lib/api";
+import { getActiveCompanyId, setActiveCompanyId, clearAuthSession, getApiUrl } from "@/lib/api";
 
 export default function ProfilPage() {
   const router = useRouter();
@@ -65,7 +65,7 @@ export default function ProfilPage() {
         headers["x-company-id"] = effectiveCompanyId;
       }
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
+      const res = await fetch(getApiUrl("/auth/me"), {
         headers
       });
 
@@ -146,7 +146,7 @@ export default function ProfilPage() {
       const formData = new FormData();
       formData.append("avatar", file);
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/profile/avatar", {
+      const res = await fetch(getApiUrl("/profile/avatar"), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`

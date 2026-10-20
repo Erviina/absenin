@@ -8,6 +8,7 @@ import { TopBar } from "@/components/TopBar";
 import { formatDateWithDay } from "@/lib/dateUtils";
 
 import { useCompany } from "@/context/CompanyContext";
+import { getApiUrl } from "@/lib/api";
 
 // Dynamically import MapLocation to prevent SSR issues
 const MapLocation = dynamic(() => import("@/components/MapLocation"), { 
@@ -46,7 +47,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
         headers["x-company-id"] = companyId;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/${id}`, {
+      const res = await fetch(getApiUrl(`/attendances/${id}`), {
         headers
       });
       

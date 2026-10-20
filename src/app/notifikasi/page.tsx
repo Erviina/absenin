@@ -2,7 +2,7 @@
 
 import { TopBar } from "@/components/TopBar";
 import { CustomCalendar } from "@/components/CustomCalendar";
-import { Pagination } from "@/components/Pagination";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 import { 
   Search, ListFilter, Bell, Clock, Calendar, Users, 
   Megaphone, Info, ChevronRight, X, CalendarDays, Check 
@@ -10,7 +10,7 @@ import {
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 import { formatDate, formatDateRange } from "@/lib/dateUtils";
 import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
@@ -23,9 +23,11 @@ export default function NotifikasiPage() {
   const [activeCategory, setActiveCategory] = useState("Semua");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Pagination states
-  const [offset, setOffset] = useState(0);
+  // Infinite Scroll & Pagination states
   const [totalNotifications, setTotalNotifications] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
   const limit = 10;
 
   // Date Filter States (sama dengan halaman Kehadiran)
@@ -53,11 +55,12 @@ export default function NotifikasiPage() {
   const activeFetchCompanyIdRef = useRef<string | null>(null);
   const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
-  // Reset offset and data HANYA saat active company benar-benar berganti
+  // Reset data HANYA saat active company benar-benar berganti
   useEffect(() => {
     if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
       setNotifications([]);
-      setOffset(0);
+      setTotalNotifications(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     }
     prevCompanyIdRef.current = activeCompanyId;
@@ -66,25 +69,23 @@ export default function NotifikasiPage() {
   useEffect(() => {
     const handleCompanyChanged = () => {
       setNotifications([]);
-      setOffset(0);
+      setTotalNotifications(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     };
     window.addEventListener("companyChanged", handleCompanyChanged);
     return () => window.removeEventListener("companyChanged", handleCompanyChanged);
   }, []);
 
-  // Reset offset when filter, search, or date changes
-  useEffect(() => {
-    setOffset(0);
-  }, [activeCategory, searchQuery, appliedStartDate, appliedEndDate]);
-
-  const fetchNotifications = useCallback(async () => {
+  const fetchInitialNotifications = useCallback(async () => {
     const compId = activeCompanyId || getActiveCompanyId();
     activeFetchCompanyIdRef.current = compId;
     try {
+      setLoadMoreError(null);
+      setError("");
       const cacheKey = buildCacheKey("notifications", compId, {
         limit,
-        offset,
+        offset: 0,
         searchQuery,
         activeCategory,
         appliedStartDate,
@@ -105,7 +106,7 @@ export default function NotifikasiPage() {
 
       const params = new URLSearchParams();
       params.set("limit", String(limit));
-      params.set("offset", String(offset));
+      params.set("offset", "0");
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (activeCategory && activeCategory !== "Semua") params.set("category", activeCategory);
       if (appliedStartDate) params.set("start_date", appliedStartDate);
@@ -116,7 +117,7 @@ export default function NotifikasiPage() {
         headers["x-company-id"] = compId;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications?${params.toString()}`, {
+      const res = await fetch(getApiUrl(`/notifications?${params.toString()}`), {
         headers
       });
       const json = await res.json();
@@ -139,11 +140,68 @@ export default function NotifikasiPage() {
         setIsLoading(false);
       }
     }
-  }, [activeCompanyId, limit, offset, searchQuery, activeCategory, appliedStartDate, appliedEndDate]);
+  }, [activeCompanyId, limit, searchQuery, activeCategory, appliedStartDate, appliedEndDate]);
+
+  // Load next batch on scroll
+  const loadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore || isFetchingMoreRef.current || notifications.length >= totalNotifications) {
+      return;
+    }
+
+    const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(notifications.length));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (activeCategory && activeCategory !== "Semua") params.set("category", activeCategory);
+      if (appliedStartDate) params.set("start_date", appliedStartDate);
+      if (appliedEndDate) params.set("end_date", appliedEndDate);
+
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (compId) {
+        headers["x-company-id"] = compId;
+      }
+
+      const res = await fetch(getApiUrl(`/notifications?${params.toString()}`), { headers });
+      const json = await res.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
+
+      if (json.success) {
+        const newItems = json.data || [];
+        const total = json.pagination?.total ?? json.meta?.total ?? totalNotifications;
+        setTotalNotifications(total);
+        setNotifications((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id));
+          const uniqueItems = newItems.filter((item: any) => !existingIds.has(item.id));
+          return [...prev, ...uniqueItems];
+        });
+      } else {
+        setLoadMoreError(json.message || "Gagal memuat notifikasi tambahan.");
+      }
+    } catch (err: any) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
+      console.error("Error loading more notifications:", err);
+      setLoadMoreError("Tidak dapat terhubung ke server. Silakan coba lagi.");
+    } finally {
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoadingMore(false);
+      }
+      isFetchingMoreRef.current = false;
+    }
+  }, [isLoading, isLoadingMore, notifications.length, totalNotifications, activeCompanyId, limit, searchQuery, activeCategory, appliedStartDate, appliedEndDate]);
 
   useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+    fetchInitialNotifications();
+  }, [fetchInitialNotifications]);
 
   const getIconAndCategory = (type: string) => {
     switch(type) {
@@ -337,14 +395,16 @@ export default function NotifikasiPage() {
                 </div>
               )})}
 
-              <Pagination
-                total={totalNotifications}
-                limit={limit}
-                offset={offset}
-                onPageChange={setOffset}
-                isLoading={isLoading}
-                label="notifikasi"
-                className="mt-2"
+              <InfiniteScrollFooter
+                hasMore={notifications.length < totalNotifications}
+                isLoadingMore={isLoadingMore}
+                onLoadMore={loadMore}
+                error={loadMoreError}
+                onRetry={loadMore}
+                endMessage="Semua notifikasi telah ditampilkan"
+                loadingMessage="Memuat notifikasi lainnya..."
+                isEmpty={!isLoading && notifications.length === 0}
+                className="mt-4 pb-8"
               />
             </>
           ) : (

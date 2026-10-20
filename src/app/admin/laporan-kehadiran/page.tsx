@@ -8,7 +8,7 @@ import { Search, ListFilter, Check, User, ChevronRight, ChevronLeft, FileDown, C
 import { useDialog } from "@/context/DialogContext";
 import { Pagination } from "@/components/Pagination";
 import { useCompany } from "@/context/CompanyContext";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData } from "@/lib/clientCache";
 
@@ -86,7 +86,7 @@ export default function LaporanKehadiranPage() {
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
         if (compId) headers["x-company-id"] = compId;
 
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/management/summary?month=${monthNum}&year=${yearNum}`, {
+        const res = await fetch(getApiUrl(`/attendances/management/summary?month=${monthNum}&year=${yearNum}`), {
           headers
         });
         

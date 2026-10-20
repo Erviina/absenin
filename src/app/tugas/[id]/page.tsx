@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/dateUtils";
 import { useDialog } from "@/context/DialogContext";
 import { shareContent } from "@/lib/shareUtils";
 import { Badge } from "@/components/Badge";
+import { getApiUrl } from "@/lib/api";
 
 export default function TugasDetailPage() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function TugasDetailPage() {
         headers["x-company-id"] = activeCompanyId;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tasks/${id}`, {
+      const res = await fetch(getApiUrl(`/tasks/${id}`), {
         method: "PATCH",
         headers,
         body: JSON.stringify({ completed: nextCompleted })
@@ -88,13 +89,13 @@ export default function TugasDetailPage() {
           headers["x-company-id"] = activeCompanyId;
         }
 
-        let res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tasks/${id}`, { headers });
+        let res = await fetch(getApiUrl(`/tasks/${id}`), { headers });
         if (res.ok) {
           const t = await res.json();
           setTask(t);
         } else {
           // Fallback to fetch all tasks and find by id
-          res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tasks`, { headers });
+          res = await fetch(getApiUrl("/tasks"), { headers });
           if (res.ok) {
             const data = await res.json();
             const t = Array.isArray(data) ? data.find((x: any) => x.id === id) : null;

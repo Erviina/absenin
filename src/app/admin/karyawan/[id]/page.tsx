@@ -35,6 +35,7 @@ import { useDialog } from "@/context/DialogContext";
 import { formatDate, formatDateWithDay, formatTime } from "@/lib/dateUtils";
 import { getAgendaCategoryColor, isAgendaUrl, formatAgendaUrl, sortAgendaCategories } from "@/app/agenda/page";
 import { AgendaCardSchedule, AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
+import { getApiUrl } from "@/lib/api";
 
 interface EmployeeProfile {
   id: string;
@@ -251,7 +252,7 @@ export default function DetailKaryawanMonitoringPage() {
         query = `?year=${now.getFullYear()}`;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/attendances/management/employees/${employeeId}${query}`, {
+      const res = await fetch(getApiUrl(`/attendances/management/employees/${employeeId}${query}`), {
         headers: getHeaders(),
       });
 
@@ -283,7 +284,7 @@ export default function DetailKaryawanMonitoringPage() {
     setTasksError("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/tasks/management/employees/${employeeId}`, {
+      const res = await fetch(getApiUrl(`/tasks/management/employees/${employeeId}`), {
         headers: getHeaders(),
       });
 
@@ -309,7 +310,7 @@ export default function DetailKaryawanMonitoringPage() {
     try {
       // Fetch all active COMPANY agendas for this employee's company (no month filter)
       // so past, current, and upcoming company agendas are all visible to management
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/agendas/management/employees/${employeeId}`, {
+      const res = await fetch(getApiUrl(`/agendas/management/employees/${employeeId}`), {
         headers: getHeaders(),
       });
 
@@ -329,7 +330,7 @@ export default function DetailKaryawanMonitoringPage() {
   // Fetch Agenda Categories
   const fetchAgendaCategories = useCallback(async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/agendas/categories`, {
+      const res = await fetch(getApiUrl("/agendas/categories"), {
         headers: getHeaders(),
       });
       const json = await res.json();
@@ -386,7 +387,7 @@ export default function DetailKaryawanMonitoringPage() {
       if (selectedRole === "Admin") rolesPayload.push("Admin");
       else if (selectedRole === "Manager") rolesPayload.push("Manager");
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/companies/employees/${employeeId}/roles`, {
+      const res = await fetch(getApiUrl(`/companies/employees/${employeeId}/roles`), {
         method: "PATCH",
         headers: getHeaders(),
         body: JSON.stringify({ roles: rolesPayload }),
@@ -414,7 +415,7 @@ export default function DetailKaryawanMonitoringPage() {
     setDeleteError("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/companies/employees/${employeeId}`, {
+      const res = await fetch(getApiUrl(`/companies/employees/${employeeId}`), {
         method: "DELETE",
         headers: getHeaders(),
       });

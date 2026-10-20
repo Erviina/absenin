@@ -10,7 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
 import { invalidateCache } from "@/lib/clientCache";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -57,7 +57,7 @@ function BuatBeritaForm() {
         const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
         if (compId) headers["x-company-id"] = compId;
 
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news/categories", {
+        const res = await fetch(getApiUrl("/news/categories"), {
           headers
         });
         const data = await res.json();
@@ -83,7 +83,7 @@ function BuatBeritaForm() {
 
           let item: any = null;
           // 1. Coba endpoint langsung /news/:id
-          const directRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/news/${editingId}`, {
+          const directRes = await fetch(getApiUrl(`/news/${editingId}`), {
             headers
           });
           if (directRes.ok) {
@@ -95,7 +95,7 @@ function BuatBeritaForm() {
 
           // 2. Fallback jika /news/:id tidak ditemukan
           if (!item) {
-            const fallbackRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news", {
+            const fallbackRes = await fetch(getApiUrl("/news"), {
               headers
             });
             const fallbackData = await fallbackRes.json();
@@ -179,7 +179,7 @@ function BuatBeritaForm() {
       }
 
       const token = localStorage.getItem("accessToken");
-      const url = process.env.NEXT_PUBLIC_API_URL + (editingId ? `/news/${editingId}` : "/news");
+      const url = getApiUrl(editingId ? `/news/${editingId}` : "/news");
       const method = editingId ? "PUT" : "POST";
       
       const normalizedContent = sanitizeText(content);

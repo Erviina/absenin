@@ -8,10 +8,10 @@ import { useCompany } from "@/context/CompanyContext";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText, truncateText } from "@/lib/sanitize";
 import { CustomCalendar } from "@/components/CustomCalendar";
-import { Pagination } from "@/components/Pagination";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 
 type NewsItem = {
   id: string;
@@ -50,10 +50,12 @@ export default function BeritaPage() {
     return !getCachedData(buildCacheKey("news", compId, { limit: 10, offset: 0, searchQuery: "", selectedCategory: "Semua", selectedDate: "" }))?.data;
   });
 
-  // Pagination states
-  const [offset, setOffset] = useState(0);
+  // Infinite Scroll & Pagination states
   const [totalNews, setTotalNews] = useState(0);
-  const limit = 10;
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
+  const limit = 8;
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,21 +65,17 @@ export default function BeritaPage() {
 
   const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
-  // Reset offset and data HANYA saat active company benar-benar berganti
+  // Reset data HANYA saat active company benar-benar berganti
   useEffect(() => {
     if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
       setNews([]);
       setCategories([]);
-      setOffset(0);
+      setTotalNews(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     }
     prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
-
-  // Reset offset when search, category, or date filter changes
-  useEffect(() => {
-    setOffset(0);
-  }, [searchQuery, selectedCategory, selectedDate]);
 
   // Fetch categories once on mount or company change
   useEffect(() => {
@@ -94,7 +92,7 @@ export default function BeritaPage() {
         if (!token) return;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
         if (compId) headers["x-company-id"] = compId;
-        const resCat = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news/categories", { headers });
+        const resCat = await fetch(getApiUrl("/news/categories"), { headers });
         if (resCat.ok) {
           const dataCat = await resCat.json();
           if (dataCat.success && Array.isArray(dataCat.data)) {
@@ -109,13 +107,14 @@ export default function BeritaPage() {
     fetchCategories();
   }, [activeCompanyId]);
 
-  // Fetch paginated news from backend
-  const fetchNews = useCallback(async () => {
+  // Fetch initial news batch from backend
+  const fetchInitialNews = useCallback(async () => {
     try {
+      setLoadMoreError(null);
       const compId = activeCompanyId || getActiveCompanyId();
       const cacheKey = buildCacheKey("news", compId, {
         limit,
-        offset,
+        offset: 0,
         searchQuery,
         selectedCategory,
         selectedDate
@@ -142,12 +141,12 @@ export default function BeritaPage() {
 
       const params = new URLSearchParams();
       params.set("limit", String(limit));
-      params.set("offset", String(offset));
+      params.set("offset", "0");
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (selectedCategory && selectedCategory !== "Semua") params.set("category", selectedCategory);
       if (selectedDate) params.set("date", selectedDate);
 
-      const resNews = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/news?${params.toString()}`, { headers });
+      const resNews = await fetch(getApiUrl(`/news?${params.toString()}`), { headers });
       const dataNews = await resNews.json();
       if (dataNews.success) {
         const items = dataNews.data || [];
@@ -161,11 +160,61 @@ export default function BeritaPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [router, activeCompanyId, limit, offset, searchQuery, selectedCategory, selectedDate]);
+  }, [router, activeCompanyId, limit, searchQuery, selectedCategory, selectedDate]);
+
+  // Fetch next page automatically on scroll
+  const loadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore || isFetchingMoreRef.current || news.length >= totalNews) {
+      return;
+    }
+
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      const compId = activeCompanyId || getActiveCompanyId();
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (compId) {
+        headers["x-company-id"] = compId;
+      }
+
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(news.length));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (selectedCategory && selectedCategory !== "Semua") params.set("category", selectedCategory);
+      if (selectedDate) params.set("date", selectedDate);
+
+      const resNews = await fetch(getApiUrl(`/news?${params.toString()}`), { headers });
+      const dataNews = await resNews.json();
+      if (dataNews.success) {
+        const newItems: NewsItem[] = dataNews.data || [];
+        const total = dataNews.pagination?.total ?? dataNews.meta?.total ?? totalNews;
+        setTotalNews(total);
+        setNews((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id));
+          const uniqueItems = newItems.filter((item) => !existingIds.has(item.id));
+          return [...prev, ...uniqueItems];
+        });
+      } else {
+        setLoadMoreError(dataNews.message || "Gagal memuat berita tambahan.");
+      }
+    } catch (err: any) {
+      console.error("Error loading more news:", err);
+      setLoadMoreError("Tidak dapat terhubung ke server. Silakan coba lagi.");
+    } finally {
+      setIsLoadingMore(false);
+      isFetchingMoreRef.current = false;
+    }
+  }, [isLoading, isLoadingMore, news.length, totalNews, activeCompanyId, limit, searchQuery, selectedCategory, selectedDate]);
 
   useEffect(() => {
-    fetchNews();
-  }, [fetchNews]);
+    fetchInitialNews();
+  }, [fetchInitialNews]);
 
   // Category tabs list
   const categoryTabs = useMemo(() => {
@@ -182,7 +231,6 @@ export default function BeritaPage() {
     setSearchQuery("");
     setSelectedCategory("Semua");
     setSelectedDate("");
-    setOffset(0);
   };
 
   return (
@@ -399,14 +447,16 @@ export default function BeritaPage() {
                 </div>
               ))}
 
-              <Pagination
-                total={totalNews}
-                limit={limit}
-                offset={offset}
-                onPageChange={setOffset}
-                isLoading={isLoading}
-                label="berita"
-                className="mt-2"
+              <InfiniteScrollFooter
+                hasMore={news.length < totalNews}
+                isLoadingMore={isLoadingMore}
+                onLoadMore={loadMore}
+                error={loadMoreError}
+                onRetry={loadMore}
+                endMessage="Semua berita telah ditampilkan"
+                loadingMessage="Memuat berita lainnya..."
+                isEmpty={!isLoading && news.length === 0}
+                className="mt-4 pb-8"
               />
             </>
           )}

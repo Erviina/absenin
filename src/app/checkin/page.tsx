@@ -20,7 +20,7 @@ const LeafletMap = dynamic(() => import('@/components/MapLocation'), {
   loading: () => <div className="w-full h-full bg-[#e6eedc] animate-pulse" />
 });
 
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 
 export default function CheckinPage() {
   const router = useRouter();
@@ -291,7 +291,7 @@ export default function CheckinPage() {
           headers["x-company-id"] = compId;
         }
 
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
+        const res = await fetch(getApiUrl("/auth/me"), {
           headers
         });
 
@@ -326,7 +326,7 @@ export default function CheckinPage() {
           headers["x-company-id"] = compId;
         }
 
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/today`, {
+        const res = await fetch(getApiUrl("/attendances/today"), {
           headers
         });
         const data = await res.json();
@@ -339,7 +339,7 @@ export default function CheckinPage() {
           } else {
             // Fallback ke /companies/me jika company belum disertakan
             try {
-              const compRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/me`, { headers });
+              const compRes = await fetch(getApiUrl("/companies/me"), { headers });
               if (compRes.ok) {
                 const compData = await compRes.json();
                 if (compData.data) {
@@ -413,7 +413,7 @@ export default function CheckinPage() {
         headers["x-company-id"] = compId;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
+      const res = await fetch(getApiUrl(endpoint), {
         method: "POST",
         headers,
         body: formData

@@ -8,7 +8,7 @@ import { formatDateRange } from "@/lib/dateUtils";
 import { Pagination } from "@/components/Pagination";
 
 import { useCompany } from "@/context/CompanyContext";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
@@ -115,7 +115,7 @@ export default function KelolaIzinPage() {
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (activeFilter && activeFilter !== "Semua") params.set("category", activeFilter);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/leaves/admin?${params.toString()}`, {
+      const res = await fetch(getApiUrl(`/leaves/admin?${params.toString()}`), {
         headers
       });
       const resData = await res.json();
@@ -210,7 +210,7 @@ export default function KelolaIzinPage() {
         payload.rejection_reason = rejectionReason;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/leaves/${id}/status`, {
+      const res = await fetch(getApiUrl(`/leaves/${id}/status`), {
         method: 'PUT',
         headers,
         body: JSON.stringify(payload)

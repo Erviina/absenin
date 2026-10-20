@@ -10,8 +10,8 @@ import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate, formatDateWithDay } from "@/lib/dateUtils";
-import { Pagination } from "@/components/Pagination";
-import { getActiveCompanyId } from "@/lib/api"; 
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api"; 
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData } from "@/lib/clientCache";
 
@@ -32,9 +32,11 @@ export default function KehadiranPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [offset, setOffset] = useState(0);
   const [limit] = useState(10);
   const [total, setTotal] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
 
   const [attendances, setAttendances] = useState<any[]>(() => {
     if (typeof window === "undefined") return [];
@@ -65,7 +67,6 @@ export default function KehadiranPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-      setOffset(0);
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -73,7 +74,6 @@ export default function KehadiranPage() {
   const handleApplyFilter = () => {
     setAppliedStartDate(startDate);
     setAppliedEndDate(endDate);
-    setOffset(0);
     setIsFilterOpen(false);
   };
 
@@ -82,7 +82,6 @@ export default function KehadiranPage() {
     setEndDate("");
     setAppliedStartDate("");
     setAppliedEndDate("");
-    setOffset(0);
     setActiveCalendar(null);
   };
 
@@ -117,6 +116,7 @@ export default function KehadiranPage() {
       setTotal(0);
       setIsLoading(false);
       setError(null);
+      setLoadMoreError(null);
       return;
     }
     const cacheKey = buildCacheKey("attendances", compId, {
@@ -124,7 +124,7 @@ export default function KehadiranPage() {
       end: appliedEndDate,
       search: debouncedSearch.trim(),
       limit,
-      offset,
+      offset: 0,
     });
 
     const cached = getCachedData<any[]>(cacheKey);
@@ -136,6 +136,7 @@ export default function KehadiranPage() {
       setIsLoading(true);
     }
     setError(null);
+    setLoadMoreError(null);
     try {
       const token = localStorage.getItem("accessToken");
       if (!token) {
@@ -143,13 +144,13 @@ export default function KehadiranPage() {
         return;
       }
       
-      let url = `${process.env.NEXT_PUBLIC_API_URL}/attendances`;
+      let url = getApiUrl("/attendances");
       const queryParams = new URLSearchParams();
       if (appliedStartDate) queryParams.append("start_date", appliedStartDate);
       if (appliedEndDate) queryParams.append("end_date", appliedEndDate);
       if (debouncedSearch.trim()) queryParams.append("search", debouncedSearch.trim());
       queryParams.append("limit", String(limit));
-      queryParams.append("offset", String(offset));
+      queryParams.append("offset", "0");
 
       const qString = queryParams.toString();
       if (qString) url += `?${qString}`;
@@ -186,13 +187,76 @@ export default function KehadiranPage() {
     }
   };
 
+  const loadMore = async () => {
+    if (isCompanyLoading || isLoading || isLoadingMore || isFetchingMoreRef.current || attendances.length >= total) {
+      return;
+    }
+    const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
+    if (!compId) return;
+
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      let url = getApiUrl("/attendances");
+      const queryParams = new URLSearchParams();
+      if (appliedStartDate) queryParams.append("start_date", appliedStartDate);
+      if (appliedEndDate) queryParams.append("end_date", appliedEndDate);
+      if (debouncedSearch.trim()) queryParams.append("search", debouncedSearch.trim());
+      queryParams.append("limit", String(limit));
+      queryParams.append("offset", String(attendances.length));
+
+      const qString = queryParams.toString();
+      if (qString) url += `?${qString}`;
+
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+      };
+      if (compId) {
+        headers["x-company-id"] = compId;
+      }
+
+      const res = await fetch(url, { headers });
+      const data = await res.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
+
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Gagal memuat riwayat kehadiran tambahan");
+      }
+
+      const newItems = data.data || [];
+      const totalCount = Number(data.pagination?.total ?? data.meta?.total ?? total);
+      setTotal(totalCount);
+      setAttendances((prev) => {
+        const existingIds = new Set(prev.map((item) => item.id));
+        const uniqueItems = newItems.filter((item: any) => !existingIds.has(item.id));
+        return [...prev, ...uniqueItems];
+      });
+    } catch (err: any) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
+      console.error("Error loading more attendances:", err);
+      setLoadMoreError("Tidak dapat terhubung ke server. Silakan coba lagi.");
+    } finally {
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoadingMore(false);
+      }
+      isFetchingMoreRef.current = false;
+    }
+  };
+
   const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
-    // Reset state and offset HANYA saat active company benar-benar berganti
+    // Reset state HANYA saat active company benar-benar berganti
     if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
       setAttendances([]);
-      setOffset(0);
+      setTotal(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     }
     prevCompanyIdRef.current = activeCompanyId;
@@ -201,7 +265,8 @@ export default function KehadiranPage() {
   useEffect(() => {
     const handleCompanyChanged = () => {
       setAttendances([]);
-      setOffset(0);
+      setTotal(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     };
     window.addEventListener("companyChanged", handleCompanyChanged);
@@ -210,7 +275,7 @@ export default function KehadiranPage() {
 
   useEffect(() => {
     fetchAttendances(false);
-  }, [appliedStartDate, appliedEndDate, activeCompanyId, isCompanyLoading, debouncedSearch, offset]);
+  }, [appliedStartDate, appliedEndDate, activeCompanyId, isCompanyLoading, debouncedSearch]);
 
   const getDayName = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -240,7 +305,7 @@ export default function KehadiranPage() {
         "Authorization": `Bearer ${token}`,
         "x-company-id": compId
       };
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances?${queryParams.toString()}`, { headers });
+      const res = await fetch(getApiUrl(`/attendances?${queryParams.toString()}`), { headers });
       const data = await res.json();
       return data.data || [];
     } catch {
@@ -485,16 +550,17 @@ export default function KehadiranPage() {
 
         </div>
 
-        {/* Pagination Component */}
-        <Pagination
-          total={total}
-          limit={limit}
-          offset={offset}
-          onPageChange={(newOffset) => setOffset(newOffset)}
-          label="riwayat"
-          isLoading={isLoading}
+        <InfiniteScrollFooter
+          hasMore={attendances.length < total}
+          isLoadingMore={isLoadingMore}
+          onLoadMore={loadMore}
+          error={loadMoreError}
+          onRetry={loadMore}
+          endMessage="Semua riwayat kehadiran telah ditampilkan"
+          loadingMessage="Memuat riwayat kehadiran lainnya..."
+          isEmpty={!isLoading && attendances.length === 0}
+          className="mt-4 pb-12"
         />
-
       </div>
 
 

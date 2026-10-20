@@ -35,7 +35,7 @@ import L from "leaflet";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
 import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 
 function MapControls({ 
   targetLat, 
@@ -207,7 +207,7 @@ export default function ProfilPerusahaanContent() {
       }
 
       // 1. Fetch Company Profile
-      const compRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", { headers });
+      const compRes = await fetch(getApiUrl("/companies/me"), { headers });
       const compData = await compRes.json();
 
       if (compRes.status === 401) {
@@ -226,7 +226,7 @@ export default function ProfilPerusahaanContent() {
         if (targetId) {
           try {
             const exitRes = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests/me?company_id=${targetId}`,
+              getApiUrl(`/company/exit-requests/me?company_id=${targetId}`),
               { headers }
             );
             const exitData = await exitRes.json();
@@ -276,7 +276,7 @@ export default function ProfilPerusahaanContent() {
       const token = localStorage.getItem("accessToken");
       const companyId = company?.id || localStorage.getItem("activeCompanyId");
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests/cancel`, {
+      const res = await fetch(getApiUrl("/company/exit-requests/cancel"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -310,7 +310,7 @@ export default function ProfilPerusahaanContent() {
       const token = localStorage.getItem("accessToken");
       const companyId = company?.id || localStorage.getItem("activeCompanyId");
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests`, {
+      const res = await fetch(getApiUrl("/company/exit-requests"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

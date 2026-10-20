@@ -14,6 +14,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
+import { getApiUrl } from "@/lib/api";
 
 const getCustomIcon = (label: string) => new L.DivIcon({
   className: "custom-leaflet-icon",
@@ -396,7 +397,7 @@ export default function KelolaPerusahaanPage() {
         const activeCompanyId = localStorage.getItem("activeCompanyId");
         if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
+        const res = await fetch(getApiUrl("/companies/me"), {
           headers
         });
         const data = await res.json();
@@ -465,7 +466,7 @@ export default function KelolaPerusahaanPage() {
       const activeCompanyId = localStorage.getItem("activeCompanyId");
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
+      const res = await fetch(getApiUrl("/companies/me"), {
         method: "PATCH",
         headers,
         body: JSON.stringify({ 
@@ -549,7 +550,7 @@ export default function KelolaPerusahaanPage() {
       const activeCompanyId = localStorage.getItem("activeCompanyId");
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/avatar", {
+      const res = await fetch(getApiUrl("/companies/avatar"), {
         method: "POST",
         headers,
         body: formData
@@ -606,7 +607,7 @@ export default function KelolaPerusahaanPage() {
       const activeCompanyId = localStorage.getItem("activeCompanyId");
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
+      const res = await fetch(getApiUrl("/companies/me"), {
         method: "PATCH",
         headers,
         body: JSON.stringify({ 
@@ -692,7 +693,7 @@ export default function KelolaPerusahaanPage() {
       const activeCompanyId = localStorage.getItem("activeCompanyId");
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
+      const res = await fetch(getApiUrl("/companies/me"), {
         method: "PATCH",
         headers,
         body: JSON.stringify(requestBody)
@@ -819,7 +820,7 @@ export default function KelolaPerusahaanPage() {
       const activeCompanyId = localStorage.getItem("activeCompanyId");
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", {
+      const res = await fetch(getApiUrl("/companies/me"), {
         method: "PATCH",
         headers,
         body: JSON.stringify(requestBody)

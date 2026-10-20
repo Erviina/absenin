@@ -246,7 +246,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
         role: "authenticated", // Supabase compatibility claim
       },
       jwtSecret,
-      { expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as any }
+      { expiresIn: (process.env.JWT_EXPIRES_IN || "24h") as any }
     );
 
     res.json({

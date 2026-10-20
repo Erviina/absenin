@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { clearPersonalModePreference } from "@/lib/personalMode";
-import { getActiveCompanyId, setActiveCompanyId as setActiveCompanyIdStorage, clearAuthSession } from "@/lib/api";
+import { getActiveCompanyId, setActiveCompanyId as setActiveCompanyIdStorage, clearAuthSession, getApiUrl } from "@/lib/api";
 
 export type CompanyCategoryCode = "community" | "organization" | "business";
 
@@ -155,8 +155,8 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       return inFlightPromiseRef.current;
     }
 
-    // Batalkan request in-flight sebelumnya jika ada (misal token berubah)
-    if (abortControllerRef.current) {
+    // Batalkan request in-flight sebelumnya hanya jika token berbeda (pergantian akun)
+    if (abortControllerRef.current && inFlightTokenRef.current !== token) {
       abortControllerRef.current.abort();
     }
     const abortController = new AbortController();
@@ -178,7 +178,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
         // 1. Coba Endpoint Backend terlebih dahulu
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/memberships`, {
+          const res = await fetch(getApiUrl("/companies/memberships"), {
             headers: { Authorization: `Bearer ${token}` },
             signal: abortController.signal,
           });
@@ -481,14 +481,13 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     };
 
     const handleSessionUpdated = (e: any) => {
-      if (abortControllerRef.current) {
+      const currentToken = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      // Batalkan fetch in-flight hanya jika request aktif berasal dari token akun yang berbeda
+      if (abortControllerRef.current && inFlightTokenRef.current && inFlightTokenRef.current !== currentToken) {
         abortControllerRef.current.abort();
+        inFlightPromiseRef.current = null;
+        inFlightTokenRef.current = null;
       }
-      inFlightPromiseRef.current = null;
-      inFlightTokenRef.current = null;
-      setIsLoading(true);
-      // Bersihkan membership lama seketika agar tidak bocor ke sesi akun baru
-      setMemberships([]);
       const newUser = e?.detail?.user || null;
       if (newUser) {
         setCurrentUser(newUser);
@@ -496,7 +495,13 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       const newCompanyId = newUser?.company?.id || e?.detail?.companyId || null;
       setActiveCompanyId(newCompanyId);
       setCompanyError(null);
-      fetchMemberships();
+
+      // Jika belum ada fetch in-flight untuk token ini, lakukan pemuatan membership
+      if (!inFlightPromiseRef.current || inFlightTokenRef.current !== currentToken) {
+        setIsLoading(true);
+        setMemberships([]);
+        fetchMemberships();
+      }
     };
 
     window.addEventListener("authSessionCleared", handleSessionCleared);
@@ -514,16 +519,38 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchMemberships]);
 
-  // Global 403 fetch interceptor to catch any permission revocations on API calls
+  // Global fetch interceptor untuk 401 (sesi tidak valid) dan 403 (revokasi izin)
   useEffect(() => {
-    if (typeof window !== "undefined" && !(window as any).__fetch403Patched) {
-      (window as any).__fetch403Patched = true;
+    if (typeof window !== "undefined" && !(window as any).__fetchAuthPatched) {
+      (window as any).__fetchAuthPatched = true;
       const originalFetch = window.fetch;
+      let isRedirectingToLogin = false;
+
       window.fetch = async function (...args) {
         const response = await originalFetch.apply(this, args);
+
         if (response.status === 403) {
+          // HTTP 403: Pembatasan izin / forbidden - jangan logout otomatis
           window.dispatchEvent(new CustomEvent("unauthorizedAccess", { detail: { url: args[0] } }));
+        } else if (response.status === 401) {
+          const rawUrl = typeof args[0] === "string" ? args[0] : (args[0] as Request)?.url || "";
+          const hasToken = typeof window !== "undefined" ? Boolean(localStorage.getItem("accessToken")) : false;
+          const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+
+          // Pengecualian endpoint autentikasi dan halaman publik untuk mencegah redirect loop
+          const isAuthEndpoint = rawUrl.includes("/auth/google") || rawUrl.includes("/auth/login");
+          const isPublicPage = ["/login", "/login/onboard", "/unauthorized", "/"].includes(currentPath);
+
+          if (hasToken && !isAuthEndpoint && !isPublicPage && !isRedirectingToLogin) {
+            isRedirectingToLogin = true;
+            clearAuthSession();
+
+            const redirectTarget = currentPath + (window.location.search || "");
+            const loginUrl = `/login?redirect=${encodeURIComponent(redirectTarget)}`;
+            window.location.href = loginUrl;
+          }
         }
+
         return response;
       };
     }

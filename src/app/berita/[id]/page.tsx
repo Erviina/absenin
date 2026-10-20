@@ -9,6 +9,7 @@ import { formatDateWithDay } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
 import { shareContent } from "@/lib/shareUtils";
 import { Badge } from "@/components/Badge";
+import { getApiUrl } from "@/lib/api";
 import { Calendar, User, Newspaper, Tag, Share2 } from "lucide-react";
 
 interface NewsDetail {
@@ -110,7 +111,7 @@ export default function BeritaDetailPage() {
         }
 
         // Coba endpoint GET /news/:id
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/news/${id}`, {
+        const res = await fetch(getApiUrl(`/news/${id}`), {
           headers,
         });
 
@@ -124,7 +125,7 @@ export default function BeritaDetailPage() {
         }
 
         // Fallback: jika GET /news/:id belum tersedia, ambil dari list GET /news
-        const fallbackRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/news`, {
+        const fallbackRes = await fetch(getApiUrl("/news"), {
           headers,
         });
         const fallbackData = await fallbackRes.json();

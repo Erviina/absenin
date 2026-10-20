@@ -113,6 +113,52 @@ export function isTokenValid(token: string | null | undefined): boolean {
 }
 
 /**
+ * Memvalidasi apakah path redirect merupakan rute internal aplikasi yang aman.
+ * Menolak open redirect (CWE-601), protocol-relative URL (//), backslash (\),
+ * URL absolut eksternal, dan karakter manipulasi origin.
+ */
+export function getSafeInternalRedirect(redirect: string | null | undefined): string | null {
+  if (!redirect || typeof redirect !== "string") return null;
+  const trimmed = redirect.trim();
+
+  // Tolak jika kosong, tidak diawali '/', diawali '//' (protocol-relative),
+  // diawali '/\' atau mengandung backslash apapun
+  if (
+    !trimmed.startsWith("/") ||
+    trimmed.startsWith("//") ||
+    trimmed.startsWith("/\\") ||
+    trimmed.includes("\\")
+  ) {
+    return null;
+  }
+
+  try {
+    // Validasi origin secara ketat menggunakan URL constructor dengan basis dummy
+    const dummyOrigin = "http://localhost";
+    const parsed = new URL(trimmed, dummyOrigin);
+
+    // Pastikan origin hasil parsing sama persis dengan origin internal kita
+    if (parsed.origin !== dummyOrigin) {
+      return null;
+    }
+
+    // Pastikan pathname diawali satu slash dan bukan ganda
+    if (!parsed.pathname.startsWith("/") || parsed.pathname.startsWith("//")) {
+      return null;
+    }
+
+    // Tolak skema berbahaya seperti javascript:, data:, dsb
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+
+    return parsed.pathname + parsed.search + parsed.hash;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Menentukan rute tujuan redirect bagi pengguna yang sudah terautentikasi
  * berdasarkan status perusahaan dan preferensi Mode Personal.
  */

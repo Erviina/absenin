@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { formatDateTime } from "@/lib/dateUtils";
 import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
+import { getApiUrl } from "@/lib/api";
 
 export default function NotifikasiDetailPage() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function NotifikasiDetailPage() {
     const fetchNotification = async () => {
       try {
         const token = localStorage.getItem("accessToken");
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications`, {
+        const res = await fetch(getApiUrl("/notifications"), {
           headers: { Authorization: `Bearer ${token}` }
         });
         const json = await res.json();
