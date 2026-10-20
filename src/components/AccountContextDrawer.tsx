@@ -32,14 +32,12 @@ export function AccountContextDrawer({
     activeCompany, 
     activeRole, 
     memberships, 
-    switchCompany 
+    switchCompany,
+    currentUser,
+    isManagement
   } = useCompany();
 
   if (!isOpen) return null;
-
-  const isManagement = activeRole 
-    ? ["owner", "admin", "manager"].includes(activeRole.toLowerCase()) 
-    : false;
 
   const formatRoleLabel = (role?: string | null) => {
     if (!role) return "Karyawan";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Search, Calendar, X, Tag, Newspaper, ChevronRight, SlidersHorizontal, RotateCcw, ListFilter } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
@@ -34,9 +34,21 @@ export default function BeritaPage() {
   const router = useRouter();
   const { activeCompanyId } = useCompany();
   
-  const [news, setNews] = useState<NewsItem[]>([]);
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [news, setNews] = useState<NewsItem[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<NewsItem[]>(buildCacheKey("news", compId, { limit: 10, offset: 0, searchQuery: "", selectedCategory: "Semua", selectedDate: "" }))?.data || [];
+  });
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<{ id: string; name: string }[]>(buildCacheKey("news_categories", compId))?.data || [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("news", compId, { limit: 10, offset: 0, searchQuery: "", selectedCategory: "Semua", selectedDate: "" }))?.data;
+  });
 
   // Pagination states
   const [offset, setOffset] = useState(0);
@@ -49,11 +61,17 @@ export default function BeritaPage() {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
-  // Reset offset and data when company changes
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
+  // Reset offset and data HANYA saat active company benar-benar berganti
   useEffect(() => {
-    setNews([]);
-    setCategories([]);
-    setOffset(0);
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setNews([]);
+      setCategories([]);
+      setOffset(0);
+      setIsLoading(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   // Reset offset when search, category, or date filter changes

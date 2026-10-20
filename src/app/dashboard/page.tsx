@@ -67,6 +67,7 @@ export default function DashboardPage() {
     refreshMemberships,
     currentUser,
     setCurrentUser,
+    isManagement,
   } = useCompany();
 
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
@@ -90,18 +91,56 @@ export default function DashboardPage() {
       } catch {}
     }
   }, [currentUser]);
-  const [news, setNews] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [agendas, setAgendas] = useState<any[]>([]);
-  const [isTasksAgendasLoading, setIsTasksAgendasLoading] = useState(true);
+  const [news, setNews] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("dashboard_news", compId))?.data || [];
+  });
+  const [tasks, setTasks] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("dashboard_tasks", compId))?.data || [];
+  });
+  const [agendas, setAgendas] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("dashboard_agendas", compId))?.data || [];
+  });
+  const [isTasksAgendasLoading, setIsTasksAgendasLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    const hasTasks = getCachedData(buildCacheKey("dashboard_tasks", compId));
+    const hasAgendas = getCachedData(buildCacheKey("dashboard_agendas", compId));
+    return !(hasTasks?.data || hasAgendas?.data);
+  });
   const [resumeTab, setResumeTab] = useState<"all" | "tasks" | "agendas">("all");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("dashboard_news", compId))?.data;
+  });
   const [avatarError, setAvatarError] = useState(false);
-  const [attendanceStatus, setAttendanceStatus] = useState<"NOT_CHECKED_IN" | "CHECKED_IN" | "CHECKED_OUT" | null>(null);
-  const [isAttendanceLoading, setIsAttendanceLoading] = useState(true);
+  const [attendanceStatus, setAttendanceStatus] = useState<"NOT_CHECKED_IN" | "CHECKED_IN" | "CHECKED_OUT" | null>(() => {
+    if (typeof window === "undefined") return null;
+    const compId = getActiveCompanyId();
+    return getCachedData<any>(buildCacheKey("dashboard_attendance", compId))?.data?.status || null;
+  });
+  const [isAttendanceLoading, setIsAttendanceLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("dashboard_attendance", compId))?.data;
+  });
   const [attendanceError, setAttendanceError] = useState(false);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
-  const [companySchedule, setCompanySchedule] = useState<CompanyScheduleData | null>(null);
+  const [unreadCount, setUnreadCount] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const compId = getActiveCompanyId();
+    return getCachedData<number>(buildCacheKey("dashboard_notif", compId))?.data || 0;
+  });
+  const [companySchedule, setCompanySchedule] = useState<CompanyScheduleData | null>(() => {
+    if (typeof window === "undefined") return null;
+    const compId = getActiveCompanyId();
+    return getCachedData<any>(buildCacheKey("dashboard_attendance", compId))?.data?.company || null;
+  });
   const [serverOffsetMs, setServerOffsetMs] = useState<number>(0);
   const [currentTimeMs, setCurrentTimeMs] = useState<number>(Date.now());
 
@@ -138,7 +177,31 @@ export default function DashboardPage() {
     return () => window.removeEventListener("companyChanged", handleCompanyChanged);
   }, []);
 
+  // Listener event pembersihan atau pembaruan sesi autentikasi untuk mereset dashboard seketika
   useEffect(() => {
+    const handleAuthChange = () => {
+      setNews([]);
+      setTasks([]);
+      setAgendas([]);
+      setAttendanceStatus(null);
+      setCompanySchedule(null);
+      setAttendanceError(false);
+      setIsLoading(true);
+      setIsAttendanceLoading(true);
+      setIsTasksAgendasLoading(true);
+      setUser(null);
+    };
+    window.addEventListener("authSessionCleared", handleAuthChange);
+    window.addEventListener("authSessionUpdated", handleAuthChange);
+    return () => {
+      window.removeEventListener("authSessionCleared", handleAuthChange);
+      window.removeEventListener("authSessionUpdated", handleAuthChange);
+    };
+  }, []);
+
+    const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
+    useEffect(() => {
     // Tunggu hingga CompanyContext selesai memverifikasi membership dari backend.
     if (isCompanyLoading) return;
 
@@ -146,13 +209,19 @@ export default function DashboardPage() {
     const compId = activeCompanyId || getActiveCompanyId();
     activeFetchCompanyIdRef.current = compId;
 
-    // Reset data kartu saat perusahaan berganti agar tidak menampilkan kartu milik perusahaan lama
-    setNews([]);
-    setTasks([]);
-    setAgendas([]);
-    setAttendanceStatus(null);
-    setCompanySchedule(null);
-    setAttendanceError(false);
+    // Reset data kartu HANYA saat perusahaan benar-benar berganti ke ID lain
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== compId) {
+      setNews([]);
+      setTasks([]);
+      setAgendas([]);
+      setAttendanceStatus(null);
+      setCompanySchedule(null);
+      setAttendanceError(false);
+      setIsLoading(true);
+      setIsAttendanceLoading(true);
+      setIsTasksAgendasLoading(true);
+    }
+    prevCompanyIdRef.current = compId;
 
     const fetchData = async () => {
       try {
@@ -171,13 +240,13 @@ export default function DashboardPage() {
         const newsCacheKey = buildCacheKey("dashboard_news", compId);
         const tasksCacheKey = buildCacheKey("dashboard_tasks", compId);
         const agendasCacheKey = buildCacheKey("dashboard_agendas", compId);
+        const attendCacheKey = buildCacheKey("dashboard_attendance", compId);
+        const notifCacheKey = buildCacheKey("dashboard_notif", compId);
 
         const cachedNews = getCachedData<any[]>(newsCacheKey);
         if (cachedNews?.data && activeFetchCompanyIdRef.current === compId) {
           setNews(cachedNews.data);
           setIsLoading(false);
-        } else {
-          setIsLoading(true);
         }
 
         const cachedTasks = getCachedData<any[]>(tasksCacheKey);
@@ -190,6 +259,20 @@ export default function DashboardPage() {
         if (cachedAgendas?.data && activeFetchCompanyIdRef.current === compId) {
           setAgendas(cachedAgendas.data);
           setIsTasksAgendasLoading(false);
+        }
+
+        const cachedAttend = getCachedData<any>(attendCacheKey);
+        if (cachedAttend?.data && activeFetchCompanyIdRef.current === compId) {
+          setAttendanceStatus(cachedAttend.data.status);
+          if (cachedAttend.data.company) {
+            setCompanySchedule(cachedAttend.data.company);
+          }
+          setIsAttendanceLoading(false);
+        }
+
+        const cachedNotif = getCachedData<number>(notifCacheKey);
+        if (cachedNotif && typeof cachedNotif.data === "number") {
+          setUnreadCount(cachedNotif.data);
         }
 
         const [authRes, newsRes, attendRes, notifRes, tasksRes, agendasRes] = await Promise.all([
@@ -236,6 +319,7 @@ export default function DashboardPage() {
           const notifData = await notifRes.json();
           if (notifData.success && activeFetchCompanyIdRef.current === compId) {
             setUnreadCount(notifData.data.count);
+            setCachedData(notifCacheKey, notifData.data.count);
           }
         } catch (e) {
           console.error("Failed to parse notif data", e);
@@ -258,6 +342,10 @@ export default function DashboardPage() {
                   const offset = calculateServerOffsetMs(attendData.data.company.server_time);
                   setServerOffsetMs(offset);
                 }
+                setCachedData(attendCacheKey, {
+                  status: attendData.data.status,
+                  company: attendData.data.company,
+                });
               } else {
                 setAttendanceError(true);
               }
@@ -380,10 +468,6 @@ export default function DashboardPage() {
     }
   };
 
-  const isManagement = activeRole 
-    ? ["owner", "admin", "manager"].includes(activeRole) 
-    : Boolean(user?.isManagement || (user?.roles?.includes("Admin") || user?.roles?.includes("Manager")));
-
   const getCategoryIcon = (categoryCode?: string | null) => {
     switch (categoryCode) {
       case "business":
@@ -397,7 +481,8 @@ export default function DashboardPage() {
   };
 
   const getRoleBadgeStyle = (role?: string | null) => {
-    switch (role?.toLowerCase()) {
+    const effectiveRole = role || currentUser?.activeRole || user?.activeRole;
+    switch (effectiveRole?.toLowerCase()) {
       case "owner":
         return "bg-[#FFF7ED] text-[#C2410C] font-bold";
       case "admin":
@@ -411,13 +496,17 @@ export default function DashboardPage() {
   };
 
   const formatRoleLabel = (role?: string | null) => {
-    if (!role) return "Karyawan";
-    const r = role.toLowerCase();
+    const effectiveRole = role || currentUser?.activeRole || user?.activeRole;
+    if (!effectiveRole) {
+      if (isCompanyLoading) return "Memuat...";
+      return "Karyawan";
+    }
+    const r = effectiveRole.toLowerCase();
     if (r === "member") return "Karyawan";
     if (r === "owner") return "Owner";
     if (r === "admin") return "Admin";
     if (r === "manager") return "Manajer";
-    return role;
+    return effectiveRole;
   };
 
   const scheduleEval = evaluateSchedule(

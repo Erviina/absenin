@@ -35,8 +35,16 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const { activeCompanyId, activeCompany, activeRole, memberships, switchCompany, isLoading: isCompanyLoading } = useCompany();
   
-  const [company, setCompany] = useState<{ id?: string; name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [company, setCompany] = useState<{ id?: string; name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const compId = getActiveCompanyId();
+    return getCachedData<any>(buildCacheKey("admin_dashboard_comp", compId))?.data || null;
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("admin_dashboard_comp", compId))?.data;
+  });
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   // Ref untuk melacak perusahaan yang sedang di-fetch guna mencegah race condition
@@ -60,6 +68,29 @@ export default function AdminDashboardPage() {
     window.addEventListener("companyChanged", handleCompanyChanged);
     return () => window.removeEventListener("companyChanged", handleCompanyChanged);
   }, []);
+
+  // Listener event pembersihan atau pembaruan sesi autentikasi untuk mereset dashboard admin seketika
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setCompany(null);
+      setAttendanceStats(null);
+      setLeaveStats(null);
+      setActivities([]);
+      setIsLoading(true);
+      setIsStatsLoading(true);
+      setIsLeaveStatsLoading(true);
+      setIsActivitiesLoading(true);
+      setDashboardError(null);
+      setStatsError(null);
+      setActivitiesError(null);
+    };
+    window.addEventListener("authSessionCleared", handleAuthChange);
+    window.addEventListener("authSessionUpdated", handleAuthChange);
+    return () => {
+      window.removeEventListener("authSessionCleared", handleAuthChange);
+      window.removeEventListener("authSessionUpdated", handleAuthChange);
+    };
+  }, []);
   
   const [attendanceStats, setAttendanceStats] = useState<{
     hadir: number;
@@ -77,8 +108,18 @@ export default function AdminDashboardPage() {
       terlambat: number;
       izin: number;
     };
-  } | null>(null);
-  const [isStatsLoading, setIsStatsLoading] = useState(true);
+  } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const compId = getActiveCompanyId();
+    const now = new Date();
+    return getCachedData<any>(buildCacheKey("admin_dashboard_stats", compId, { month: now.getMonth() + 1, year: now.getFullYear() }))?.data || null;
+  });
+  const [isStatsLoading, setIsStatsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    const now = new Date();
+    return !getCachedData(buildCacheKey("admin_dashboard_stats", compId, { month: now.getMonth() + 1, year: now.getFullYear() }))?.data;
+  });
   const [statsError, setStatsError] = useState<string | null>(null);
   
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -90,14 +131,38 @@ export default function AdminDashboardPage() {
   const currentMonthName = monthNames[selectedDate.getMonth()];
   const currentYear = selectedDate.getFullYear();
 
-  const [leaveStats, setLeaveStats] = useState<{ total: number; sakit: number; cuti: number; izin: number } | null>(null);
-  const [activities, setActivities] = useState<any[]>([]);
-  const [isLeaveStatsLoading, setIsLeaveStatsLoading] = useState(true);
-  const [isActivitiesLoading, setIsActivitiesLoading] = useState(true);
+  const [leaveStats, setLeaveStats] = useState<{ total: number; sakit: number; cuti: number; izin: number } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const compId = getActiveCompanyId();
+    return getCachedData<any>(buildCacheKey("admin_dashboard_leave", compId))?.data || null;
+  });
+  const [activities, setActivities] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("admin_dashboard_act", compId))?.data || [];
+  });
+  const [isLeaveStatsLoading, setIsLeaveStatsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("admin_dashboard_leave", compId))?.data;
+  });
+  const [isActivitiesLoading, setIsActivitiesLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("admin_dashboard_act", compId))?.data;
+  });
   const [activitiesError, setActivitiesError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState("Semua");
-  const [pendingLeavesCount, setPendingLeavesCount] = useState<number>(0);
-  const [karyawanBadgeCount, setKaryawanBadgeCount] = useState<number>(0);
+  const [pendingLeavesCount, setPendingLeavesCount] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const compId = getActiveCompanyId();
+    return getCachedData<any>(buildCacheKey("admin_dashboard_badge", compId))?.data?.pendingLeaves || 0;
+  });
+  const [karyawanBadgeCount, setKaryawanBadgeCount] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const compId = getActiveCompanyId();
+    return getCachedData<any>(buildCacheKey("admin_dashboard_badge", compId))?.data?.karyawanBadge || 0;
+  });
 
   // Guard: If activeRole is member, redirect back to dashboard immediately
   useEffect(() => {
@@ -119,8 +184,6 @@ export default function AdminDashboardPage() {
 
   const fetchAttendanceStatsForDate = async (targetDate: Date) => {
     try {
-      setIsStatsLoading(true);
-      setStatsError(null);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
@@ -129,6 +192,17 @@ export default function AdminDashboardPage() {
 
       const m = targetDate.getMonth() + 1;
       const y = targetDate.getFullYear();
+      const statsCacheKey = buildCacheKey("admin_dashboard_stats", compId, { month: m, year: y });
+
+      const cached = getCachedData<any>(statsCacheKey);
+      if (cached?.data) {
+        setAttendanceStats(cached.data);
+        setIsStatsLoading(false);
+      } else {
+        setIsStatsLoading(true);
+      }
+      setStatsError(null);
+
       const resStats = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/attendance-stats?month=${m}&year=${y}`, {
         headers
       });
@@ -136,6 +210,7 @@ export default function AdminDashboardPage() {
       const dataStats = await resStats.json();
       if (dataStats.success && dataStats.data) {
         setAttendanceStats(dataStats.data);
+        setCachedData(statsCacheKey, dataStats.data);
         setStatsError(null);
       } else {
         setStatsError("Gagal memuat data statistik kehadiran");
@@ -165,9 +240,6 @@ export default function AdminDashboardPage() {
     activeFetchCompanyIdRef.current = compId;
 
     try {
-      setIsLoading(true);
-      setDashboardError(null);
-
       const token = localStorage.getItem("accessToken");
       if (!token) {
         router.push("/login");
@@ -182,12 +254,45 @@ export default function AdminDashboardPage() {
       const m = selectedDate.getMonth() + 1;
       const y = selectedDate.getFullYear();
 
+      const compCacheKey = buildCacheKey("admin_dashboard_comp", compId);
+      const statsCacheKey = buildCacheKey("admin_dashboard_stats", compId, { month: m, year: y });
+      const leaveCacheKey = buildCacheKey("admin_dashboard_leave", compId);
       const actCacheKey = buildCacheKey("admin_dashboard_act", compId);
+      const badgeCacheKey = buildCacheKey("admin_dashboard_badge", compId);
+
+      const cachedComp = getCachedData<any>(compCacheKey);
+      if (cachedComp?.data && activeFetchCompanyIdRef.current === compId) {
+        setCompany(cachedComp.data);
+      }
+
+      const cachedStats = getCachedData<any>(statsCacheKey);
+      if (cachedStats?.data && activeFetchCompanyIdRef.current === compId) {
+        setAttendanceStats(cachedStats.data);
+        setIsStatsLoading(false);
+      }
+
+      const cachedLeave = getCachedData<any>(leaveCacheKey);
+      if (cachedLeave?.data && activeFetchCompanyIdRef.current === compId) {
+        setLeaveStats(cachedLeave.data);
+        setIsLeaveStatsLoading(false);
+      }
+
       const cachedAct = getCachedData<any[]>(actCacheKey);
       if (cachedAct?.data && activeFetchCompanyIdRef.current === compId) {
         setActivities(cachedAct.data);
         setIsActivitiesLoading(false);
       }
+
+      const cachedBadge = getCachedData<any>(badgeCacheKey);
+      if (cachedBadge?.data && activeFetchCompanyIdRef.current === compId) {
+        setPendingLeavesCount(cachedBadge.data.pendingLeaves || 0);
+        setKaryawanBadgeCount(cachedBadge.data.karyawanBadge || 0);
+      }
+
+      if (!cachedComp?.data && !cachedStats?.data) {
+        setIsLoading(true);
+      }
+      setDashboardError(null);
 
       // Parallel fetching using Promise.allSettled so that one endpoint failure doesn't block the rest
       const [resCompanySettled, resStatsSettled, resLeaveSettled, resActSettled, resBadgeSettled] = await Promise.allSettled([
@@ -222,19 +327,22 @@ export default function AdminDashboardPage() {
 
       // 1. Company Data
       if (resCompanySettled.status === "fulfilled" && resCompanySettled.value?.success && resCompanySettled.value.data) {
-        setCompany({
+        const cData = {
           id: compId || undefined,
           name: resCompanySettled.value.data.name || "",
           address: resCompanySettled.value.data.address || "",
           memberCount: resCompanySettled.value.data.memberCount || 0,
           avatar_company_url: resCompanySettled.value.data.avatar_company_url,
-        });
+        };
+        setCompany(cData);
+        setCachedData(compCacheKey, cData);
         hadSuccess = true;
       }
 
       // 2. Attendance Stats
       if (resStatsSettled.status === "fulfilled" && resStatsSettled.value?.success && resStatsSettled.value.data) {
         setAttendanceStats(resStatsSettled.value.data);
+        setCachedData(statsCacheKey, resStatsSettled.value.data);
         setStatsError(null);
         hadSuccess = true;
       } else {
@@ -245,6 +353,7 @@ export default function AdminDashboardPage() {
       // 3. Leave Stats
       if (resLeaveSettled.status === "fulfilled" && resLeaveSettled.value?.success && resLeaveSettled.value.data) {
         setLeaveStats(resLeaveSettled.value.data);
+        setCachedData(leaveCacheKey, resLeaveSettled.value.data);
         hadSuccess = true;
       }
       setIsLeaveStatsLoading(false);
@@ -264,6 +373,7 @@ export default function AdminDashboardPage() {
       if (resBadgeSettled.status === "fulfilled" && resBadgeSettled.value?.success && resBadgeSettled.value.data) {
         setPendingLeavesCount(resBadgeSettled.value.data.pendingLeaves || 0);
         setKaryawanBadgeCount(resBadgeSettled.value.data.karyawanBadge || 0);
+        setCachedData(badgeCacheKey, resBadgeSettled.value.data);
       } else {
         // Fallback to direct endpoints if badge-counts is not available
         try {

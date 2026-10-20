@@ -21,9 +21,6 @@ import {
   X,
   Info
 } from "lucide-react";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 import { formatDate, formatDateWithDay, formatTime } from "@/lib/dateUtils";
 
 interface PreviewPhotoData {
@@ -135,7 +132,7 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
     setSelectedMonth(`${monthNames[monthIdx]} ${year}`);
   };
 
-  const handleExport = (type: 'pdf' | 'xlsx') => {
+  const handleExport = async (type: 'pdf' | 'xlsx') => {
     if (!employee || attendances.length === 0) return;
 
     const [monthName, yearString] = selectedMonth.split(" ");
@@ -158,6 +155,11 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
     });
 
     if (type === 'pdf') {
+        const [{ default: jsPDF }, autoTableModule] = await Promise.all([
+          import("jspdf"),
+          import("jspdf-autotable"),
+        ]);
+        const autoTable = (autoTableModule as any).default || autoTableModule;
         const doc = new jsPDF({ orientation: 'landscape' });
         doc.setFontSize(16);
         doc.text("REKAP KEHADIRAN KARYAWAN", 14, 20);
@@ -180,6 +182,7 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
         
         doc.save(`${fileName}.pdf`);
     } else {
+        const XLSX = await import("xlsx");
         const wsData = [
           ["REKAP KEHADIRAN KARYAWAN"],
           [`Nama`, employee.full_name || "-"],

@@ -138,6 +138,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
     // Fetch active company — prioritaskan profile.company_id jika status aktif di company_members
     let company = null;
     let targetCompanyId: string | null = null;
+    let targetRole: string | null = null;
 
     if (profile.company_id) {
       const currentMemCheck = await db.execute(sql`
@@ -151,6 +152,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       `);
       if (currentMemCheck.rows.length > 0) {
         targetCompanyId = profile.company_id;
+        targetRole = (currentMemCheck.rows[0].role as string || "member").toLowerCase();
       }
     }
 
@@ -166,7 +168,37 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       `);
       if (activeMemRes.rows.length > 0) {
         targetCompanyId = activeMemRes.rows[0].company_id as string;
+        targetRole = (activeMemRes.rows[0].role as string || "member").toLowerCase();
       }
+    }
+
+    if (!targetCompanyId) {
+      const createdCheck = await db.execute(sql`
+        SELECT id FROM companies WHERE created_by = ${profile.id} AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1
+      `);
+      if (createdCheck.rows.length > 0) {
+        targetCompanyId = createdCheck.rows[0].id as string;
+        targetRole = "owner";
+      }
+    }
+
+    // Check if user is the company creator (legacy support)
+    if (targetCompanyId && !targetRole) {
+      const ownerCheck = await db.execute(sql`
+        SELECT id FROM companies WHERE id = ${targetCompanyId} AND created_by = ${profile.id} AND deleted_at IS NULL LIMIT 1
+      `);
+      if (ownerCheck.rows.length > 0) {
+        targetRole = "owner";
+      }
+    }
+
+    // Auto-sync company_members row to ensure consistency across endpoints
+    if (targetCompanyId && targetRole) {
+      await db.execute(sql`
+        INSERT INTO company_members (id, company_id, profile_id, role, status, joined_at)
+        VALUES (gen_random_uuid(), ${targetCompanyId}, ${profile.id}, ${targetRole}, 'active', now())
+        ON CONFLICT (company_id, profile_id) DO UPDATE SET role = ${targetRole}, status = 'active', deleted_at = NULL
+      `).catch(console.error);
     }
 
     if (targetCompanyId) {
@@ -181,9 +213,25 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       await db.execute(sql`UPDATE profiles SET company_id = NULL WHERE id = ${profile.id}`);
     }
 
-    // Fetch roles
-    const rolesResult = await db.select().from(profileRoles).where(eq(profileRoles.profile_id, profile.id));
-    const roles = rolesResult.map((r) => r.role) || []; // Empty array if no roles found
+    // Roles based on active company membership (source of truth: company_members.role)
+    let activeRole: string = "member";
+    let roles: string[] = ["Employee"];
+
+    if (targetRole) {
+      activeRole = targetRole;
+      if (targetRole === "owner") {
+        roles = ["Owner", "Admin", "Employee"];
+      } else if (targetRole === "admin") {
+        roles = ["Admin", "Employee"];
+      } else if (targetRole === "manager") {
+        roles = ["Manager", "Employee"];
+      } else {
+        roles = ["Employee"];
+      }
+    } else {
+      activeRole = "member";
+      roles = ["Employee"];
+    }
 
     // Generate JWT
     const jwtSecret = process.env.JWT_SECRET;
@@ -213,6 +261,8 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
           avatarUrl: profile.avatar_url,
           company: company,
           roles: roles,
+          activeRole: activeRole,
+          isManagement: ["owner", "admin", "manager"].includes(activeRole),
         },
       },
     });

@@ -2,11 +2,9 @@
 
 import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Search, ListFilter, Check, User, ChevronRight, ChevronLeft, FileDown, CalendarDays, CheckCircle2, Clock, FileWarning, Loader2, X } from "lucide-react";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+
 import { useDialog } from "@/context/DialogContext";
 import { Pagination } from "@/components/Pagination";
 import { useCompany } from "@/context/CompanyContext";
@@ -33,14 +31,31 @@ export default function LaporanKehadiranPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportingType, setExportingType] = useState<"pdf" | "xlsx" | null>(null);
 
-  const [dataKaryawan, setDataKaryawan] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [dataKaryawan, setDataKaryawan] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    const now = new Date();
+    const key = buildCacheKey("admin_attendance_summary", compId, { month: now.getMonth() + 1, year: now.getFullYear() });
+    return getCachedData<any[]>(key)?.data || [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    const now = new Date();
+    const key = buildCacheKey("admin_attendance_summary", compId, { month: now.getMonth() + 1, year: now.getFullYear() });
+    return !getCachedData(key)?.data;
+  });
   const [error, setError] = useState<string | null>(null);
 
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
   useEffect(() => {
-    // Reset data when active company changes
-    setDataKaryawan([]);
-    setIsLoading(true);
+    // Reset data HANYA saat active company benar-benar berganti
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setDataKaryawan([]);
+      setIsLoading(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   useEffect(() => {
@@ -165,7 +180,7 @@ export default function LaporanKehadiranPage() {
     }
   };
 
-  const handleExport = (type: 'pdf' | 'xlsx') => {
+  const handleExport = async (type: 'pdf' | 'xlsx') => {
     if (isExporting || selectedItems.length === 0) return;
     setIsExporting(true);
     setExportingType(type);
@@ -187,6 +202,11 @@ export default function LaporanKehadiranPage() {
       ]);
 
       if (type === 'pdf') {
+        const [{ default: jsPDF }, autoTableModule] = await Promise.all([
+          import("jspdf"),
+          import("jspdf-autotable"),
+        ]);
+        const autoTable = (autoTableModule as any).default || autoTableModule;
         const doc = new jsPDF({ orientation: 'landscape' });
         doc.setFontSize(16);
         doc.text("LAPORAN KEHADIRAN KARYAWAN", 14, 20);
@@ -204,6 +224,7 @@ export default function LaporanKehadiranPage() {
         doc.save(`${fileName}.pdf`);
         showToast("Laporan PDF berhasil diunduh!", "success");
       } else if (type === 'xlsx') {
+        const XLSX = await import("xlsx");
         const wsData = [
           ["LAPORAN KEHADIRAN KARYAWAN"],
           [`Periode: ${selectedMonth}`],

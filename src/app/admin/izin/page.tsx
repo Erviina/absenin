@@ -2,7 +2,7 @@
 
 import { ChevronLeft, Search, Check, AlertCircle, XCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
 import { formatDateRange } from "@/lib/dateUtils";
 import { Pagination } from "@/components/Pagination";
@@ -29,12 +29,20 @@ export default function KelolaIzinPage() {
   const router = useRouter();
   const { activeCompanyId, isCompanyLoading } = useCompany();
   
-  const [data, setData] = useState<IzinRequest[]>([]);
+  const [data, setData] = useState<IzinRequest[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<IzinRequest[]>(buildCacheKey("admin_leaves", compId, { limit: 10, offset: 0, searchQuery: "", activeFilter: "Semua" }))?.data || [];
+  });
   const [selectAll, setSelectAll] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]); 
   const [activeFilter, setFilter] = useState<string>("Semua");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("admin_leaves", compId, { limit: 10, offset: 0, searchQuery: "", activeFilter: "Semua" }))?.data;
+  });
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Modal and action states
@@ -56,10 +64,16 @@ export default function KelolaIzinPage() {
   const [totalLeaves, setTotalLeaves] = useState(0);
   const limit = 10;
 
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
   // Reset data and offset on company change
   useEffect(() => {
-    setData([]);
-    setOffset(0);
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setData([]);
+      setOffset(0);
+      setIsLoading(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   // Reset offset on search or category filter change

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Eye, MoreVertical, Share2, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
@@ -12,6 +12,7 @@ import { Pagination } from "@/components/Pagination";
 import { getActiveCompanyId } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
+import { shareContent } from "@/lib/shareUtils";
 
 type NewsItem = {
   id: string;
@@ -29,22 +30,48 @@ export default function KelolaBeritaPage() {
   const router = useRouter();
   const { activeCompanyId, canCreate } = useCompany();
   const { showConfirm, showToast } = useDialog();
-  const [news, setNews] = useState<NewsItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [news, setNews] = useState<NewsItem[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<NewsItem[]>(buildCacheKey("admin_news", compId, { limit: 10, offset: 0, searchQuery: "", activeFilter: "Semua" }))?.data || [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("admin_news", compId, { limit: 10, offset: 0, searchQuery: "", activeFilter: "Semua" }))?.data;
+  });
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Semua");
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   // Pagination states
   const [offset, setOffset] = useState(0);
   const [totalNews, setTotalNews] = useState(0);
   const limit = 10;
 
-  // Reset offset and data on company change
+  const activeFetchCompanyIdRef = useRef<string | null>(null);
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
+  // Reset offset and data HANYA saat active company benar-benar berganti
   useEffect(() => {
-    setNews([]);
-    setOffset(0);
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setNews([]);
+      setOffset(0);
+      setIsLoading(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
+
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setNews([]);
+      setOffset(0);
+      setIsLoading(true);
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, []);
 
   // Reset offset when filter or search changes
   useEffect(() => {
@@ -52,8 +79,9 @@ export default function KelolaBeritaPage() {
   }, [searchQuery, activeFilter]);
 
   const fetchNews = useCallback(async () => {
+    const companyId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = companyId;
     try {
-      const companyId = activeCompanyId || getActiveCompanyId();
       const cacheKey = buildCacheKey("admin_news", companyId, {
         limit,
         offset,
@@ -86,6 +114,8 @@ export default function KelolaBeritaPage() {
         headers
       });
       const data = await res.json();
+      if (activeFetchCompanyIdRef.current !== companyId) return;
+
       if (data.success) {
         const items = data.data || [];
         const total = data.pagination?.total ?? data.meta?.total ?? (data.data?.length || 0);
@@ -94,9 +124,12 @@ export default function KelolaBeritaPage() {
         setCachedData(cacheKey, items, total);
       }
     } catch (error) {
+      if (activeFetchCompanyIdRef.current !== companyId) return;
       console.error("Error fetching news:", error);
     } finally {
-      setIsLoading(false);
+      if (activeFetchCompanyIdRef.current === companyId) {
+        setIsLoading(false);
+      }
     }
   }, [activeCompanyId, limit, offset, searchQuery, activeFilter]);
 
@@ -232,7 +265,7 @@ export default function KelolaBeritaPage() {
                   </div>
                   
                   <div className="flex flex-col flex-1 justify-center min-w-0">
-                    {item.category?.name && (
+                    {item.category?.name ? (
                       <span className="bg-[#eef5f0] text-[#1E4738] text-[10px] font-bold px-2.5 py-1 rounded-full w-fit mb-1.5">
                         {item.category.name}
                       </span>

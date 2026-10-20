@@ -172,10 +172,22 @@ function AgendaPageContent() {
   const { showConfirm, showToast } = useDialog();
   
   // State Data
-  const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>(() => {
+    if (typeof window === "undefined") return {};
+    const compId = getActiveCompanyId();
+    return getCachedData<Record<string, AgendaItem[]>>(buildCacheKey("agendas", compId))?.data || {};
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("agendas", compId))?.data;
+  });
   const [errorMsg, setErrorMsg] = useState("");
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("agenda_categories", compId))?.data || [];
+  });
 
   // State Kalender
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -235,10 +247,16 @@ function AgendaPageContent() {
   const [formLink, setFormLink] = useState("");
   const [submitError, setSubmitError] = useState("");
 
-  // Reset on company change
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
+  // Reset HANYA saat active company benar-benar berganti
   useEffect(() => {
-    setAgendasMap({});
-    setCategories([]);
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setAgendasMap({});
+      setCategories([]);
+      setIsLoading(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   const fetchCategories = useCallback(async () => {
@@ -274,11 +292,6 @@ function AgendaPageContent() {
   }, [activeCompanyId, isCompanyLoading]);
 
   const activeFetchCompanyIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    setAgendasMap({});
-    setIsLoading(true);
-  }, [activeCompanyId]);
 
   useEffect(() => {
     const handleCompanyChanged = () => {

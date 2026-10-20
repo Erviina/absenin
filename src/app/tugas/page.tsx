@@ -36,20 +36,36 @@ export default function TugasPage() {
   const [noteText, setNoteText] = useState("");
 
   // Group task mention / assignees states
-  const [companyMembers, setCompanyMembers] = useState<any[]>([]);
+  const [companyMembers, setCompanyMembers] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("company_members", compId))?.data || [];
+  });
   const [selectedAssignees, setSelectedAssignees] = useState<any[]>([]);
   const [searchMember, setSearchMember] = useState("");
 
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
+  const [tasks, setTasks] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("tasks", compId))?.data || [];
+  });
+  const [isLoadingTasks, setIsLoadingTasks] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("tasks", compId))?.data;
+  });
 
   const activeFetchCompanyIdRef = useRef<string | null>(null);
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
-  // Reset on company change
+  // Reset HANYA saat active company benar-benar berganti
   useEffect(() => {
-    setTasks([]);
-    setCompanyMembers([]);
-    setIsLoadingTasks(true);
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setTasks([]);
+      setCompanyMembers([]);
+      setIsLoadingTasks(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   useEffect(() => {

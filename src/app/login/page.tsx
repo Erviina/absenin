@@ -7,13 +7,15 @@ import { Loader2 } from "lucide-react";
 
 import { getPersonalModePreference, isTokenValid } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
-import { setActiveCompanyId, clearAuthSession } from "@/lib/api";
+import { setActiveCompanyId, clearAuthSession, setAuthSession } from "@/lib/api";
+import { useCompany } from "@/context/CompanyContext";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectParam = searchParams.get("redirect");
   const { showToast } = useDialog();
+  const { refreshMemberships } = useCompany();
   const [isLoading, setIsLoading] = useState(false);
 
   // Jika terdapat target redirectParam dari tautan eksternal dan pengguna sudah memiliki token valid, arahkan ke target tersebut
@@ -59,8 +61,15 @@ function LoginForm() {
         }
 
         if (data?.success) {
-          localStorage.setItem("accessToken", data.data.accessToken);
-          localStorage.setItem("user", JSON.stringify(data.data.user));
+          const user = data.data.user;
+          const token = data.data.accessToken;
+
+          // 1. Simpan sesi secara terpusat dan beritahu seluruh aplikasi
+          setAuthSession(token, user, user?.company?.id);
+
+          // 2. Muat membership pengguna dan tunggu hingga role & activeCompany terkonfirmasi
+          await refreshMemberships();
+
           showToast("Login berhasil!", "success");
 
           // Cek jika terdapat target redirect dari tautan yang dibagikan
@@ -69,10 +78,18 @@ function LoginForm() {
             return;
           }
 
-          // Redirect default sesuai PRD
-          const user = data.data.user;
-          const skipCompany = getPersonalModePreference(user.id);
-          if (!user.company && !skipCompany) {
+          // Dapatkan data user & perusahaan terbaru yang telah terkonfirmasi dari backend
+          let effectiveUser = user;
+          try {
+            const userStr = localStorage.getItem("user");
+            if (userStr) {
+              effectiveUser = JSON.parse(userStr);
+            }
+          } catch {}
+
+          const effectiveCompany = effectiveUser?.company || null;
+          const skipCompany = getPersonalModePreference(effectiveUser?.id || user.id);
+          if (!effectiveCompany && !skipCompany) {
             router.replace("/cek-perusahaan"); // "Halaman belum terdaftar"
           } else {
             router.replace("/dashboard");

@@ -12,6 +12,9 @@ if (!connectionString) {
 
 const pool = new Pool({
   connectionString,
+  max: process.env.NODE_ENV === "production" ? 10 : 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 export const db = drizzle(pool);

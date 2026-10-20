@@ -153,11 +153,19 @@ function AdminKaryawanView() {
   const [exitActionError, setExitActionError] = useState("");
 
   // Karyawan State
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("admin_employees", compId, { debouncedSearch: "", roleFilter: "Semua", employeeLimit: 10, employeeOffset: 0 }))?.data || [];
+  });
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [employeeOffset, setEmployeeOffset] = useState(0);
   const [employeeLimit] = useState(10);
-  const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("admin_employees", compId, { debouncedSearch: "", roleFilter: "Semua", employeeLimit: 10, employeeOffset: 0 }))?.data;
+  });
   const [employeeError, setEmployeeError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -487,14 +495,20 @@ function AdminKaryawanView() {
     }
   };
 
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
   useEffect(() => {
-    setEmployees([]);
-    setExitRequests([]);
-    setJoinRequests([]);
-    setCompanyData(null);
-    setEmployeeOffset(0);
-    setExitRequestsOffset(0);
-    setJoinRequestsOffset(0);
+    // Reset HANYA saat active company benar-benar berganti
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setEmployees([]);
+      setExitRequests([]);
+      setJoinRequests([]);
+      setCompanyData(null);
+      setEmployeeOffset(0);
+      setExitRequestsOffset(0);
+      setJoinRequestsOffset(0);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   useEffect(() => {

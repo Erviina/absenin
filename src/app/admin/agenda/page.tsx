@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { 
   ChevronLeft, 
   ChevronRight,
@@ -102,8 +102,16 @@ export default function AdminAgendaPage() {
   const [editingAgendaId, setEditingAgendaId] = useState<string | null>(null);
   
   // State Data
-  const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [agendasMap, setAgendasMap] = useState<Record<string, AgendaItem[]>>(() => {
+    if (typeof window === "undefined") return {};
+    const compId = getActiveCompanyId();
+    return getCachedData<Record<string, AgendaItem[]>>(buildCacheKey("agendas", compId))?.data || {};
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("agendas", compId))?.data;
+  });
   const [errorMsg, setErrorMsg] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -116,12 +124,22 @@ export default function AdminAgendaPage() {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isDetailMenuOpen, setIsDetailMenuOpen] = useState(false);
 
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("agenda_categories", compId))?.data || [];
+  });
 
-  // Reset on company change
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
+  // Reset HANYA saat active company benar-benar berganti
   useEffect(() => {
-    setAgendasMap({});
-    setCategories([]);
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setAgendasMap({});
+      setCategories([]);
+      setIsLoading(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   useEffect(() => {

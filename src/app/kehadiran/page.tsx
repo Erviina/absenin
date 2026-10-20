@@ -6,9 +6,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { useRouter } from "next/navigation";
 import { CustomCalendar } from "@/components/CustomCalendar";
 import { TopBar } from "@/components/TopBar";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate, formatDateWithDay } from "@/lib/dateUtils";
@@ -38,8 +36,30 @@ export default function KehadiranPage() {
   const [limit] = useState(10);
   const [total, setTotal] = useState(0);
 
-  const [attendances, setAttendances] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [attendances, setAttendances] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    const cacheKey = buildCacheKey("attendances", compId, {
+      start: "",
+      end: "",
+      search: "",
+      limit: 10,
+      offset: 0,
+    });
+    return getCachedData<any[]>(cacheKey)?.data || [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    const cacheKey = buildCacheKey("attendances", compId, {
+      start: "",
+      end: "",
+      search: "",
+      limit: 10,
+      offset: 0,
+    });
+    return !getCachedData(cacheKey)?.data;
+  });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -166,11 +186,16 @@ export default function KehadiranPage() {
     }
   };
 
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
   useEffect(() => {
-    // Reset state and offset when active company changes
-    setAttendances([]);
-    setOffset(0);
-    setIsLoading(true);
+    // Reset state and offset HANYA saat active company benar-benar berganti
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setAttendances([]);
+      setOffset(0);
+      setIsLoading(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   useEffect(() => {
@@ -229,6 +254,11 @@ export default function KehadiranPage() {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
       return;
     }
+    const [{ default: jsPDF }, autoTableModule] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
+    const autoTable = (autoTableModule as any).default || autoTableModule;
     const exportList = await fetchAllForExport();
     const doc = new jsPDF();
     doc.text("Rekap Kehadiran", 14, 15);
@@ -258,6 +288,7 @@ export default function KehadiranPage() {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu.", "warning");
       return;
     }
+    const XLSX = await import("xlsx");
     const exportList = await fetchAllForExport();
     const excelData = exportList.map((item: any, idx: number) => ({
       No: idx + 1,

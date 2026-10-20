@@ -38,12 +38,37 @@ export function setActiveCompanyId(companyId: string | null): void {
   } catch {}
 }
 
+export function setAuthSession(token: string, user: any, companyId?: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem("accessToken", token);
+    if (user) {
+      localStorage.setItem("user", JSON.stringify(user));
+    }
+    // Hapus cache membership akun lama agar tidak bocor ke akun baru yang sedang login
+    localStorage.removeItem("companyMemberships");
+    const targetCompId = companyId || user?.company?.id || null;
+    setActiveCompanyId(targetCompId);
+    window.dispatchEvent(new CustomEvent("authSessionUpdated", { detail: { user, companyId: targetCompId } }));
+  } catch (e) {
+    console.error("Failed to set auth session:", e);
+  }
+}
+
 export function clearAuthSession(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");
     localStorage.removeItem("companyMemberships");
+
+    // Bersihkan sesi Google OAuth jika ada
+    try {
+      const { googleLogout } = require("@react-oauth/google");
+      if (typeof googleLogout === "function") {
+        googleLogout();
+      }
+    } catch {}
 
     // Bersihkan hanya key sessionStorage yang berkaitan dengan autentikasi & status perusahaan aktif
     try {

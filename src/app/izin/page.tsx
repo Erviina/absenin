@@ -67,9 +67,21 @@ export default function IzinPage() {
   const [totalLeaves, setTotalLeaves] = useState(0);
   const limit = 10;
 
-  const [categories, setCategories] = useState<any[]>([]);
-  const [pengajuanList, setPengajuanList] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [categories, setCategories] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("leave_categories", compId))?.data || [];
+  });
+  const [pengajuanList, setPengajuanList] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("leaves", compId, { limit: 10, offset: 0 }))?.data || [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("leaves", compId, { limit: 10, offset: 0 }))?.data;
+  });
 
   // Reset offset on filter change
   useEffect(() => {
@@ -83,6 +95,13 @@ export default function IzinPage() {
       const compId = activeCompanyId || getActiveCompanyId();
       if (!compId) return;
       try {
+        const catCacheKey = buildCacheKey("leave_categories", compId);
+        const cachedCat = getCachedData<any[]>(catCacheKey);
+        if (cachedCat?.data) {
+          setCategories(cachedCat.data);
+          if (cachedCat.data.length > 0) setKategori(cachedCat.data[0].id);
+        }
+
         const token = localStorage.getItem("accessToken");
         if (!token) return;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
@@ -91,7 +110,8 @@ export default function IzinPage() {
         const catData = await catRes.json();
         if (catData.success) {
           setCategories(catData.data);
-          if (catData.data.length > 0) setKategori(catData.data[0].id);
+          setCachedData(catCacheKey, catData.data);
+          if (catData.data.length > 0 && !kategori) setKategori(catData.data[0].id);
         }
       } catch (err) {
         console.error("Error fetching categories:", err);
@@ -101,13 +121,17 @@ export default function IzinPage() {
   }, [activeCompanyId, isCompanyLoading]);
 
   const activeFetchCompanyIdRef = useRef<string | null>(null);
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
   // Reset leaves and offset when active company changes
   useEffect(() => {
-    setPengajuanList([]);
-    setTotalLeaves(0);
-    setOffset(0);
-    setIsLoading(true);
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setPengajuanList([]);
+      setTotalLeaves(0);
+      setOffset(0);
+      setIsLoading(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   useEffect(() => {
@@ -283,7 +307,9 @@ export default function IzinPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        // Refresh data
+        // Invalidate and refresh data
+        invalidateCache("leaves");
+        invalidateCache("admin_leaves");
         await fetchLeaves();
         showToast("Pengajuan izin berhasil dikirim", "success");
         

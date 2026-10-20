@@ -38,23 +38,29 @@ export default function NotifikasiPage() {
 
   const categories = ["Semua", "Absensi", "Izin & Cuti", "Sistem"];
 
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [notifications, setNotifications] = useState<any[]>(() => {
+    if (typeof window === "undefined") return [];
+    const compId = getActiveCompanyId();
+    return getCachedData<any[]>(buildCacheKey("notifications", compId, { limit: 10, offset: 0, searchQuery: "", activeCategory: "Semua", appliedStartDate: "", appliedEndDate: "" }))?.data || [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const compId = getActiveCompanyId();
+    return !getCachedData(buildCacheKey("notifications", compId, { limit: 10, offset: 0, searchQuery: "", activeCategory: "Semua", appliedStartDate: "", appliedEndDate: "" }))?.data;
+  });
   const [error, setError] = useState("");
 
-  // Reset offset and data when company changes
-  useEffect(() => {
-    setNotifications([]);
-    setOffset(0);
-  }, [activeCompanyId]);
-
   const activeFetchCompanyIdRef = useRef<string | null>(null);
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
-  // Reset state and offset when activeCompanyId changes
+  // Reset offset and data HANYA saat active company benar-benar berganti
   useEffect(() => {
-    setNotifications([]);
-    setOffset(0);
-    setIsLoading(true);
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
+      setNotifications([]);
+      setOffset(0);
+      setIsLoading(true);
+    }
+    prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   useEffect(() => {

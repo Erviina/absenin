@@ -122,7 +122,7 @@ export default function ProfilPage() {
     if (!confirmed) return;
 
     clearAuthSession();
-    router.push("/login");
+    router.replace("/login");
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

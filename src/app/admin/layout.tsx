@@ -8,7 +8,7 @@ import { TopBar } from "@/components/TopBar";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { activeRole, activeCompanyId, memberships, isLoading, refreshMemberships } = useCompany();
+  const { activeRole, activeCompanyId, memberships, isLoading, refreshMemberships, isManagement } = useCompany();
   const [isVerifying, setIsVerifying] = useState(false);
   const [hasVerified, setHasVerified] = useState(false);
 
@@ -17,8 +17,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const verifyAccess = async () => {
       // If access is unclear (no active company or role is not management), verify once before redirecting
       if (!isLoading && !hasVerified) {
-        const isManagement = activeCompanyId && activeRole && ["owner", "admin", "manager"].includes(activeRole);
-        if (!isManagement) {
+        const hasManagementAccess = Boolean(activeCompanyId && isManagement);
+        if (!hasManagementAccess) {
           setIsVerifying(true);
           try {
             await refreshMemberships();
@@ -38,7 +38,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => {
       isMounted = false;
     };
-  }, [activeRole, activeCompanyId, isLoading, hasVerified, refreshMemberships]);
+  }, [activeRole, activeCompanyId, isManagement, isLoading, hasVerified, refreshMemberships]);
 
   useEffect(() => {
     if (!isLoading && !isVerifying) {
@@ -51,14 +51,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }
 
       // 2. If user is in a company but not in a management role (e.g. member/karyawan), redirect to /dashboard
-      if (activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
+      if (!isManagement) {
         if (hasVerified) {
           router.replace("/dashboard");
         }
         return;
       }
     }
-  }, [activeCompanyId, memberships.length, activeRole, isLoading, isVerifying, hasVerified, router]);
+  }, [activeCompanyId, memberships.length, isManagement, isLoading, isVerifying, hasVerified, router]);
 
   if (isLoading || isVerifying) {
     return (
@@ -75,7 +75,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   // Prevent rendering admin children if unauthorized or not associated with an active company
-  if (!activeCompanyId || memberships.length === 0 || (activeRole && !["owner", "admin", "manager"].includes(activeRole))) {
+  if (!activeCompanyId || memberships.length === 0 || !isManagement) {
     return (
       <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc]">
         <TopBar title="Manajemen" onBack={() => router.push("/dashboard")} />
