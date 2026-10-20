@@ -59,23 +59,29 @@ export function CustomSelect({
 
       {isOpen && (
         <div className={`absolute top-[calc(100%+6px)] ${variant === 'default' ? 'left-0 right-0 min-w-[140px]' : 'left-1/2 -translate-x-1/2 min-w-[120px]'} bg-white rounded-[16px] shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-1.5 z-50 animate-in fade-in zoom-in-95 duration-200 max-h-[250px] overflow-y-auto`}>
-          {options.map((option) => (
-            <div
-              key={option.value}
-              onClick={() => {
-                onChange(option.value);
-                setIsOpen(false);
-              }}
-              className={`flex items-center justify-between gap-2 p-2.5 rounded-[12px] cursor-pointer transition-colors ${
-                value === option.value ? 'bg-[#F0FDF4] text-[#356E3B]' : 'hover:bg-[#F3F4F6] text-[#374151]'
-              }`}
-            >
-              <span className={`text-[13px] sm:text-[14px] truncate flex-1 text-left ${value === option.value ? 'font-bold' : 'font-medium'}`}>
-                {option.label}
-              </span>
-              {value === option.value && <Check className="w-4 h-4 text-[#356E3B] shrink-0" strokeWidth={3} />}
+          {options.length === 0 ? (
+            <div className="p-3 text-center text-gray-400 text-[13px] font-medium">
+              Tidak ada pilihan
             </div>
-          ))}
+          ) : (
+            options.map((option) => (
+              <div
+                key={option.value}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={`flex items-center justify-between gap-2 p-2.5 rounded-[12px] cursor-pointer transition-colors ${
+                  value === option.value ? 'bg-[#F0FDF4] text-[#356E3B]' : 'hover:bg-[#F3F4F6] text-[#374151]'
+                }`}
+              >
+                <span className={`text-[13px] sm:text-[14px] truncate flex-1 text-left ${value === option.value ? 'font-bold' : 'font-medium'}`}>
+                  {option.label}
+                </span>
+                {value === option.value && <Check className="w-4 h-4 text-[#356E3B] shrink-0" strokeWidth={3} />}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>

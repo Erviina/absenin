@@ -2,12 +2,12 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useGoogleLogin } from "@react-oauth/google";
+import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
 import { Loader2 } from "lucide-react";
 
 import { getPersonalModePreference, isTokenValid } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
-import { setActiveCompanyId, clearAuthSession, setAuthSession } from "@/lib/api";
+import { clearAuthSession, setAuthSession } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 
 function LoginForm() {
@@ -35,85 +35,77 @@ function LoginForm() {
     }
   }, [redirectParam, router]);
 
-  const loginWithGoogle = useGoogleLogin({
-    prompt: "select_account",
-    onSuccess: async (tokenResponse) => {
-      if (!tokenResponse.access_token) return;
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    if (isLoading || !credentialResponse.credential) return;
 
-      setIsLoading(true);
-      try {
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/google", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ accessToken: tokenResponse.access_token }),
-        });
+    setIsLoading(true);
+    try {
+      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: credentialResponse.credential }),
+      });
 
-        const contentType = res.headers.get("content-type");
-        let data: any = null;
-        if (contentType && contentType.includes("application/json")) {
-          data = await res.json();
-        }
+      const contentType = res.headers.get("content-type");
+      let data: any = null;
+      if (contentType && contentType.includes("application/json")) {
+        data = await res.json();
+      }
 
-        if (!res.ok) {
-          console.error("Login failed with status:", res.status, data);
-          showToast(data?.message || `Gagal login (Error ${res.status})`, "error");
+      if (!res.ok) {
+        console.error("Login failed with status:", res.status, data);
+        showToast(data?.message || `Gagal login (Error ${res.status})`, "error");
+        return;
+      }
+
+      if (data?.success) {
+        const user = data.data.user;
+        const token = data.data.accessToken;
+
+        // 1. Simpan sesi secara terpusat dan beritahu seluruh aplikasi (membersihkan cache akun lama)
+        setAuthSession(token, user, user?.company?.id);
+
+        // 2. Muat membership pengguna dan tunggu hingga role & activeCompany terkonfirmasi
+        await refreshMemberships();
+
+        showToast("Login berhasil!", "success");
+
+        // Cek jika terdapat target redirect dari tautan yang dibagikan
+        if (redirectParam && redirectParam.startsWith("/")) {
+          router.replace(redirectParam);
           return;
         }
 
-        if (data?.success) {
-          const user = data.data.user;
-          const token = data.data.accessToken;
-
-          // 1. Simpan sesi secara terpusat dan beritahu seluruh aplikasi
-          setAuthSession(token, user, user?.company?.id);
-
-          // 2. Muat membership pengguna dan tunggu hingga role & activeCompany terkonfirmasi
-          await refreshMemberships();
-
-          showToast("Login berhasil!", "success");
-
-          // Cek jika terdapat target redirect dari tautan yang dibagikan
-          if (redirectParam && redirectParam.startsWith("/")) {
-            router.replace(redirectParam);
-            return;
+        // Dapatkan data user & perusahaan terbaru yang telah terkonfirmasi dari backend
+        let effectiveUser = user;
+        try {
+          const userStr = localStorage.getItem("user");
+          if (userStr) {
+            effectiveUser = JSON.parse(userStr);
           }
+        } catch {}
 
-          // Dapatkan data user & perusahaan terbaru yang telah terkonfirmasi dari backend
-          let effectiveUser = user;
-          try {
-            const userStr = localStorage.getItem("user");
-            if (userStr) {
-              effectiveUser = JSON.parse(userStr);
-            }
-          } catch {}
-
-          const effectiveCompany = effectiveUser?.company || null;
-          const skipCompany = getPersonalModePreference(effectiveUser?.id || user.id);
-          if (!effectiveCompany && !skipCompany) {
-            router.replace("/cek-perusahaan"); // "Halaman belum terdaftar"
-          } else {
-            router.replace("/dashboard");
-          }
+        const effectiveCompany = effectiveUser?.company || null;
+        const skipCompany = getPersonalModePreference(effectiveUser?.id || user.id);
+        if (!effectiveCompany && !skipCompany) {
+          router.replace("/cek-perusahaan"); // "Halaman belum terdaftar"
         } else {
-          console.error("Login failed:", data?.message);
-          showToast(data?.message || "Login failed", "error");
+          router.replace("/dashboard");
         }
-      } catch (err) {
-        console.error("Login error:", err);
-        showToast("Terjadi kesalahan jaringan saat login", "error");
-      } finally {
-        setIsLoading(false);
+      } else {
+        console.error("Login failed:", data?.message);
+        showToast(data?.message || "Login failed", "error");
       }
-    },
-    onError: (error) => {
-      console.error("Google Login Failed:", error);
+    } catch (err) {
+      console.error("Login error:", err);
+      showToast("Terjadi kesalahan jaringan saat login", "error");
+    } finally {
       setIsLoading(false);
-      showToast("Gagal menghubungkan ke Google", "error");
-    },
-  });
+    }
+  };
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-x-hidden overflow-y-auto">
+    <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
 
       {/* Top Section */}
       <div className="flex flex-col items-center pt-20 px-6 z-10">
@@ -134,48 +126,17 @@ function LoginForm() {
             </p>
           </div>
 
-          <div className="flex justify-center w-full mt-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (!isLoading) {
-                  loginWithGoogle();
-                }
+          <div className={`flex justify-center w-full mt-2 ${isLoading ? "pointer-events-none opacity-50" : ""}`}>
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => {
+                console.error("Login Failed");
+                setIsLoading(false);
               }}
-              disabled={isLoading}
-              className="w-full max-w-[300px] h-[46px] bg-white hover:bg-[#F8FAFC] active:scale-[0.98] border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-full flex items-center justify-center gap-3 px-5 shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all duration-200 cursor-pointer disabled:opacity-65 disabled:cursor-not-allowed group"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin text-[#1E4738]" />
-                  <span className="text-[14px] font-semibold text-[#1E4738]">Menghubungkan...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
-                  </svg>
-                  <span className="text-[14px] font-semibold text-[#1F2937] group-hover:text-[#111827]">
-                    Masuk dengan Google
-                  </span>
-                </>
-              )}
-            </button>
+              shape="pill"
+              size="large"
+              width="300"
+            />
           </div>
         </div>
       </div>

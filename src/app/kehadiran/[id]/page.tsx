@@ -230,9 +230,13 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
               </div>
 
               <div className="flex items-center gap-1.5 flex-wrap">
-                {data.is_terlambat && (
+                {data.is_terlambat ? (
                   <span className="text-[10.5px] font-bold text-amber-700 bg-amber-50 border border-amber-200/60 px-2.5 py-0.5 rounded-full">
                     Terlambat
+                  </span>
+                ) : (
+                  <span className="text-[10.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full">
+                    Disiplin
                   </span>
                 )}
               </div>
@@ -254,9 +258,13 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {data.is_pulang_cepat && (
+                  {data.is_pulang_cepat ? (
                     <span className="text-[10.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/60 px-2.5 py-0.5 rounded-full">
                       Pulang Cepat
+                    </span>
+                  ) : (
+                    <span className="text-[10.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full">
+                      Disiplin
                     </span>
                   )}
                 </div>

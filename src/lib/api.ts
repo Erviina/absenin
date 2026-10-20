@@ -84,6 +84,12 @@ export function clearAuthSession(): void {
     } catch {}
 
     setActiveCompanyId(null);
+
+    // Reset akun Google yang tersimpan di browser agar tombol login tidak menampilkan email sebelumnya
+    try {
+      (window as any).google?.accounts?.id?.disableAutoSelect?.();
+    } catch {}
+
     window.dispatchEvent(new CustomEvent("authSessionCleared"));
   } catch (e) {
     console.error("Failed to clear auth session:", e);
@@ -128,9 +134,15 @@ export async function fetchApi(
     headers.set("x-company-id", companyId);
   }
 
-  return fetch(url, {
+  const res = await fetch(url, {
     ...options,
     headers,
   });
+
+  if (res.status === 403 && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("unauthorizedAccess", { detail: { url } }));
+  }
+
+  return res;
 }
 

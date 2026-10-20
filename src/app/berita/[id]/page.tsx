@@ -234,13 +234,13 @@ export default function BeritaDetailPage() {
               </div>
             </div>
 
-            {/* Cover Image - Menyesuaikan ukuran asli gambar yang diunggah */}
+            {/* Cover Image - Auto cropping berdasarkan width dengan height fix */}
             {news.cover_image_url && (
-              <div className="w-full rounded-[20px] overflow-hidden bg-gray-50/70 border border-[#eef5f0] shadow-2xs flex items-center justify-center">
+              <div className="w-full h-[210px] sm:h-[260px] rounded-[20px] overflow-hidden bg-gray-50/70 border border-[#eef5f0] shadow-2xs">
                 <img
                   src={news.cover_image_url}
                   alt={sanitizeText(news.title)}
-                  className="w-full h-auto max-h-[650px] object-contain rounded-[20px]"
+                  className="w-full h-full object-cover rounded-[20px]"
                 />
               </div>
             )}

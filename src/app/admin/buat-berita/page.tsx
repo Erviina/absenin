@@ -10,6 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
 import { invalidateCache } from "@/lib/clientCache";
+import { getActiveCompanyId } from "@/lib/api";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -21,6 +22,12 @@ type Category = {
 
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
+
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: "a2000000-0000-4000-8000-000000000001", name: "Pengumuman" },
+  { id: "a2000000-0000-4000-8000-000000000002", name: "Berita" },
+  { id: "7a2d4238-2d08-4cac-a1c8-0ae326a00937", name: "Artikel" },
+];
 
 function BuatBeritaForm() {
   const router = useRouter();
@@ -35,7 +42,7 @@ function BuatBeritaForm() {
   const [fileObj, setFileObj] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(!!editingId);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -46,8 +53,9 @@ function BuatBeritaForm() {
     const fetchCategories = async () => {
       try {
         const token = localStorage.getItem("accessToken");
+        const compId = activeCompanyId || getActiveCompanyId();
         const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-        if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+        if (compId) headers["x-company-id"] = compId;
 
         const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news/categories", {
           headers
@@ -69,21 +77,38 @@ function BuatBeritaForm() {
       const fetchNewsItem = async () => {
         try {
           const token = localStorage.getItem("accessToken");
+          const compId = activeCompanyId || getActiveCompanyId();
           const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
-          if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+          if (compId) headers["x-company-id"] = compId;
 
-          const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news", {
+          let item: any = null;
+          // 1. Coba endpoint langsung /news/:id
+          const directRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/news/${editingId}`, {
             headers
           });
-          const data = await res.json();
-          if (data.success) {
-            const item = data.data.find((n: any) => n.id === editingId);
-            if (item) {
-              setTitle(item.title);
-              setContent(sanitizeText(item.content));
-              setCategoryId(item.category?.id || "");
-              setPreviewUrl(item.cover_image_url);
+          if (directRes.ok) {
+            const directData = await directRes.json();
+            if (directData.success && directData.data) {
+              item = directData.data;
             }
+          }
+
+          // 2. Fallback jika /news/:id tidak ditemukan
+          if (!item) {
+            const fallbackRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news", {
+              headers
+            });
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData.success && Array.isArray(fallbackData.data)) {
+              item = fallbackData.data.find((n: any) => n.id === editingId);
+            }
+          }
+
+          if (item) {
+            setTitle(item.title || "");
+            setContent(sanitizeText(item.content || ""));
+            setCategoryId(item.category?.id || item.news_category_id || "");
+            setPreviewUrl(item.cover_image_url || null);
           }
         } catch (error) {
           console.error("Error fetching news item", error);
@@ -106,8 +131,18 @@ function BuatBeritaForm() {
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
-    if (!title || !content) {
+    if (!title.trim() || !content.trim()) {
       showToast("Judul dan Isi Berita wajib diisi", "warning");
+      return;
+    }
+
+    if (!categoryId) {
+      showToast("Kategori berita wajib dipilih", "warning");
+      return;
+    }
+
+    if (!fileObj && !previewUrl) {
+      showToast("Sampul Berita wajib diunggah", "warning");
       return;
     }
 
@@ -149,19 +184,21 @@ function BuatBeritaForm() {
       
       const normalizedContent = sanitizeText(content);
 
+      const compId = activeCompanyId || getActiveCompanyId();
+
       const payload: any = {
         title: title.trim(),
         content: normalizedContent,
         news_category_id: categoryId || null,
         cover_image_url: finalImageUrl || null,
-        company_id: activeCompanyId,
+        company_id: compId,
       };
 
       const headers: Record<string, string> = {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
       };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+      if (compId) headers["x-company-id"] = compId;
 
       const res = await fetch(url, {
         method,
@@ -221,7 +258,9 @@ function BuatBeritaForm() {
           </div>
 
           <div className="flex flex-col gap-2 relative">
-            <label className="text-[#1E4738] text-[13px] font-bold">Kategori</label>
+            <label className="text-[#1E4738] text-[13px] font-bold">
+              Kategori <span className="text-red-500">*</span>
+            </label>
             <CustomSelect
               options={categories.map(cat => ({ value: cat.id, label: cat.name }))}
               value={categoryId}
@@ -250,7 +289,7 @@ function BuatBeritaForm() {
 
           <div className="flex flex-col gap-2">
             <label className="text-[#1E4738] text-[13px] font-bold">
-              Sampul Berita
+              Sampul Berita <span className="text-red-500">*</span>
             </label>
             <div 
               onClick={() => fileInputRef.current?.click()}
@@ -295,7 +334,7 @@ function BuatBeritaForm() {
         </button>
         <PrimaryButton 
           onClick={handleSubmit}
-          disabled={isSubmitting || !title || !content}
+          disabled={isSubmitting || !title.trim() || !content.trim() || !categoryId || (!fileObj && !previewUrl)}
           isLoading={isSubmitting}
           loadingText={editingId ? "Menyimpan Perubahan..." : "Mengunggah..."}
           icon={<CheckCircle2 className="w-5 h-5" />}
@@ -364,13 +403,13 @@ function BuatBeritaForm() {
                   </div>
                 </div>
 
-                {/* Cover Image - Menyesuaikan ukuran asli gambar */}
+                {/* Cover Image - Auto cropping berdasarkan width dengan height fix */}
                 {previewUrl && (
-                  <div className="w-full rounded-[16px] overflow-hidden bg-gray-50/70 shadow-2xs border border-[#eef5f0] flex items-center justify-center">
+                  <div className="w-full h-[210px] sm:h-[260px] rounded-[16px] overflow-hidden bg-gray-50/70 shadow-2xs border border-[#eef5f0]">
                     <img
                       src={previewUrl}
                       alt="Pratinjau Sampul"
-                      className="w-full h-auto max-h-[450px] object-contain rounded-[16px]"
+                      className="w-full h-full object-cover rounded-[16px]"
                     />
                   </div>
                 )}

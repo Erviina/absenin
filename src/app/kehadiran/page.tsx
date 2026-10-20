@@ -433,9 +433,13 @@ export default function KehadiranPage() {
                         <span className="text-[#111827] font-bold text-[16px]">{extractTime(item.check_in_time)}</span>
                         <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
                       </div>
-                      {item.is_terlambat && (
+                      {item.is_terlambat ? (
                         <span className="mt-1 bg-amber-50 text-amber-700 border border-amber-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
                           Terlambat
+                        </span>
+                      ) : (
+                        <span className="mt-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          Disiplin
                         </span>
                       )}
                     </div>
@@ -459,9 +463,13 @@ export default function KehadiranPage() {
                             <span className="text-[#111827] font-bold text-[16px]">{extractTime(item.check_out_time)}</span>
                             <span className="text-[#6B7280] text-[12px] font-medium">WIB</span>
                           </div>
-                          {item.is_pulang_cepat && (
+                          {item.is_pulang_cepat ? (
                             <span className="mt-1 bg-orange-50 text-orange-700 border border-orange-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
                               Pulang Cepat
+                            </span>
+                          ) : (
+                            <span className="mt-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              Disiplin
                             </span>
                           )}
                         </>

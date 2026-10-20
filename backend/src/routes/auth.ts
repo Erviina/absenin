@@ -47,7 +47,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       fullName = payload.name || "";
       avatarUrl = payload.picture || "";
     } else if (googleAccessToken) {
-      // Verify Google Access Token via Google OAuth2 UserInfo API
+      // Verify Google Access Token via Google userinfo endpoint
       const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
         headers: { Authorization: `Bearer ${googleAccessToken}` },
       });
@@ -55,7 +55,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       if (!userInfoRes.ok) {
         return res.status(401).json({
           success: false,
-          message: "Invalid Google Access Token",
+          message: "Token Google tidak valid",
           errors: [],
         });
       }
@@ -64,7 +64,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       if (!userInfo || !userInfo.email) {
         return res.status(401).json({
           success: false,
-          message: "Invalid user info from Google",
+          message: "Data profil Google tidak memiliki email",
           errors: [],
         });
       }

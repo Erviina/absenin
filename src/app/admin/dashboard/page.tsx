@@ -164,12 +164,16 @@ export default function AdminDashboardPage() {
     return getCachedData<any>(buildCacheKey("admin_dashboard_badge", compId))?.data?.karyawanBadge || 0;
   });
 
-  // Guard: If activeRole is member, redirect back to dashboard immediately
+  // Guard: If activeRole is member, redirect to /unauthorized immediately
   useEffect(() => {
     if (!isCompanyLoading && activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
-      router.replace("/dashboard");
+      router.replace("/unauthorized");
     }
   }, [activeRole, isCompanyLoading, router]);
+
+  if (!isCompanyLoading && activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
+    return null;
+  }
 
   const formatRelativeTime = (dateString: string) => {
     const diff = Date.now() - new Date(dateString).getTime();
@@ -465,15 +469,14 @@ export default function AdminDashboardPage() {
       <TopBar 
         title="Manajemen" 
         onBack={() => router.push("/dashboard")} 
-        showCompanySwitcher={true}
         rightAction={
           <button
             onClick={() => router.push("/notifikasi")}
-            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all flex items-center justify-center relative text-white cursor-pointer"
+            className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all relative cursor-pointer"
             title="Notifikasi"
             aria-label="Notifikasi"
           >
-            <Bell className="w-5 h-5 text-white" />
+            <Bell className="w-6 h-6 text-white" />
             {unreadNotifCount > 0 && (
               <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#EF4444] border-2 border-[#356E3B] rounded-full"></div>
             )}
@@ -645,7 +648,7 @@ export default function AdminDashboardPage() {
         {/* Action Buttons */}
         <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex justify-between items-start mt-1">
           {[
-            { icon: Calendar, label: "Jadwal", path: "/admin/agenda" },
+            { icon: Calendar, label: "Agenda", path: "/admin/agenda" },
             { icon: FileCheck, label: "Perizinan", path: "/admin/izin", badge: pendingLeavesCount },
             { icon: Users2, label: "Karyawan", path: "/admin/karyawan", badge: karyawanBadgeCount },
             { icon: FileText, label: "Laporan", path: "/admin/laporan-kehadiran" },

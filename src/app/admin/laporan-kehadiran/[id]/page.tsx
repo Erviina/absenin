@@ -150,7 +150,7 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
       const mode = item.work_mode || "-";
       const addrIn = item.check_in_address || "-";
       const addrOut = item.check_out_address || "-";
-      const status = item.is_terlambat ? "Terlambat" : "Tepat Waktu";
+      const status = item.is_terlambat ? "Terlambat" : "Disiplin";
       return [tanggal, checkIn, checkOut, mode, addrIn, addrOut, status];
     });
 
@@ -383,22 +383,6 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
                           }`}>
                             {item.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
                           </span>
-
-                          {/* Status Terlambat */}
-                          <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                            item.is_terlambat
-                              ? "bg-amber-50 text-amber-700 border border-amber-200/60"
-                              : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                          }`}>
-                            {item.is_terlambat ? "Terlambat" : "Tepat Waktu"}
-                          </span>
-
-                          {/* Status Pulang Cepat */}
-                          {item.is_pulang_cepat && (
-                            <span className="bg-orange-50 text-orange-700 border border-orange-200/60 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                              Pulang Cepat
-                            </span>
-                          )}
                         </div>
                       </div>
 
@@ -407,19 +391,28 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
                         
                         {/* 1. DETAIL MASUK (CHECK-IN) */}
                         <div className="bg-[#fbfdfc] border border-[#eef5f0] rounded-[18px] p-4 flex flex-col gap-3">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
                             <div className="flex items-center gap-2">
                               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
                               <span className="text-[#1E4738] text-[12px] font-bold uppercase tracking-wider">
                                 Detail Masuk (Check-In)
                               </span>
                             </div>
-                            <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
-                              <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                              <span className="text-[#111827] font-bold text-[13px]">
-                                {formatTime(item.check_in_time)}
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                                item.is_terlambat
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200/60"
+                                  : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                              }`}>
+                                {item.is_terlambat ? "Terlambat" : "Disiplin"}
                               </span>
-                              <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                              <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
+                                <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="text-[#111827] font-bold text-[13px]">
+                                  {formatTime(item.check_in_time)}
+                                </span>
+                                <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                              </div>
                             </div>
                           </div>
 
@@ -510,7 +503,7 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
                         <div className={`border rounded-[18px] p-4 flex flex-col gap-3 ${
                           item.check_out_time ? "bg-[#fffdfb] border-[#fde8d7]" : "bg-gray-50/60 border-dashed border-gray-200"
                         }`}>
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
                             <div className="flex items-center gap-2">
                               <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                                 item.check_out_time ? "bg-orange-500" : "bg-gray-300"
@@ -522,12 +515,21 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
                               </span>
                             </div>
                             {item.check_out_time ? (
-                              <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
-                                <Clock className="w-3.5 h-3.5 text-orange-600" />
-                                <span className="text-[#111827] font-bold text-[13px]">
-                                  {formatTime(item.check_out_time)}
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                                  item.is_pulang_cepat
+                                    ? "bg-orange-50 text-orange-700 border border-orange-200/60"
+                                    : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                                }`}>
+                                  {item.is_pulang_cepat ? "Pulang Cepat" : "Disiplin"}
                                 </span>
-                                <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                                <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
+                                  <Clock className="w-3.5 h-3.5 text-orange-600" />
+                                  <span className="text-[#111827] font-bold text-[13px]">
+                                    {formatTime(item.check_out_time)}
+                                  </span>
+                                  <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                                </div>
                               </div>
                             ) : (
                               <span className="text-[11px] font-semibold text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-full">

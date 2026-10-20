@@ -204,10 +204,13 @@ export default function DetailKaryawanMonitoringPage() {
   useEffect(() => {
     if (isCompanyLoading) return;
     if (activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
-      showToast("Akses ditolak: Hanya Manajemen yang dapat melihat profil karyawan", "error");
-      router.replace("/dashboard");
+      router.replace("/unauthorized");
     }
-  }, [activeRole, isCompanyLoading, router, showToast]);
+  }, [activeRole, isCompanyLoading, router]);
+
+  if (!isCompanyLoading && activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
+    return null;
+  }
 
   const getHeaders = useCallback(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
@@ -492,7 +495,7 @@ export default function DetailKaryawanMonitoringPage() {
   };
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] pb-24 relative font-sans">
+    <div className="flex flex-col min-h-[100dvh] w-full max-w-full overflow-x-hidden bg-[#fbfdfc] pb-24 relative font-sans">
       {/* TopBar with back button to Kelola Karyawan */}
       <TopBar 
         title="Profil Karyawan" 
@@ -566,23 +569,21 @@ export default function DetailKaryawanMonitoringPage() {
             </div>
           </div>
 
-          {/* DEDICATED ACTIONS: Keluarkan Karyawan (Kiri) & Kelola Hak Akses (Kanan) */}
+          {/* DEDICATED ACTIONS: Keluarkan Karyawan & Kelola Hak Akses */}
           {(canModifyRole || canRemoveMember) && (
-            <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
-              {canRemoveMember ? (
+            <div className={`pt-3 border-t border-gray-100 grid gap-2 w-full ${canModifyRole && canRemoveMember ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+              {canRemoveMember && (
                 <button
                   type="button"
                   onClick={() => {
                     setDeleteError("");
                     setIsDeleteModalOpen(true);
                   }}
-                  className="px-4 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-full text-[13px] font-bold flex items-center gap-1.5 active:scale-[0.98] transition-all shrink-0 shadow-sm cursor-pointer"
+                  className="w-full px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-full text-[13px] font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all shadow-sm cursor-pointer"
                 >
-                  <UserMinus className="w-4 h-4 text-red-600" />
-                  <span>Keluarkan Karyawan</span>
+                  <UserMinus className="w-4 h-4 text-red-600 shrink-0" />
+                  <span className="truncate">Keluarkan Karyawan</span>
                 </button>
-              ) : (
-                <div />
               )}
 
               {canModifyRole && (
@@ -592,10 +593,10 @@ export default function DetailKaryawanMonitoringPage() {
                     setRoleError("");
                     setIsRoleModalOpen(true);
                   }}
-                  className="px-4 py-2 bg-[#E8F3EB] hover:bg-[#D5EAD9] border border-[#D1E5D5] text-[#356E3B] rounded-full text-[13px] font-bold flex items-center gap-1.5 active:scale-[0.98] transition-all shrink-0 shadow-sm cursor-pointer ml-auto"
+                  className="w-full px-4 py-2.5 bg-[#E8F3EB] hover:bg-[#D5EAD9] border border-[#D1E5D5] text-[#356E3B] rounded-full text-[13px] font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all shadow-sm cursor-pointer"
                 >
-                  <Shield className="w-4 h-4 text-[#356E3B]" />
-                  <span>Kelola Hak Akses</span>
+                  <Shield className="w-4 h-4 text-[#356E3B] shrink-0" />
+                  <span className="truncate">Kelola Hak Akses</span>
                 </button>
               )}
             </div>
@@ -603,44 +604,44 @@ export default function DetailKaryawanMonitoringPage() {
         </div>
 
         {/* TABS NAVIGATION */}
-        <div className="grid grid-cols-3 gap-2 bg-[#f4f9f6]/80 p-1 rounded-full border border-[#eef5f0]">
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-[#f4f9f6]/80 p-1 rounded-full border border-[#eef5f0] w-full">
           <button
             type="button"
             onClick={() => setActiveTab("kehadiran")}
-            className={`py-2 px-3 rounded-full text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-1.5 sm:px-3 rounded-full text-[12px] sm:text-[13px] font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === "kehadiran"
                 ? "bg-[#356E3B] text-white shadow-sm"
                 : "text-gray-600 hover:text-[#111827] hover:bg-white/60"
             }`}
           >
-            <CalendarCheck className="w-[22px] h-[22px] shrink-0" size={22} />
-            <span>Kehadiran</span>
+            <CalendarCheck className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+            <span className="truncate">Kehadiran</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("tugas")}
-            className={`py-2 px-3 rounded-full text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-1.5 sm:px-3 rounded-full text-[12px] sm:text-[13px] font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === "tugas"
                 ? "bg-[#356E3B] text-white shadow-sm"
                 : "text-gray-600 hover:text-[#111827] hover:bg-white/60"
             }`}
           >
-            <ListTodo className="w-[22px] h-[22px] shrink-0" size={22} />
-            <span>Tugas</span>
+            <ListTodo className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+            <span className="truncate">Tugas</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("agenda")}
-            className={`py-2 px-3 rounded-full text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 px-1.5 sm:px-3 rounded-full text-[12px] sm:text-[13px] font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === "agenda"
                 ? "bg-[#356E3B] text-white shadow-sm"
                 : "text-gray-600 hover:text-[#111827] hover:bg-white/60"
             }`}
           >
-            <Calendar className="w-[22px] h-[22px] shrink-0" size={22} />
-            <span>Agenda</span>
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+            <span className="truncate">Agenda</span>
           </button>
         </div>
 
@@ -648,9 +649,9 @@ export default function DetailKaryawanMonitoringPage() {
         {/* TAB 1: KEHADIRAN */}
         {/* ======================================================== */}
         {activeTab === "kehadiran" && (
-          <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-3.5 w-full">
             {/* Filter Periode Kehadiran */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none snap-x">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none snap-x -mx-1 px-1 touch-pan-x w-full">
               {[
                 { id: "today", label: "Hari Ini" },
                 { id: "week", label: "Minggu Ini" },
@@ -661,7 +662,7 @@ export default function DetailKaryawanMonitoringPage() {
                   key={p.id}
                   type="button"
                   onClick={() => setAttendancePeriod(p.id as any)}
-                  className={`px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[13px] font-bold transition-all border ${
+                  className={`px-3.5 sm:px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[12.5px] sm:text-[13px] font-bold transition-all border ${
                     attendancePeriod === p.id
                       ? "bg-[#356E3B] text-white border-[#356E3B] shadow-md"
                       : "bg-white text-[#4B5563] border-[#E5E7EB] hover:bg-gray-50"
@@ -765,22 +766,6 @@ export default function DetailKaryawanMonitoringPage() {
                             }`}>
                               {att.work_mode === "WFH" ? "Work From Home" : "Work From Office"}
                             </span>
-
-                            {/* Status Terlambat */}
-                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                              att.is_terlambat
-                                ? "bg-amber-50 text-amber-700 border border-amber-200/60"
-                                : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
-                            }`}>
-                              {att.is_terlambat ? "Terlambat" : "Tepat Waktu"}
-                            </span>
-
-                            {/* Status Pulang Cepat */}
-                            {att.is_pulang_cepat && (
-                              <span className="bg-orange-50 text-orange-700 border border-orange-200/60 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                                Pulang Cepat
-                              </span>
-                            )}
                           </div>
                         </div>
 
@@ -789,19 +774,28 @@ export default function DetailKaryawanMonitoringPage() {
                           
                           {/* 1. DETAIL MASUK (CHECK-IN) */}
                           <div className="bg-[#fbfdfc] border border-[#eef5f0] rounded-[18px] p-4 flex flex-col gap-3">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
                               <div className="flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
                                 <span className="text-[#1E4738] text-[12px] font-bold uppercase tracking-wider">
                                   Detail Masuk 
                                 </span>
                               </div>
-                              <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
-                                <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                                <span className="text-[#111827] font-bold text-[13px]">
-                                  {formatTime(att.check_in_time)}
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                                  att.is_terlambat
+                                    ? "bg-amber-50 text-amber-700 border border-amber-200/60"
+                                    : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                                }`}>
+                                  {att.is_terlambat ? "Terlambat" : "Disiplin"}
                                 </span>
-                                <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                                <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
+                                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span className="text-[#111827] font-bold text-[13px]">
+                                    {formatTime(att.check_in_time)}
+                                  </span>
+                                  <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                                </div>
                               </div>
                             </div>
 
@@ -892,7 +886,7 @@ export default function DetailKaryawanMonitoringPage() {
                           <div className={`border rounded-[18px] p-4 flex flex-col gap-3 ${
                             att.check_out_time ? "bg-[#fffdfb] border-[#fde8d7]" : "bg-gray-50/60 border-dashed border-gray-200"
                           }`}>
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
                               <div className="flex items-center gap-2">
                                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                                   att.check_out_time ? "bg-orange-500" : "bg-gray-300"
@@ -904,12 +898,21 @@ export default function DetailKaryawanMonitoringPage() {
                                 </span>
                               </div>
                               {att.check_out_time ? (
-                                <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
-                                  <Clock className="w-3.5 h-3.5 text-orange-600" />
-                                  <span className="text-[#111827] font-bold text-[13px]">
-                                    {formatTime(att.check_out_time)}
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                                    att.is_pulang_cepat
+                                      ? "bg-orange-50 text-orange-700 border border-orange-200/60"
+                                      : "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                                  }`}>
+                                    {att.is_pulang_cepat ? "Pulang Cepat" : "Disiplin"}
                                   </span>
-                                  <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                                  <div className="flex items-baseline gap-1 bg-white px-2.5 py-1 rounded-full border border-gray-100 shadow-2xs">
+                                    <Clock className="w-3.5 h-3.5 text-orange-600" />
+                                    <span className="text-[#111827] font-bold text-[13px]">
+                                      {formatTime(att.check_out_time)}
+                                    </span>
+                                    <span className="text-[#6B7280] text-[10px] font-medium">WIB</span>
+                                  </div>
                                 </div>
                               ) : (
                                 <span className="text-[11px] font-semibold text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-full">
@@ -1022,9 +1025,9 @@ export default function DetailKaryawanMonitoringPage() {
         {/* TAB 2: TUGAS */}
         {/* ======================================================== */}
         {activeTab === "tugas" && (
-          <div className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-3.5 w-full">
             {/* Task Filter Chips */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none snap-x">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none snap-x -mx-1 px-1 touch-pan-x w-full">
               {[
                 { id: "all", label: "Semua" },
                 { id: "today", label: "Hari Ini" },
@@ -1034,7 +1037,7 @@ export default function DetailKaryawanMonitoringPage() {
                   key={f.id}
                   type="button"
                   onClick={() => setTaskFilter(f.id as any)}
-                  className={`px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[13px] font-bold transition-all border ${
+                  className={`px-3.5 sm:px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[12.5px] sm:text-[13px] font-bold transition-all border ${
                     taskFilter === f.id
                       ? "bg-[#356E3B] text-white border-[#356E3B] shadow-md"
                       : "bg-white text-[#4B5563] border-[#E5E7EB] hover:bg-gray-50"
@@ -1168,11 +1171,11 @@ export default function DetailKaryawanMonitoringPage() {
             </div>
 
             {/* Filter Tabs matching Employee Agenda role */}
-            <div className="flex gap-2 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden snap-x">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none snap-x -mx-1 px-1 touch-pan-x w-full">
               <button 
                 type="button"
                 onClick={() => setAgendaFilter("Semua")}
-                className={`px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[13px] font-bold transition-all border ${
+                className={`px-3.5 sm:px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[12.5px] sm:text-[13px] font-bold transition-all border ${
                   agendaFilter === "Semua" 
                     ? "bg-[#356E3B] text-white border-[#356E3B] shadow-md" 
                     : "bg-white text-[#4B5563] border-[#E5E7EB] hover:bg-gray-50"
@@ -1185,7 +1188,7 @@ export default function DetailKaryawanMonitoringPage() {
                   key={kat.id}
                   type="button"
                   onClick={() => setAgendaFilter(kat.name)}
-                  className={`px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[13px] font-bold transition-all border ${
+                  className={`px-3.5 sm:px-4 py-2 shrink-0 snap-start rounded-full whitespace-nowrap text-[12.5px] sm:text-[13px] font-bold transition-all border ${
                     agendaFilter.toLowerCase() === kat.name.toLowerCase()
                       ? "bg-[#356E3B] text-white border-[#356E3B] shadow-md" 
                       : "bg-white text-[#4B5563] border-[#E5E7EB] hover:bg-gray-50"

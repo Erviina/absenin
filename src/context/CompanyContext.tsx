@@ -46,7 +46,7 @@ interface CompanyContextType {
   isCompanyLoading: boolean;
   companyError: string | null;
   switchCompany: (companyId: string) => void;
-  refreshMemberships: () => Promise<void>;
+  refreshMemberships: (silent?: boolean) => Promise<void>;
   canCreate: (feature: "agendas" | "news") => boolean;
   clearCacheAndRefresh: () => void;
   currentUser: any | null;
@@ -139,7 +139,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, []);
 
-  const fetchMemberships = useCallback(async () => {
+  const fetchMemberships = useCallback(async (silent: boolean = false) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
     if (!token) {
       setMemberships([]);
@@ -164,7 +164,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     inFlightTokenRef.current = token;
 
     const runFetch = async () => {
-      setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+      }
       setCompanyError(null);
       const tokenAtStart = token;
       const profileId = getCurrentProfileId();
@@ -453,6 +455,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         inFlightPromiseRef.current = null;
         inFlightTokenRef.current = null;
       }
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, [getCurrentProfileId]);
 
@@ -497,11 +502,32 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("authSessionCleared", handleSessionCleared);
     window.addEventListener("authSessionUpdated", handleSessionUpdated);
 
+    const handleUnauthorizedAccess = () => {
+      fetchMemberships(true);
+    };
+    window.addEventListener("unauthorizedAccess", handleUnauthorizedAccess);
+
     return () => {
       window.removeEventListener("authSessionCleared", handleSessionCleared);
       window.removeEventListener("authSessionUpdated", handleSessionUpdated);
+      window.removeEventListener("unauthorizedAccess", handleUnauthorizedAccess);
     };
   }, [fetchMemberships]);
+
+  // Global 403 fetch interceptor to catch any permission revocations on API calls
+  useEffect(() => {
+    if (typeof window !== "undefined" && !(window as any).__fetch403Patched) {
+      (window as any).__fetch403Patched = true;
+      const originalFetch = window.fetch;
+      window.fetch = async function (...args) {
+        const response = await originalFetch.apply(this, args);
+        if (response.status === 403) {
+          window.dispatchEvent(new CustomEvent("unauthorizedAccess", { detail: { url: args[0] } }));
+        }
+        return response;
+      };
+    }
+  }, []);
 
   // Handle company switch
   const switchCompany = useCallback((companyId: string) => {
@@ -565,6 +591,11 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
               detail: { companyId: activeCompanyId, payload },
             })
           );
+
+          // If membership or company member is updated, refresh memberships silently
+          if (payload.table === "company_members") {
+            fetchMemberships(true);
+          }
         }
       )
       .subscribe((status) => {
@@ -576,7 +607,32 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeCompanyId]);
+  }, [activeCompanyId, fetchMemberships]);
+
+  // Realtime subscription for current user's company memberships
+  useEffect(() => {
+    const profileId = currentUser?.id || getCurrentProfileId();
+    if (!profileId) return;
+
+    const channel = supabase.channel(`user-memberships-${profileId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "company_members",
+          filter: `profile_id=eq.${profileId}`,
+        },
+        () => {
+          fetchMemberships(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, getCurrentProfileId, fetchMemberships]);
 
   const activeMembership = useMemo(() => {
     return memberships.find((m) => m.company_id === activeCompanyId) || null;

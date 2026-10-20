@@ -164,7 +164,7 @@ export function getAgendaCategoryColor(type?: string | null) {
   };
 }
 
-function AgendaPageContent() {
+function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryAgendaId = searchParams.get("id");
@@ -479,7 +479,7 @@ function AgendaPageContent() {
       return;
     }
     setFormId("");
-    setFormScope("PERSONAL");
+    setFormScope(isAdminMode && canCreate("agendas") ? "COMPANY" : "PERSONAL");
     setFormKegiatan("");
     setFormKategoriId(categories.length > 0 ? categories[0].id : "");
     setIsAllDay(false);
@@ -714,10 +714,10 @@ function AgendaPageContent() {
   }
 
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
+    <div className={`flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative ${isAdminMode ? 'pb-12' : 'pb-32'}`}>
       {/* Header */}
       <TopBar 
-        title="Agenda"
+        title={isAdminMode ? "Kelola Agenda" : "Agenda"}
         onBack={() => {
           if (isFormModalOpen) {
             setIsFormModalOpen(false);
@@ -725,13 +725,13 @@ function AgendaPageContent() {
             setSelectedAgendaDetail(null);
             setIsDetailMenuOpen(false);
           } else {
-            router.push("/dashboard");
+            router.push(isAdminMode ? "/admin/dashboard" : "/dashboard");
           }
         }}
         rightAction={
           <button 
             onClick={handleOpenAddModal}
-            className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all z-10"
+            className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all z-10 cursor-pointer"
             aria-label="Tambah Agenda"
           >
             <Plus className="w-6 h-6 text-white" />
@@ -1025,7 +1025,7 @@ function AgendaPageContent() {
         )}
       </div>
 
-      <BottomNav activeTab="agenda" />
+      {!isAdminMode && <BottomNav activeTab="agenda" />}
 
       {/* Modal Detail Agenda */}
       {selectedAgendaDetail && (
@@ -1404,7 +1404,11 @@ function AgendaPageContent() {
                   loadingText={formId ? "Menyimpan Perubahan..." : "Menyimpan..."}
                   icon={<CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5} />}
                 >
-                  {formId ? "Simpan Perubahan" : "Simpan Agenda Pribadi"}
+                  {formId 
+                    ? "Simpan Perubahan" 
+                    : formScope === "COMPANY" 
+                      ? "Simpan Agenda Perusahaan" 
+                      : "Simpan Agenda Pribadi"}
                 </PrimaryButton>
               </div>
             </div>
@@ -1415,10 +1419,10 @@ function AgendaPageContent() {
   );
 }
 
-export default function AgendaPage() {
+export default function AgendaPage({ isAdminMode = false }: { isAdminMode?: boolean }) {
   return (
     <Suspense fallback={null}>
-      <AgendaPageContent />
+      <AgendaPageContent isAdminMode={isAdminMode} />
     </Suspense>
   );
 }

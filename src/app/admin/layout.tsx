@@ -1,27 +1,33 @@
 "use client";
 
 import { useCompany } from "@/context/CompanyContext";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { activeRole, activeCompanyId, memberships, isLoading, refreshMemberships, isManagement } = useCompany();
   const [isVerifying, setIsVerifying] = useState(false);
   const [hasVerified, setHasVerified] = useState(false);
 
+  // Jika sedang berada di rute /admin/no-authorized, izinkan tampil tanpa proteksi redirect
+  const isNoAuthorizedPage = pathname === "/admin/no-authorized";
+
+  // Verifikasi role awal jika belum jelas
   useEffect(() => {
+    if (isNoAuthorizedPage) return;
     let isMounted = true;
+
     const verifyAccess = async () => {
-      // If access is unclear (no active company or role is not management), verify once before redirecting
       if (!isLoading && !hasVerified) {
         const hasManagementAccess = Boolean(activeCompanyId && isManagement);
         if (!hasManagementAccess) {
           setIsVerifying(true);
           try {
-            await refreshMemberships();
+            await refreshMemberships(true);
           } catch (e) {
             console.error("Failed to refresh memberships in AdminLayout:", e);
           } finally {
@@ -30,6 +36,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               setHasVerified(true);
             }
           }
+        } else {
+          setHasVerified(true);
         }
       }
     };
@@ -38,31 +46,68 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => {
       isMounted = false;
     };
-  }, [activeRole, activeCompanyId, isManagement, isLoading, hasVerified, refreshMemberships]);
+  }, [activeRole, activeCompanyId, isManagement, isLoading, hasVerified, refreshMemberships, isNoAuthorizedPage]);
 
+  // LIVE MONITORING:
+  // 1. Silent interval polling setiap 3 detik untuk mendeteksi pencabutan role secara instan
+  // 2. Cek saat tab browser kembali aktif (visibilitychange & focus)
+  // 3. Listener event unauthorizedAccess (saat ada API yang merespons 403 Forbidden)
   useEffect(() => {
-    if (!isLoading && !isVerifying) {
-      // 1. If user has no active company or memberships at all, redirect to /cek-perusahaan
+    if (isNoAuthorizedPage) return;
+
+    const interval = setInterval(() => {
+      refreshMemberships(true);
+    }, 3000);
+
+    const handleFocus = () => {
+      refreshMemberships(true);
+    };
+
+    const handleUnauthorizedEvent = () => {
+      refreshMemberships(true);
+      router.replace("/unauthorized");
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+    window.addEventListener("unauthorizedAccess", handleUnauthorizedEvent);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+      window.removeEventListener("unauthorizedAccess", handleUnauthorizedEvent);
+    };
+  }, [isNoAuthorizedPage, refreshMemberships, router]);
+
+  // Redirection guard ketika verifikasi selesai atau role berubah
+  useEffect(() => {
+    if (isNoAuthorizedPage) return;
+
+    if (!isLoading && !isVerifying && hasVerified) {
+      // 1. Jika tidak terafiliasi dengan perusahaan apapun, arahkan ke /cek-perusahaan
       if (!activeCompanyId || memberships.length === 0) {
-        if (hasVerified) {
-          router.replace("/cek-perusahaan");
-        }
+        router.replace("/cek-perusahaan");
         return;
       }
 
-      // 2. If user is in a company but not in a management role (e.g. member/karyawan), redirect to /dashboard
+      // 2. Jika hak akses manajemen dicabut (kembali jadi karyawan), langsung arahkan ke /unauthorized
       if (!isManagement) {
-        if (hasVerified) {
-          router.replace("/dashboard");
-        }
+        router.replace("/unauthorized");
         return;
       }
     }
-  }, [activeCompanyId, memberships.length, isManagement, isLoading, isVerifying, hasVerified, router]);
+  }, [activeCompanyId, memberships.length, isManagement, isLoading, isVerifying, hasVerified, router, isNoAuthorizedPage]);
 
+  // Jika rute adalah /admin/no-authorized, langsung render tanpa pemblokiran
+  if (isNoAuthorizedPage) {
+    return <>{children}</>;
+  }
+
+  // Tampilan pemuatan awal
   if (isLoading || isVerifying) {
     return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc]">
+      <div className="flex flex-col min-h-[100dvh] bg-[#FAFCF9]">
         <TopBar title="Manajemen" onBack={() => router.push("/dashboard")} />
         <div className="flex-1 flex flex-col items-center justify-center p-6 gap-3">
           <Loader2 className="w-8 h-8 text-[#356E3B] animate-spin" />
@@ -74,17 +119,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  // Prevent rendering admin children if unauthorized or not associated with an active company
-  if (!activeCompanyId || memberships.length === 0 || !isManagement) {
+  // JIKA TIDAK MEMILIKI HAK AKSES MANAJEMEN:
+  // Buat tampilan seketika menjadi BLANK (tidak me-render children / data admin sama sekali)
+  // untuk mencegah kebocoran informasi manajemen saat akses dicabut
+  if (!isManagement || !activeCompanyId || memberships.length === 0) {
     return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc]">
-        <TopBar title="Manajemen" onBack={() => router.push("/dashboard")} />
-        <div className="flex-1 flex flex-col items-center justify-center p-6 gap-3 text-center">
-          <Loader2 className="w-8 h-8 text-[#356E3B] animate-spin" />
-          <p className="text-[#5C786C] text-[13px] font-medium">
-            Mengarahkan ke halaman yang sesuai...
-          </p>
-        </div>
+      <div className="min-h-[100dvh] bg-[#FAFCF9] flex items-center justify-center">
+        {/* Blank state saat proses redirect ke /unauthorized sedang berlangsung */}
       </div>
     );
   }

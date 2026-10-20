@@ -21,11 +21,13 @@ import attendancesRoutes from "./routes/attendances";
 import leavesRoutes from "./routes/leaves";
 import tasksRoutes from "./routes/tasks";
 import notificationsRoutes from "./routes/notifications";
+import platformRoutes from "./routes/platform";
 
 app.use(cors());
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
+app.use("/api/platform", platformRoutes);
 app.use("/api/companies", companiesRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/company/join-requests", joinRequestsRoutes);

@@ -524,6 +524,9 @@ export default function DashboardPage() {
     }
   );
 
+  // Cek apakah hari ini adalah hari libur (bukan hari kerja dan tidak sedang check in)
+  const isDayOff = Boolean(activeCompanyId && !scheduleEval.isWorkDay && attendanceStatus !== "CHECKED_IN");
+
   // Evaluasi status dan gaya tombol absensi
   let isBtnDisabled = false;
   let btnLabel = "Masuk";
@@ -629,7 +632,7 @@ export default function DashboardPage() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-32">
       
       {/* Top Header: Profil & Notifikasi */}
-      <div className="h-[72px] px-6 flex justify-between items-center bg-[#fbfdfc] shrink-0 sticky top-0 z-20">
+      <div className="h-[72px] px-6 flex justify-between items-center bg-[#fbfdfc] shrink-0 sticky top-0 z-30">
         {/* Avatar & Greeting */}
         <div className="flex items-center gap-3 min-w-0">
           <Link 
@@ -728,7 +731,7 @@ export default function DashboardPage() {
       <div className="flex-1 px-6 pt-0 flex flex-col gap-6">
         
         {/* Hero Section */}
-        <div className="relative w-full rounded-[24px] mb-2 bg-[#dce9df] overflow-hidden min-h-[164px]">
+        <div className="relative isolate w-full rounded-[24px] mb-2 bg-[#dce9df] overflow-hidden min-h-[164px]">
           {/* Background Illustration */}
           <img 
             src="/img/assets/imagehero.png" 
@@ -748,6 +751,16 @@ export default function DashboardPage() {
                   Presensi selesai dicatat.
                 </p>
               </div>
+            ) : isDayOff ? (
+              <div className="flex flex-col gap-1">
+                <h1 className="text-[#1E4738] text-[17px] font-bold leading-[1.3] tracking-tight">
+                  Selamat beristirahat,<br/>
+                  nikmati hari liburmu!
+                </h1>
+                <p className="text-[#2D5A3F] text-[12.5px] font-medium leading-tight">
+                  Hari ini bukan hari kerja.
+                </p>
+              </div>
             ) : (
               <h1 className="text-[#1E4738] text-[17px] font-bold leading-[1.35] tracking-tight">
                 Kerja lebih produktif,<br/>
@@ -757,9 +770,9 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* CTA Check In / Out Floating Full Rounded Pill at Bottom Right (Hanya muncul jika belum selesai presensi hari ini) */}
-          {attendanceStatus !== "CHECKED_OUT" && (
-            <div className="absolute bottom-3.5 right-3.5 z-20 flex flex-col items-end">
+          {/* CTA Check In / Out Floating Full Rounded Pill at Bottom Right (Hanya muncul jika belum selesai presensi hari ini dan bukan hari libur) */}
+          {attendanceStatus !== "CHECKED_OUT" && !isDayOff && (
+            <div className="absolute bottom-3.5 right-3.5 z-10 flex flex-col items-end">
               {showScheduleNotice && btnHelperText && (
                 <div className="mb-2 bg-[#1E4738] text-white text-[11px] font-medium px-3.5 py-2 rounded-[14px] shadow-lg flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200 max-w-[260px] text-left relative border border-white/20">
                   <Clock className="w-3.5 h-3.5 text-white/90 shrink-0" strokeWidth={2} />
