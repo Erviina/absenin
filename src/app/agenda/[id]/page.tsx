@@ -11,6 +11,7 @@ import { isAgendaUrl, formatAgendaUrl, getAgendaCategoryColor, LocationPinIcon }
 import { Badge } from "@/components/Badge";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
+import { getApiUrl } from "@/lib/api";
 
 export default function AgendaDetailPage() {
   const router = useRouter();
@@ -51,7 +52,7 @@ export default function AgendaDetailPage() {
         }
 
         // Coba GET /agendas/:id
-        let res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agendas/${id}`, { headers });
+        let res = await fetch(getApiUrl(`/agendas/${id}`), { headers });
         if (res.ok) {
           const json = await res.json();
           if (json.success && json.data) {
@@ -62,7 +63,7 @@ export default function AgendaDetailPage() {
         }
 
         // Fallback: cari dari list GET /agendas
-        res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/agendas`, { headers });
+        res = await fetch(getApiUrl("/agendas"), { headers });
         if (res.ok) {
           const json = await res.json();
           if (json.success && Array.isArray(json.data)) {

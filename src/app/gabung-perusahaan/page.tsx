@@ -7,7 +7,7 @@ import { TopBar } from "@/components/TopBar";
 import { Html5Qrcode } from "html5-qrcode";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
-import { setActiveCompanyId } from "@/lib/api";
+import { setActiveCompanyId, getApiUrl } from "@/lib/api";
 
 function LoadingOverlay({ text }: { text: string }) {
   return (
@@ -71,7 +71,7 @@ function GabungPerusahaanContent() {
     // Ini mengarsipkan join request (soft-delete) sehingga tidak akan pernah memicu layar sukses kembali
     if (activeRequestId && token) {
       try {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests/${activeRequestId}/acknowledge`, {
+        await fetch(getApiUrl(`/company/join-requests/${activeRequestId}/acknowledge`), {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -84,7 +84,7 @@ function GabungPerusahaanContent() {
 
     if (token) {
       try {
-        const meRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
+        const meRes = await fetch(getApiUrl("/auth/me"), {
           headers: { Authorization: `Bearer ${token}` }
         });
         const meData = await meRes.json();
@@ -139,7 +139,7 @@ function GabungPerusahaanContent() {
 
     const fetchStatus = async () => {
       try {
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+        const res = await fetch(getApiUrl("/company/join-requests/me"), {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -165,7 +165,7 @@ function GabungPerusahaanContent() {
             // Jika pengguna sudah menjadi anggota aktif dan ini adalah refresh, login ulang, atau sudah pernah melihat layar sukses:
             if (isAlreadyMember && (alreadySeen || !forceSuccess)) {
               if (data.data.id) {
-                fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests/${data.data.id}/acknowledge`, {
+                fetch(getApiUrl(`/company/join-requests/${data.data.id}/acknowledge`), {
                   method: "POST",
                   headers: { Authorization: `Bearer ${token}` }
                 }).catch(() => {});
@@ -228,7 +228,7 @@ function GabungPerusahaanContent() {
       const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
       if (!token) return;
       try {
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+        const res = await fetch(getApiUrl("/company/join-requests/me"), {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
@@ -275,7 +275,7 @@ function GabungPerusahaanContent() {
     isProcessingRef.current = true;
 
     try {
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", {
+      const res = await fetch(getApiUrl("/company/join-requests"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -287,7 +287,7 @@ function GabungPerusahaanContent() {
       
       if (data.success) {
         // Ambil detail request terkini dari backend
-        const resMe = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+        const resMe = await fetch(getApiUrl("/company/join-requests/me"), {
           headers: { Authorization: `Bearer ${token}` }
         });
         const dataMe = await resMe.json();

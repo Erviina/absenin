@@ -22,6 +22,7 @@ import {
   Info
 } from "lucide-react";
 import { formatDate, formatDateWithDay, formatTime } from "@/lib/dateUtils";
+import { getApiUrl } from "@/lib/api";
 
 interface PreviewPhotoData {
   url: string;
@@ -76,7 +77,7 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
         const activeCompanyId = localStorage.getItem("activeCompanyId");
         if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/attendances/management/employees/${id}?month=${monthNum}&year=${yearNum}`, {
+        const res = await fetch(getApiUrl(`/attendances/management/employees/${id}?month=${monthNum}&year=${yearNum}`), {
           headers
         });
         

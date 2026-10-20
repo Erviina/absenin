@@ -28,7 +28,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { shareContent } from "@/lib/shareUtils";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { Badge } from "@/components/Badge";
 import { AgendaCardSchedule, AgendaDetailSchedule } from "@/components/AgendaScheduleDisplay";
 import { CardListSkeleton } from "@/components/CardSkeleton";
@@ -276,10 +276,10 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
 
       const token = localStorage.getItem("accessToken");
       if (!token) return;
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
       if (compId) headers["x-company-id"] = compId;
-      const res = await fetch(`${apiUrl}/agendas/categories`, { headers });
+      const res = await fetch(getApiUrl("/agendas/categories"), { headers });
+
       const data = await res.json();
       if (data.success) {
         const sorted = sortAgendaCategories(data.data);
@@ -331,13 +331,10 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
         return;
       }
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-      if (!apiUrl) throw new Error("API URL tidak ditemukan");
-
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
       if (compId) headers["x-company-id"] = compId;
 
-      const res = await fetch(`${apiUrl}/agendas`, { headers });
+      const res = await fetch(getApiUrl("/agendas"), { headers });
       const data = await res.json();
       if (activeFetchCompanyIdRef.current !== compId) return;
       
@@ -555,7 +552,6 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem("accessToken");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       
       const payload: any = {
         title: formKegiatan,
@@ -569,11 +565,11 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
         is_all_day: isAllDay,
       };
 
-      let url = `${apiUrl}/agendas`;
+      let url = getApiUrl("/agendas");
       let method = "POST";
 
       if (formId) {
-        url = `${apiUrl}/agendas/${formId}`;
+        url = getApiUrl(`/agendas/${formId}`);
         method = "PATCH";
       } else {
         payload.type = formScope;
@@ -627,12 +623,10 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem("accessToken");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-      
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
       if (compId) headers["x-company-id"] = compId;
 
-      const res = await fetch(`${apiUrl}/agendas/${agendaId}`, {
+      const res = await fetch(getApiUrl(`/agendas/${agendaId}`), {
         method: "DELETE",
         headers
       });

@@ -7,9 +7,13 @@ export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    // Berpindah ke halaman onboarding setelah 2 detik
+    // Pengguna yang sudah memiliki token sesi diarahkan ke /login untuk verifikasi backend terpusat.
+    // Pengguna baru tanpa sesi diarahkan ke /login/onboard.
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken")?.trim() : null;
+    const target = token ? "/login" : "/login/onboard";
+
     const timer = setTimeout(() => {
-      router.push("/login/onboard");
+      router.push(target);
     }, 2000);
 
     return () => clearTimeout(timer);

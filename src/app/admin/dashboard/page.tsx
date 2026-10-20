@@ -27,7 +27,7 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData } from "@/lib/clientCache";
 
@@ -207,7 +207,7 @@ export default function AdminDashboardPage() {
       }
       setStatsError(null);
 
-      const resStats = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/attendance-stats?month=${m}&year=${y}`, {
+      const resStats = await fetch(getApiUrl(`/dashboard/attendance-stats?month=${m}&year=${y}`), {
         headers
       });
       if (!resStats.ok) throw new Error(`HTTP ${resStats.status}`);
@@ -300,23 +300,23 @@ export default function AdminDashboardPage() {
 
       // Parallel fetching using Promise.allSettled so that one endpoint failure doesn't block the rest
       const [resCompanySettled, resStatsSettled, resLeaveSettled, resActSettled, resBadgeSettled] = await Promise.allSettled([
-        fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", { headers }).then(async r => {
+        fetch(getApiUrl("/companies/me"), { headers }).then(async r => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.json();
         }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/attendance-stats?month=${m}&year=${y}`, { headers }).then(async r => {
+        fetch(getApiUrl(`/dashboard/attendance-stats?month=${m}&year=${y}`), { headers }).then(async r => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.json();
         }),
-        fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/leave-stats", { headers }).then(async r => {
+        fetch(getApiUrl("/dashboard/leave-stats"), { headers }).then(async r => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.json();
         }),
-        fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications", { headers }).then(async r => {
+        fetch(getApiUrl("/notifications"), { headers }).then(async r => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.json();
         }),
-        fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/badge-counts", { headers }).then(async r => {
+        fetch(getApiUrl("/dashboard/badge-counts"), { headers }).then(async r => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.json();
         }),
@@ -382,9 +382,9 @@ export default function AdminDashboardPage() {
         // Fallback to direct endpoints if badge-counts is not available
         try {
           const [resLeavesAdmin, resJoin, resExit] = await Promise.allSettled([
-            fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/admin", { headers }).then(r => r.json()),
-            fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests", { headers }).then(r => r.json()),
-            fetch(process.env.NEXT_PUBLIC_API_URL + "/company/exit-requests", { headers }).then(r => r.json()),
+            fetch(getApiUrl("/leaves/admin"), { headers }).then(r => r.json()),
+            fetch(getApiUrl("/company/join-requests"), { headers }).then(r => r.json()),
+            fetch(getApiUrl("/company/exit-requests"), { headers }).then(r => r.json()),
           ]);
 
           if (activeFetchCompanyIdRef.current === compId) {

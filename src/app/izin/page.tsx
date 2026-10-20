@@ -14,7 +14,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDateRange } from "@/lib/dateUtils";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
@@ -106,7 +106,7 @@ export default function IzinPage() {
         if (!token) return;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
         if (compId) headers["x-company-id"] = compId;
-        const catRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/categories", { headers });
+        const catRes = await fetch(getApiUrl("/leaves/categories"), { headers });
         const catData = await catRes.json();
         if (catData.success) {
           setCategories(catData.data);
@@ -195,7 +195,7 @@ export default function IzinPage() {
         params.set("start_date", filterDate);
       }
 
-      const leaveRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/leaves?${params.toString()}`, { headers });
+      const leaveRes = await fetch(getApiUrl(`/leaves?${params.toString()}`), { headers });
       const leaveData = await leaveRes.json();
       if (activeFetchCompanyIdRef.current !== compId) return;
 
@@ -292,7 +292,7 @@ export default function IzinPage() {
         headers["x-company-id"] = compId;
       }
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves", {
+      const res = await fetch(getApiUrl("/leaves"), {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -400,7 +400,7 @@ export default function IzinPage() {
       }
 
       // Ambil data terbaru dari backend untuk memastikan status kuota akurat
-      const leaveRes = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves", { headers });
+      const leaveRes = await fetch(getApiUrl("/leaves"), { headers });
       if (!leaveRes.ok) {
         throw new Error("Gagal memeriksa status kuota pengajuan izin. Silakan coba lagi.");
       }

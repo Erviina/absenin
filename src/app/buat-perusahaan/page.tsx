@@ -9,6 +9,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
+import { getApiUrl } from "@/lib/api";
 
 export default function BuatPerusahaanPage() {
   const router = useRouter();
@@ -171,7 +172,7 @@ export default function BuatPerusahaanPage() {
 
       const categoryCode = getCategoryCode(jenis);
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies", {
+      const res = await fetch(getApiUrl("/companies"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

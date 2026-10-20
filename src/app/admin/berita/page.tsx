@@ -10,7 +10,7 @@ import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
 import { shareContent } from "@/lib/shareUtils";
 import { Pagination } from "@/components/Pagination";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
@@ -100,7 +100,7 @@ export default function KelolaBeritaPage() {
         if (!token) return;
         const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
         if (compId) headers["x-company-id"] = compId;
-        const resCat = await fetch(process.env.NEXT_PUBLIC_API_URL + "/news/categories", { headers });
+        const resCat = await fetch(getApiUrl("/news/categories"), { headers });
         if (resCat.ok) {
           const dataCat = await resCat.json();
           if (dataCat.success && Array.isArray(dataCat.data)) {
@@ -159,7 +159,7 @@ export default function KelolaBeritaPage() {
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (activeFilter && activeFilter !== "Semua") params.set("category", activeFilter);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/news?${params.toString()}`, {
+      const res = await fetch(getApiUrl(`/news?${params.toString()}`), {
         headers
       });
       const data = await res.json();
@@ -216,7 +216,7 @@ export default function KelolaBeritaPage() {
       const compId = activeCompanyId || getActiveCompanyId();
       if (compId) headers["x-company-id"] = compId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/news/${id}`, {
+      const res = await fetch(getApiUrl(`/news/${id}`), {
         method: "DELETE",
         headers
       });

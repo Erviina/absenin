@@ -11,7 +11,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
 import { Pagination } from "@/components/Pagination";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
@@ -44,7 +44,7 @@ export default function KelolaKaryawanPage() {
         const compId = activeCompanyId || getActiveCompanyId();
         if (compId) headers["x-company-id"] = compId;
 
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", {
+        const res = await fetch(getApiUrl("/auth/me"), {
           headers
         });
         
@@ -212,7 +212,7 @@ function AdminKaryawanView() {
       queryParams.append("limit", String(employeeLimit));
       queryParams.append("offset", String(employeeOffset));
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/employees?${queryParams.toString()}`, {
+      const res = await fetch(getApiUrl(`/companies/employees?${queryParams.toString()}`), {
         headers: { 
           "Authorization": `Bearer ${token}`,
           ...(compId ? { "x-company-id": compId } : {})
@@ -267,7 +267,7 @@ function AdminKaryawanView() {
       queryParams.append("limit", String(exitRequestsLimit));
       queryParams.append("offset", String(exitRequestsOffset));
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/exit-requests?${queryParams.toString()}`, {
+      const res = await fetch(getApiUrl(`/company/exit-requests?${queryParams.toString()}`), {
         headers
       });
       const data = await res.json();
@@ -311,7 +311,7 @@ function AdminKaryawanView() {
         ? `/company/exit-requests/${selectedExitReqForAction.id}/approve`
         : `/company/exit-requests/${selectedExitReqForAction.id}/reject`;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + endpoint, {
+      const res = await fetch(getApiUrl(endpoint), {
         method: "POST",
         headers
       });
@@ -346,7 +346,7 @@ function AdminKaryawanView() {
     setDeleteMemberError("");
     try {
       const compId = activeCompanyId || getActiveCompanyId();
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/companies/employees/${selectedEmployeeForRole.id}`, {
+      const res = await fetch(getApiUrl(`/companies/employees/${selectedEmployeeForRole.id}`), {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -397,7 +397,7 @@ function AdminKaryawanView() {
       const compId = activeCompanyId || getActiveCompanyId();
       if (compId) headers["x-company-id"] = compId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/companies/employees/${selectedEmployeeForRole.id}/roles`, {
+      const res = await fetch(getApiUrl(`/companies/employees/${selectedEmployeeForRole.id}/roles`), {
         method: "PATCH",
         headers,
         body: JSON.stringify({ roles: newRoles })
@@ -470,7 +470,7 @@ function AdminKaryawanView() {
       queryParams.append("limit", String(joinRequestsLimit));
       queryParams.append("offset", String(joinRequestsOffset));
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests?${queryParams.toString()}`, {
+      const res = await fetch(getApiUrl(`/company/join-requests?${queryParams.toString()}`), {
         headers
       });
       const data = await res.json();
@@ -547,7 +547,7 @@ function AdminKaryawanView() {
     if (!token || !compId) return;
     setIsLoadingCompany(true);
     const compHeaders: Record<string, string> = { "Authorization": `Bearer ${token}`, "x-company-id": compId };
-    fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/me", { headers: compHeaders })
+    fetch(getApiUrl("/companies/me"), { headers: compHeaders })
       .then(res => res.json())
       .then(data => {
         if (activeFetchCompanyIdRef.current && activeFetchCompanyIdRef.current !== compId) return;
@@ -590,7 +590,7 @@ function AdminKaryawanView() {
       if (currentCompId) approveHeaders["x-company-id"] = currentCompId;
 
       for (const reqId of targetIds) {
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/company/join-requests/${reqId}/approve`, {
+        const res = await fetch(getApiUrl(`/company/join-requests/${reqId}/approve`), {
           method: "POST",
           headers: approveHeaders
         });
@@ -631,7 +631,7 @@ function AdminKaryawanView() {
       };
       if (currentCompId) headers["x-company-id"] = currentCompId;
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + `/company/join-requests/${selectedJoinReqForReject.id}/reject`, {
+      const res = await fetch(getApiUrl(`/company/join-requests/${selectedJoinReqForReject.id}/reject`), {
         method: "POST",
         headers
       });

@@ -4,6 +4,8 @@
  * Tanpa mengirim header x-company-id untuk mencegah kontaminasi tenant.
  */
 
+import { getApiUrl } from "@/lib/api";
+
 export interface PlatformOwnerProfile {
   id: string;
   email: string;
@@ -30,9 +32,8 @@ export async function fetchPlatformApi<T = any>(
   options: RequestInit = {}
 ): Promise<PlatformApiResponse<T>> {
   const token = getPlatformAuthToken();
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
-  const url = `${baseUrl}/platform/${cleanEndpoint}`;
+  const url = getApiUrl(`/platform/${cleanEndpoint}`);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

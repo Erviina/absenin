@@ -14,7 +14,7 @@ import { ViewAllButton } from "@/components/ViewAllButton";
 
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
@@ -107,7 +107,7 @@ export default function TugasPage() {
         if (compId) {
           headers["x-company-id"] = compId;
         }
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", {
+        const res = await fetch(getApiUrl("/tasks"), {
           headers
         });
         if (activeFetchCompanyIdRef.current !== compId) return;
@@ -153,7 +153,7 @@ export default function TugasPage() {
         if (compId) {
           headers["x-company-id"] = compId;
         }
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/companies/members", {
+        const res = await fetch(getApiUrl("/companies/members"), {
           headers,
         });
         if (activeFetchCompanyIdRef.current !== compId) return;
@@ -196,7 +196,7 @@ export default function TugasPage() {
       if (compId) {
         headers["x-company-id"] = compId;
       }
-      await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
+      await fetch(getApiUrl("/tasks/" + id), {
         method: "PATCH",
         headers,
         body: JSON.stringify({ completed: !t.completed })
@@ -292,7 +292,7 @@ export default function TugasPage() {
       if (compId) {
         headers["x-company-id"] = compId;
       }
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks/" + id, {
+      const res = await fetch(getApiUrl("/tasks/" + id), {
         method: "DELETE",
         headers
       });
@@ -356,7 +356,7 @@ export default function TugasPage() {
         headers["x-company-id"] = compId;
       }
 
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + url, {
+      const res = await fetch(getApiUrl(url), {
         method,
         headers,
         body: JSON.stringify(payload)

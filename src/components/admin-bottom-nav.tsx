@@ -4,7 +4,7 @@ import { Home, FileText, ClipboardEdit } from "lucide-react";
 import Link from "next/link";
 
 import { useState, useEffect } from "react";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 
 interface AdminBottomNavProps {
   activeTab?: "beranda" | "absensi" | "izin" | "tugas" | "berita";
@@ -28,14 +28,14 @@ export function AdminBottomNav({ activeTab = "beranda", pendingIzinCount }: Admi
         const activeCompanyId = getActiveCompanyId();
         if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/dashboard/badge-counts", { headers });
+        const res = await fetch(getApiUrl("/dashboard/badge-counts"), { headers });
         const data = await res.json();
         if (data.success && data.data) {
           setInternalIzinCount(data.data.pendingLeaves || 0);
           return;
         }
 
-        const resLeaves = await fetch(process.env.NEXT_PUBLIC_API_URL + "/leaves/admin", { headers });
+        const resLeaves = await fetch(getApiUrl("/leaves/admin"), { headers });
         const dataLeaves = await resLeaves.json();
         if (dataLeaves.success && Array.isArray(dataLeaves.data)) {
           const pending = dataLeaves.data.filter((l: any) => l.status === "Menunggu").length;

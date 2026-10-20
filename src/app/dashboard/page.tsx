@@ -29,7 +29,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 import { getPersonalModePreference } from "@/lib/personalMode";
-import { getActiveCompanyId } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { 
   evaluateSchedule, 
   getNextCheckInSchedule, 
@@ -276,12 +276,12 @@ export default function DashboardPage() {
         }
 
         const [authRes, newsRes, attendRes, notifRes, tasksRes, agendasRes] = await Promise.all([
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/auth/me", { headers }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/news?limit=2", { headers }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/attendances/today", { headers }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/notifications/unread-count", { headers }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/tasks", { headers }),
-          fetch(process.env.NEXT_PUBLIC_API_URL + "/agendas", { headers })
+          fetch(getApiUrl("/auth/me"), { headers }),
+          fetch(getApiUrl("/news?limit=2"), { headers }),
+          fetch(getApiUrl("/attendances/today"), { headers }),
+          fetch(getApiUrl("/notifications/unread-count"), { headers }),
+          fetch(getApiUrl("/tasks"), { headers }),
+          fetch(getApiUrl("/agendas"), { headers })
         ]);
 
         // Proteksi Race Condition: Jika unmount, token berganti, atau perusahaan aktif sudah berbeda dari compId saat request dikirim, DROP respons!
@@ -453,7 +453,7 @@ export default function DashboardPage() {
       };
       if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/tasks/${taskId}`, {
+      await fetch(getApiUrl(`/tasks/${taskId}`), {
         method: "PATCH",
         headers,
         body: JSON.stringify({ completed: nextCompleted }),

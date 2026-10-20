@@ -114,6 +114,52 @@ export function getAuthHeaders(customHeaders: Record<string, string> = {}): Reco
   return headers;
 }
 
+/**
+ * Mendapatkan base URL API.
+ * Default adalah "/api" jika NEXT_PUBLIC_API_URL tidak tersedia atau bernilai kosong/undefined.
+ */
+export function getApiBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl && typeof envUrl === "string") {
+    const trimmed = envUrl.trim();
+    if (trimmed !== "" && trimmed !== "undefined" && trimmed !== "null") {
+      return trimmed.replace(/\/+$/, "");
+    }
+  }
+  return "/api";
+}
+
+/**
+ * Helper untuk menyusun URL API yang konsisten di seluruh aplikasi.
+ * - Mendukung URL absolut (http:// atau https://).
+ * - Menangani base URL berupa "/api" atau URL eksternal lengkap.
+ * - Mencegah duplikasi path seperti "/api/api/auth/me" jika base URL sudah berakhiran "/api"
+ *   dan endpoint juga menyertakan prefix "/api".
+ */
+export function getApiUrl(endpoint: string): string {
+  if (!endpoint) return getApiBaseUrl();
+
+  // Jika sudah merupakan URL absolut, gunakan langsung
+  if (/^https?:\/\//i.test(endpoint)) {
+    return endpoint;
+  }
+
+  const base = getApiBaseUrl();
+  const cleanPath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
+  // Jika base URL sudah berakhiran "/api" (misal "/api" atau "https://domain.com/api")
+  // dan cleanPath juga diawali dengan "/api/", hindari duplikasi "/api/api/..."
+  if (base.endsWith("/api") && cleanPath.startsWith("/api/")) {
+    return `${base}${cleanPath.slice(4)}`;
+  }
+
+  if (base === "/api" && cleanPath === "/api") {
+    return "/api";
+  }
+
+  return `${base}${cleanPath}`;
+}
+
 export async function fetchApi(
   endpoint: string,
   options: RequestInit = {}
@@ -121,8 +167,7 @@ export async function fetchApi(
   const token = getAuthToken();
   const companyId = getActiveCompanyId();
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
-  const url = endpoint.startsWith("http") ? endpoint : `${baseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+  const url = getApiUrl(endpoint);
 
   const headers = new Headers(options.headers || {});
 

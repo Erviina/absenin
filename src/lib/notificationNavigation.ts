@@ -1,4 +1,5 @@
 import { CompanyMembership } from "@/context/CompanyContext";
+import { getApiUrl } from "@/lib/api";
 
 export interface NotificationItem {
   id: string;
@@ -158,7 +159,7 @@ export async function handleNotificationNavigation(
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
       if (token) {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/${notif.id}/read`, {
+        await fetch(getApiUrl(`/notifications/${notif.id}/read`), {
           method: "PATCH",
           headers: { Authorization: `Bearer ${token}` },
         });

@@ -4,7 +4,7 @@ import { Building2, Plus, Hourglass, ChevronLeft, AlertCircle, RefreshCw } from 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { setPersonalModePreference } from "@/lib/personalMode";
-import { clearAuthSession, setActiveCompanyId } from "@/lib/api";
+import { clearAuthSession, setActiveCompanyId, getApiUrl } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 
 function CekPerusahaanContent() {
@@ -79,7 +79,7 @@ function CekPerusahaanContent() {
 
     // 2. Jika belum memiliki perusahaan aktif, periksa apakah ada permintaan bergabung (pending)
     try {
-      const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+      const res = await fetch(getApiUrl("/company/join-requests/me"), {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -98,7 +98,7 @@ function CekPerusahaanContent() {
         } else if (data.data.status === 'approved') {
           // Permintaan disetujui: akui permintaan, pulihkan perusahaan aktif, dan arahkan ke dashboard
           if (data.data.id) {
-            fetch(`${process.env.NEXT_PUBLIC_API_URL}/company/join-requests/${data.data.id}/acknowledge`, {
+            fetch(getApiUrl(`/company/join-requests/${data.data.id}/acknowledge`), {
               method: "POST",
               headers: { Authorization: `Bearer ${token}` }
             }).catch(() => {});
@@ -131,7 +131,7 @@ function CekPerusahaanContent() {
       const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
       if (!token) return;
       try {
-        const res = await fetch(process.env.NEXT_PUBLIC_API_URL + "/company/join-requests/me", {
+        const res = await fetch(getApiUrl("/company/join-requests/me"), {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
