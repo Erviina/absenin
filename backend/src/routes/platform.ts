@@ -39,6 +39,7 @@ router.get("/me", authenticatePlatformOwner, async (req: Request, res: Response)
         email: userProfile.email || platformOwner.email,
         fullName: userProfile.fullName,
         avatarUrl: userProfile.avatarUrl,
+        isDeveloper: true,
         role: "PLATFORM_OWNER",
         verifiedAt: new Date().toISOString(),
       },
@@ -409,6 +410,7 @@ router.get("/users", authenticatePlatformOwner, async (req: Request, res: Respon
         p.email, 
         p.avatar_url, 
         p.created_at,
+        p.is_developer,
         p.company_id as active_company_id,
         (SELECT COUNT(*)::int FROM attendances WHERE profile_id = p.id AND deleted_at IS NULL) as total_attendances,
         (SELECT MAX(check_in_time) FROM attendances WHERE profile_id = p.id AND deleted_at IS NULL) as last_attendance,
@@ -466,6 +468,7 @@ router.get("/users", authenticatePlatformOwner, async (req: Request, res: Respon
       const primaryMembership = memberships[0] || null;
       return {
         ...row,
+        is_developer: row.is_developer === true,
         memberships,
         companies_count: memberships.length,
         company_name: primaryMembership?.company_name || null,
@@ -498,6 +501,58 @@ router.get("/users", authenticatePlatformOwner, async (req: Request, res: Respon
     return res.status(500).json({
       success: false,
       message: "Gagal memuat direktori pengguna",
+      errors: [error.message],
+    });
+  }
+});
+
+/**
+ * PATCH /api/platform/users/:id/developer
+ * Mengubah status is_developer (hak akses Platform Admin) seorang pengguna
+ */
+router.patch("/users/:id/developer", authenticatePlatformOwner, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = req.params.id;
+    const { isDeveloper } = req.body;
+
+    if (typeof isDeveloper !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "Nilai isDeveloper harus bertipe boolean (true/false)",
+      });
+    }
+
+    const updateRes = await db.execute(sql`
+      UPDATE profiles 
+      SET is_developer = ${isDeveloper}, updated_at = NOW()
+      WHERE id = ${userId}::uuid AND deleted_at IS NULL
+      RETURNING id, email, full_name, is_developer;
+    `);
+
+    if (updateRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Pengguna tidak ditemukan",
+      });
+    }
+
+    const updatedUser = updateRes.rows[0];
+
+    return res.status(200).json({
+      success: true,
+      message: `Status developer pengguna ${updatedUser.full_name || updatedUser.email} berhasil diubah menjadi ${isDeveloper ? 'Aktif' : 'Nonaktif'}`,
+      data: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        fullName: updatedUser.full_name,
+        isDeveloper: updatedUser.is_developer === true,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error updating user developer status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memperbarui status developer pengguna",
       errors: [error.message],
     });
   }

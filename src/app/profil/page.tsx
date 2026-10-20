@@ -9,8 +9,10 @@ import {
   Lock, 
   LogOut, 
   ChevronRight,
-  ArrowLeftRight
-, Loader2 } from "lucide-react";
+  ArrowLeftRight,
+  Loader2,
+  ShieldCheck 
+} from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
@@ -178,6 +180,19 @@ export default function ProfilPage() {
       <TopBar
         title="Profil"
         onBack={() => router.push("/dashboard")}
+        rightAction={
+          (user?.isDeveloper || currentUser?.isDeveloper) ? (
+            <button
+              type="button"
+              onClick={() => router.push("/platform-admin/overview")}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[12px] font-bold border border-white/30 transition-all active:scale-95 shadow-sm backdrop-blur-sm cursor-pointer"
+              title="Akses Platform Admin (Khusus Developer)"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-white" />
+              <span>Platform Admin</span>
+            </button>
+          ) : undefined
+        }
       />
 
       <div className="px-6 pt-6 flex flex-col gap-6">
@@ -232,7 +247,15 @@ export default function ProfilPage() {
           </div>
           
           <div className="flex flex-col gap-1">
-            <h1 className="text-[#111827] text-[20px] font-bold leading-tight">{user.fullName || "User"}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-[#111827] text-[20px] font-bold leading-tight">{user.fullName || "User"}</h1>
+              {(user?.isDeveloper || currentUser?.isDeveloper) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10.5px] font-bold shadow-2xs">
+                  <ShieldCheck className="w-3 h-3 text-amber-600" />
+                  Developer
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1.5 text-[#6B7280]">
               <User className="w-3.5 h-3.5" />
               <span className="text-[13px] font-medium">{getRoleDisplay()}</span>

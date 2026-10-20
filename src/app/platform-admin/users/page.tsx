@@ -15,6 +15,7 @@ import {
   Layers,
   X,
   Filter,
+  ShieldCheck,
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
 import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
@@ -41,6 +42,7 @@ export interface UserItem {
   companies_count?: number;
   total_attendances: number;
   last_attendance: string | null;
+  is_developer?: boolean;
 }
 
 export interface CompanyLookupItem {
@@ -87,6 +89,41 @@ export default function PlatformAdminUsersPage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const isFetchingMoreRef = useRef(false);
+  const [isTogglingDev, setIsTogglingDev] = useState<string | null>(null);
+
+  const handleToggleDeveloper = async (targetUser: UserItem) => {
+    const nextVal = !targetUser.is_developer;
+    const confirmMsg = nextVal
+      ? `Berikan hak akses Developer kepada "${targetUser.full_name || targetUser.email}"?\n\nPengguna ini akan dapat mengakses Platform Admin.`
+      : `Cabut hak akses Developer dari "${targetUser.full_name || targetUser.email}"?\n\nPengguna tidak akan dapat mengakses Platform Admin lagi.`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsTogglingDev(targetUser.id);
+    try {
+      const res = await fetchPlatformApi(`/users/${targetUser.id}/developer`, {
+        method: "PATCH",
+        body: JSON.stringify({ isDeveloper: nextVal }),
+      });
+
+      if (res.success) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === targetUser.id ? { ...u, is_developer: nextVal } : u))
+        );
+        if (selectedUserForModal?.id === targetUser.id) {
+          setSelectedUserForModal((prev) =>
+            prev ? { ...prev, is_developer: nextVal } : null
+          );
+        }
+      } else {
+        alert(res.message || "Gagal memperbarui status developer");
+      }
+    } catch (err: any) {
+      alert(err.message || "Terjadi kesalahan jaringan");
+    } finally {
+      setIsTogglingDev(null);
+    }
+  };
 
   // Baca query parameter dari URL saat pertama kali dimuat
   useEffect(() => {
@@ -486,6 +523,7 @@ export default function PlatformAdminUsersPage() {
             <thead>
               <tr className="border-b border-gray-100 bg-[#F9FBFA] text-[11px] font-bold uppercase tracking-wider text-gray-400">
                 <th className="py-3.5 pl-6">Pengguna</th>
+                <th className="py-3.5 px-4 text-center">Akses Developer</th>
                 <th className="py-3.5 px-4">Keanggotaan Organisasi (Multi-Tenant)</th>
                 <th className="py-3.5 px-4 text-center">Presensi</th>
                 <th className="py-3.5 px-4">Aktivitas Terakhir</th>
@@ -506,6 +544,9 @@ export default function PlatformAdminUsersPage() {
                         </div>
                       </div>
                     </td>
+                    <td className="py-4 px-4 text-center">
+                      <div className="w-16 h-6 bg-gray-100 rounded-full mx-auto" />
+                    </td>
                     <td className="py-4 px-4">
                       <div className="w-36 h-3.5 bg-gray-200 rounded" />
                     </td>
@@ -525,7 +566,7 @@ export default function PlatformAdminUsersPage() {
                 ))
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                  <td colSpan={7} className="py-12 text-center text-gray-400">
                     <UserX className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     <p className="text-[13px] font-medium">Tidak ada data pengguna ditemukan.</p>
                   </td>
@@ -589,6 +630,32 @@ export default function PlatformAdminUsersPage() {
                             </span>
                           </div>
                         </div>
+                      </td>
+
+                      {/* Developer Access Column */}
+                      <td className="py-3.5 px-4 text-center align-middle">
+                        <button
+                          type="button"
+                          disabled={isTogglingDev === user.id}
+                          onClick={() => handleToggleDeveloper(user)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
+                            user.is_developer
+                              ? "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 shadow-2xs"
+                              : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                          } ${isTogglingDev === user.id ? "opacity-50 cursor-wait" : ""}`}
+                          title={
+                            user.is_developer
+                              ? "Status Developer aktif (klik untuk mencabut)"
+                              : "Bukan Developer (klik untuk memberikan akses)"
+                          }
+                        >
+                          <ShieldCheck
+                            className={`w-3.5 h-3.5 ${
+                              user.is_developer ? "text-amber-600" : "text-gray-400"
+                            }`}
+                          />
+                          <span>{user.is_developer ? "Developer" : "Bukan"}</span>
+                        </button>
                       </td>
 
                       {/* Multi-Tenant Organization Column with Dropdown */}
@@ -846,6 +913,35 @@ export default function PlatformAdminUsersPage() {
                 <span className="text-[12px] font-extrabold bg-white text-[#1E3F2B] px-3 py-1 rounded-full shadow-2xs">
                   {selectedUserForModal.memberships?.length || 0} Organisasi Terdaftar
                 </span>
+              </div>
+
+              {/* Developer Flag Control */}
+              <div className="flex items-center justify-between p-3.5 rounded-[16px] bg-amber-50/60 border border-amber-200/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[12.5px] font-bold text-gray-900">Hak Akses Developer</span>
+                    <span className="text-[11px] text-gray-500">
+                      {selectedUserForModal.is_developer
+                        ? "Dapat mengakses Platform Admin"
+                        : "Hanya akses aplikasi utama"}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isTogglingDev === selectedUserForModal.id}
+                  onClick={() => handleToggleDeveloper(selectedUserForModal)}
+                  className={`px-3 py-1.5 rounded-full text-[11.5px] font-bold border transition-all cursor-pointer ${
+                    selectedUserForModal.is_developer
+                      ? "bg-amber-600 text-white border-amber-600 hover:bg-amber-700 shadow-sm"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                  }`}
+                >
+                  {selectedUserForModal.is_developer ? "Cabut Akses" : "Jadikan Developer"}
+                </button>
               </div>
 
               <div>
