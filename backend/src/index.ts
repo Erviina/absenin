@@ -59,12 +59,6 @@ app.get("/api/health", async (req: Request, res: Response) => {
   }
 });
 
-if (!process.env.VERCEL) {
-  app.listen(port, () => {
-    console.log(`Backend server listening on port ${port}`);
-  });
-}
-
-module.exports = app;
-module.exports.default = app;
-export default app;
+app.listen(port, () => {
+  console.log(`Backend server listening on port ${port}`);
+});
