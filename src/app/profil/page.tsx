@@ -17,6 +17,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 import { getActiveCompanyId, setActiveCompanyId, clearAuthSession, getApiUrl } from "@/lib/api";
+import { ProfileSkeleton } from "@/components/CardSkeleton";
 
 export default function ProfilPage() {
   const router = useRouter();
@@ -158,7 +159,6 @@ export default function ProfilPage() {
       if (data.success) {
         // Refresh the profile to get new avatarUrl
         await fetchUser();
-        showToast("Foto profil berhasil diperbarui", "success");
       } else {
         showToast(data.message || "Gagal mengupload foto profil", "error");
       }
@@ -182,10 +182,7 @@ export default function ProfilPage() {
 
       <div className="px-6 pt-6 flex flex-col gap-6">
         {(isLoading || isCompanyLoading) && !user ? (
-          <div className="flex-1 flex flex-col items-center justify-center h-[50vh]">
-            <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
-            <p className="text-[#4B5563] font-medium text-[14px]">Memuat profil...</p>
-          </div>
+          <ProfileSkeleton />
         ) : error && !user ? (
           <div className="flex-1 flex flex-col items-center justify-center h-[50vh] p-6 text-center">
             <p className="text-red-600 font-bold text-[16px] mb-2">{error}</p>

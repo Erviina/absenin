@@ -1,0 +1,467 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const db_1 = require("../db");
+const schema_1 = require("../db/schema");
+const drizzle_orm_1 = require("drizzle-orm");
+const auth_1 = require("../middleware/auth");
+const crypto_1 = __importDefault(require("crypto"));
+const tenant_1 = require("../utils/tenant");
+const router = (0, express_1.Router)();
+// Helper to notify assignees safely
+async function notifyAssignees(companyId, assignees, creatorId, taskId, taskTitle, existingAssigneeIds = new Set()) {
+    try {
+        if (!companyId || !Array.isArray(assignees) || assignees.length === 0)
+            return;
+        const [creator] = await db_1.db
+            .select({ full_name: schema_1.profiles.full_name })
+            .from(schema_1.profiles)
+            .where((0, drizzle_orm_1.eq)(schema_1.profiles.id, creatorId))
+            .limit(1);
+        const senderName = creator?.full_name || "Rekan kerja Anda";
+        for (const assignee of assignees) {
+            const recipientId = typeof assignee === "string" ? assignee : assignee?.id;
+            if (!recipientId || recipientId === creatorId || existingAssigneeIds.has(recipientId)) {
+                continue;
+            }
+            await db_1.db.insert(schema_1.notifications).values({
+                company_id: companyId,
+                recipient_id: recipientId,
+                type: "TASK_ASSIGNED",
+                title: "Tugas Baru Ditugaskan",
+                message: `${senderName} menugaskan tugas "${taskTitle}" kepada Anda.`,
+                reference_id: taskId,
+                is_read: false,
+            });
+        }
+    }
+    catch (err) {
+        console.error("Failed to notify assignees:", err);
+    }
+}
+// Get all tasks for the current user (personal) and their company (group)
+router.get("/", auth_1.authenticate, async (req, res) => {
+    try {
+        const profileId = req.user?.id;
+        if (!profileId) {
+            res.status(401).json({ error: "Unauthorized" });
+            return;
+        }
+        const tenant = await (0, tenant_1.resolveTenant)(req, profileId);
+        const companyId = tenant?.companyId || null;
+        // Filter tasks based on company:
+        // If companyId is present, strictly fetch tasks for this active company.
+        // If no companyId, fetch tasks where company_id is null.
+        const companyCondition = companyId
+            ? (0, drizzle_orm_1.eq)(schema_1.tasks.company_id, String(companyId))
+            : (0, drizzle_orm_1.isNull)(schema_1.tasks.company_id);
+        const allCompanyTasks = await db_1.db.select().from(schema_1.tasks)
+            .where((0, drizzle_orm_1.and)(companyCondition, (0, drizzle_orm_1.isNull)(schema_1.tasks.deleted_at)))
+            .orderBy((0, drizzle_orm_1.desc)(schema_1.tasks.created_at));
+        // Visible tasks rule:
+        // 1. Personal tasks: ONLY visible to creator (profile_id === profileId)
+        // 2. Group tasks: ONLY visible to creator OR persons mentioned in assignees / assigned_to
+        const visibleTasks = allCompanyTasks.filter(t => {
+            const isCreator = t.profile_id === profileId || t.created_by === profileId;
+            const isGroup = t.type === "group" || (!t.type && Array.isArray(t.assignees) && t.assignees.length > 0);
+            if (isGroup) {
+                if (isCreator)
+                    return true;
+                if (t.assigned_to === profileId)
+                    return true;
+                if (Array.isArray(t.assignees)) {
+                    return t.assignees.some((a) => (typeof a === "string" ? a === profileId : a?.id === profileId));
+                }
+                return false;
+            }
+            else {
+                return isCreator;
+            }
+        });
+        const formattedTasks = visibleTasks.map(t => {
+            const d = t.deadline ? new Date(t.deadline) : null;
+            const isGroup = t.type === "group" || (!t.type && Array.isArray(t.assignees) && t.assignees.length > 0);
+            return {
+                id: t.id,
+                title: t.title,
+                date: d ? d.toISOString().split("T")[0] : null,
+                time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
+                note: t.notes || "",
+                completed: t.is_completed,
+                type: t.type || (isGroup ? "group" : "personal"),
+                company_id: t.company_id,
+                assignees: t.assignees || [],
+                assigned_to: t.assigned_to || null,
+                created_at: t.created_at,
+                created_by: t.created_by || t.profile_id
+            };
+        });
+        res.json(formattedTasks);
+    }
+    catch (error) {
+        console.error("Error fetching tasks:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+// GET /api/tasks/management/employees/:employeeId - Get tasks related to a specific employee for management monitoring
+router.get("/management/employees/:employeeId", auth_1.authenticate, async (req, res) => {
+    try {
+        const callerId = req.user?.id;
+        if (!callerId) {
+            res.status(401).json({ success: false, message: "Unauthorized" });
+            return;
+        }
+        const { employeeId } = req.params;
+        const { status, startDate, endDate } = req.query;
+        const tenant = await (0, tenant_1.resolveTenant)(req, callerId);
+        if (!tenant) {
+            res.status(404).json({ success: false, message: "Perusahaan tidak ditemukan" });
+            return;
+        }
+        if (!tenant.isManagement) {
+            res.status(403).json({ success: false, message: "Forbidden: Hanya Admin atau Manager yang dapat mengakses." });
+            return;
+        }
+        const companyId = tenant.companyId;
+        // Verify target employee belongs to this company
+        const memberCheck = await db_1.db.execute((0, drizzle_orm_1.sql) `
+      SELECT profile_id FROM company_members
+      WHERE company_id = ${companyId}
+        AND profile_id = ${employeeId}
+        AND status = 'active'
+        AND deleted_at IS NULL
+      LIMIT 1
+    `);
+        if (memberCheck.rows.length === 0) {
+            res.status(404).json({ success: false, message: "Karyawan tidak ditemukan di perusahaan ini." });
+            return;
+        }
+        // Fetch tasks for this company
+        const allCompanyTasks = await db_1.db.select().from(schema_1.tasks)
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.tasks.company_id, String(companyId)), (0, drizzle_orm_1.isNull)(schema_1.tasks.deleted_at)))
+            .orderBy((0, drizzle_orm_1.desc)(schema_1.tasks.created_at));
+        // Filter to tasks strictly related to this employee
+        const relatedTasks = allCompanyTasks.filter(t => {
+            const isCreator = t.profile_id === employeeId || t.created_by === employeeId;
+            const isAssigned = t.assigned_to === employeeId;
+            const isInAssignees = Array.isArray(t.assignees) && t.assignees.some((a) => (typeof a === "string" ? a === employeeId : a?.id === employeeId));
+            return isCreator || isAssigned || isInAssignees;
+        });
+        const now = new Date();
+        const formattedTasks = relatedTasks.map(t => {
+            const d = t.deadline ? new Date(t.deadline) : null;
+            const isOverdue = d ? (!t.is_completed && d < now) : false;
+            const isGroup = t.type === "group" || (!t.type && Array.isArray(t.assignees) && t.assignees.length > 0);
+            let computedStatus = "pending";
+            if (t.is_completed) {
+                computedStatus = "completed";
+            }
+            else if (isOverdue) {
+                computedStatus = "overdue";
+            }
+            else {
+                computedStatus = "in_progress";
+            }
+            return {
+                id: t.id,
+                title: t.title,
+                notes: t.notes || "",
+                date: d ? d.toISOString().split("T")[0] : null,
+                time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
+                deadline: t.deadline,
+                completed: t.is_completed,
+                status: computedStatus,
+                is_overdue: isOverdue,
+                type: t.type || (isGroup ? "group" : "personal"),
+                company_id: t.company_id,
+                assignees: t.assignees || [],
+                assigned_to: t.assigned_to || null,
+                created_at: t.created_at,
+                created_by: t.created_by || t.profile_id
+            };
+        });
+        // Optional status filtering
+        let result = formattedTasks;
+        if (status && status !== "all") {
+            result = result.filter(t => t.status === status);
+        }
+        if (startDate && endDate) {
+            result = result.filter(t => {
+                if (!t.date)
+                    return false;
+                return t.date >= startDate && t.date <= endDate;
+            });
+        }
+        res.json({
+            success: true,
+            data: result,
+            meta: {
+                total: result.length,
+                completed: formattedTasks.filter(t => t.completed).length,
+                in_progress: formattedTasks.filter(t => t.status === "in_progress").length,
+                overdue: formattedTasks.filter(t => t.status === "overdue").length,
+            }
+        });
+    }
+    catch (error) {
+        console.error("Error fetching employee tasks:", error);
+        res.status(500).json({ success: false, message: "Internal server error" });
+    }
+});
+// Get single task by ID
+router.get("/:id", auth_1.authenticate, async (req, res) => {
+    try {
+        const profileId = req.user?.id;
+        if (!profileId) {
+            res.status(401).json({ error: "Unauthorized" });
+            return;
+        }
+        const taskId = String(req.params.id);
+        const existingTask = await db_1.db
+            .select()
+            .from(schema_1.tasks)
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.tasks.id, taskId), (0, drizzle_orm_1.isNull)(schema_1.tasks.deleted_at)));
+        if (existingTask.length === 0) {
+            res.status(404).json({ error: "Task not found" });
+            return;
+        }
+        const t = existingTask[0];
+        const isGroup = t.type === "group" || (!t.type && Array.isArray(t.assignees) && t.assignees.length > 0);
+        const isCreator = t.profile_id === profileId || t.created_by === profileId;
+        let isAssignee = false;
+        if (Array.isArray(t.assignees)) {
+            isAssignee = t.assignees.some((a) => (typeof a === "string" ? a === profileId : a?.id === profileId));
+        }
+        if (t.assigned_to === profileId) {
+            isAssignee = true;
+        }
+        if (isGroup) {
+            if (!isCreator && !isAssignee) {
+                res.status(403).json({ error: "Forbidden: Anda tidak memiliki akses ke tugas grup ini" });
+                return;
+            }
+        }
+        else {
+            if (!isCreator) {
+                res.status(403).json({ error: "Forbidden: Anda tidak memiliki akses ke tugas personal ini" });
+                return;
+            }
+        }
+        const d = t.deadline ? new Date(t.deadline) : null;
+        res.json({
+            id: t.id,
+            title: t.title,
+            date: d ? d.toISOString().split("T")[0] : null,
+            time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
+            note: t.notes || "",
+            completed: t.is_completed,
+            type: t.type || (isGroup ? "group" : "personal"),
+            company_id: t.company_id,
+            assignees: t.assignees || [],
+            assigned_to: t.assigned_to || null,
+            created_at: t.created_at,
+            created_by: t.created_by || t.profile_id
+        });
+    }
+    catch (error) {
+        console.error("Error fetching task details:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+// Create a new task
+router.post("/", auth_1.authenticate, async (req, res) => {
+    try {
+        const profileId = req.user?.id;
+        if (!profileId) {
+            res.status(401).json({ error: "Unauthorized" });
+            return;
+        }
+        const { title, date, time, note, type, assignees, assigned_to } = req.body;
+        if (!title) {
+            res.status(400).json({ error: "Title is required" });
+            return;
+        }
+        const tenant = await (0, tenant_1.resolveTenant)(req, profileId);
+        const targetCompanyId = tenant?.companyId || null;
+        const taskType = type === "group" ? "group" : "personal";
+        if (taskType === "group" && !targetCompanyId) {
+            res.status(400).json({ error: "Cannot create group task: No active company associated" });
+            return;
+        }
+        const deadlineStr = `${date || new Date().toISOString().split("T")[0]}T${time || "00:00"}:00Z`;
+        const deadline = new Date(deadlineStr);
+        const safeAssignees = Array.isArray(assignees) ? assignees : [];
+        const safeAssignedTo = assigned_to ||
+            (safeAssignees[0] ? (typeof safeAssignees[0] === "string" ? safeAssignees[0] : safeAssignees[0].id) : null);
+        const [newTask] = await db_1.db
+            .insert(schema_1.tasks)
+            .values({
+            id: crypto_1.default.randomUUID(),
+            profile_id: profileId,
+            company_id: targetCompanyId ? String(targetCompanyId) : null,
+            title,
+            deadline,
+            notes: note || null,
+            is_completed: false,
+            type: taskType,
+            assignees: safeAssignees,
+            assigned_to: safeAssignedTo,
+            created_at: new Date(),
+            updated_at: new Date(),
+            created_by: profileId
+        })
+            .returning();
+        // Send notifications to assignees for group tasks
+        if (targetCompanyId && safeAssignees.length > 0) {
+            await notifyAssignees(String(targetCompanyId), safeAssignees, profileId, newTask.id, newTask.title || "Tugas Baru");
+        }
+        const d = newTask.deadline ? new Date(newTask.deadline) : null;
+        res.status(201).json({
+            id: newTask.id,
+            title: newTask.title,
+            date: d ? d.toISOString().split("T")[0] : null,
+            time: d ? d.toISOString().split("T")[1].substring(0, 5) : "00:00",
+            note: newTask.notes || "",
+            completed: newTask.is_completed,
+            type: newTask.type || taskType,
+            company_id: newTask.company_id,
+            assignees: newTask.assignees || [],
+            assigned_to: newTask.assigned_to || null,
+            created_at: newTask.created_at,
+            created_by: newTask.created_by || newTask.profile_id
+        });
+    }
+    catch (error) {
+        console.error("Error creating task:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+// Update a task
+router.patch("/:id", auth_1.authenticate, async (req, res) => {
+    try {
+        const profileId = req.user?.id;
+        if (!profileId) {
+            res.status(401).json({ error: "Unauthorized" });
+            return;
+        }
+        const taskId = String(req.params.id);
+        const { title, date, time, note, completed, assignees, assigned_to } = req.body;
+        const existingTask = await db_1.db.select().from(schema_1.tasks).where((0, drizzle_orm_1.eq)(schema_1.tasks.id, taskId));
+        if (existingTask.length === 0) {
+            res.status(404).json({ error: "Task not found" });
+            return;
+        }
+        const currentTask = existingTask[0];
+        const isGroup = currentTask.type === "group" || (!currentTask.type && Array.isArray(currentTask.assignees) && currentTask.assignees.length > 0);
+        const isCreator = currentTask.profile_id === profileId || currentTask.created_by === profileId;
+        let isAssignee = false;
+        if (Array.isArray(currentTask.assignees)) {
+            isAssignee = currentTask.assignees.some((a) => (typeof a === "string" ? a === profileId : a?.id === profileId));
+        }
+        if (currentTask.assigned_to === profileId) {
+            isAssignee = true;
+        }
+        if (isGroup) {
+            if (!isCreator && !isAssignee) {
+                res.status(403).json({ error: "Forbidden: Anda tidak memiliki akses ke tugas ini" });
+                return;
+            }
+        }
+        else {
+            if (!isCreator) {
+                res.status(403).json({ error: "Forbidden: Anda tidak dapat mengubah tugas personal orang lain" });
+                return;
+            }
+        }
+        let updatedDeadline = currentTask.deadline;
+        if (date !== undefined || time !== undefined) {
+            const fallbackD = currentTask.deadline ? new Date(currentTask.deadline) : new Date();
+            const d = date !== undefined ? date : fallbackD.toISOString().split("T")[0];
+            const t = time !== undefined ? time : fallbackD.toISOString().split("T")[1].substring(0, 5);
+            updatedDeadline = new Date(`${d}T${t}:00Z`);
+        }
+        const updateData = {
+            title: title !== undefined ? title : currentTask.title,
+            deadline: updatedDeadline,
+            notes: note !== undefined ? note : currentTask.notes,
+            is_completed: completed !== undefined ? completed : currentTask.is_completed,
+            updated_at: new Date(),
+            updated_by: profileId
+        };
+        let newAssigneesToNotify = [];
+        if (assignees !== undefined) {
+            const safeAssignees = Array.isArray(assignees) ? assignees : [];
+            updateData.assignees = safeAssignees;
+            updateData.assigned_to =
+                assigned_to !== undefined
+                    ? assigned_to
+                    : (safeAssignees[0] ? (typeof safeAssignees[0] === "string" ? safeAssignees[0] : safeAssignees[0].id) : null);
+            newAssigneesToNotify = safeAssignees;
+        }
+        else if (assigned_to !== undefined) {
+            updateData.assigned_to = assigned_to;
+        }
+        const [updatedTask] = await db_1.db
+            .update(schema_1.tasks)
+            .set(updateData)
+            .where((0, drizzle_orm_1.eq)(schema_1.tasks.id, taskId))
+            .returning();
+        // Send notifications to newly added assignees
+        if (currentTask.company_id && newAssigneesToNotify.length > 0) {
+            const oldAssigneeIds = new Set(Array.isArray(currentTask.assignees)
+                ? currentTask.assignees.map((a) => (typeof a === "string" ? a : a?.id))
+                : []);
+            await notifyAssignees(currentTask.company_id, newAssigneesToNotify, profileId, updatedTask.id, updatedTask.title || "Tugas Baru", oldAssigneeIds);
+        }
+        const rd = updatedTask.deadline ? new Date(updatedTask.deadline) : null;
+        res.json({
+            id: updatedTask.id,
+            title: updatedTask.title,
+            date: rd ? rd.toISOString().split("T")[0] : null,
+            time: rd ? rd.toISOString().split("T")[1].substring(0, 5) : "00:00",
+            note: updatedTask.notes || "",
+            completed: updatedTask.is_completed,
+            type: updatedTask.type || (isGroup ? "group" : "personal"),
+            company_id: updatedTask.company_id,
+            assignees: updatedTask.assignees || [],
+            assigned_to: updatedTask.assigned_to || null,
+            created_at: updatedTask.created_at,
+            created_by: updatedTask.created_by || updatedTask.profile_id
+        });
+    }
+    catch (error) {
+        console.error("Error updating task:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+// Delete a task (Soft delete)
+router.delete("/:id", auth_1.authenticate, async (req, res) => {
+    try {
+        const profileId = req.user?.id;
+        if (!profileId) {
+            res.status(401).json({ error: "Unauthorized" });
+            return;
+        }
+        const taskId = String(req.params.id);
+        const existingTask = await db_1.db.select().from(schema_1.tasks).where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.tasks.id, taskId), (0, drizzle_orm_1.isNull)(schema_1.tasks.deleted_at)));
+        if (existingTask.length === 0) {
+            res.status(404).json({ error: "Task not found" });
+            return;
+        }
+        const isCreator = existingTask[0].profile_id === profileId || existingTask[0].created_by === profileId;
+        if (!isCreator) {
+            res.status(403).json({ error: "Forbidden: Hanya pembuat tugas yang dapat menghapus tugas ini" });
+            return;
+        }
+        await db_1.db.update(schema_1.tasks).set({ deleted_at: new Date(), updated_at: new Date() }).where((0, drizzle_orm_1.eq)(schema_1.tasks.id, taskId));
+        res.status(204).send();
+    }
+    catch (error) {
+        console.error("Error deleting task:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+exports.default = router;

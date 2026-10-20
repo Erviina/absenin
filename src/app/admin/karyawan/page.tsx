@@ -10,7 +10,7 @@ import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
-import { Pagination } from "@/components/Pagination";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
@@ -141,10 +141,12 @@ function AdminKaryawanView() {
   // Exit Requests State
   const [exitRequests, setExitRequests] = useState<any[]>([]);
   const [exitRequestsTotal, setExitRequestsTotal] = useState(0);
-  const [exitRequestsOffset, setExitRequestsOffset] = useState(0);
   const [exitRequestsLimit] = useState(10);
   const [isLoadingExitRequests, setIsLoadingExitRequests] = useState(true);
   const [exitRequestsError, setExitRequestsError] = useState("");
+  const [isLoadingMoreExit, setIsLoadingMoreExit] = useState(false);
+  const [loadMoreExitError, setLoadMoreExitError] = useState<string | null>(null);
+  const isFetchingMoreExitRef = useRef(false);
 
   // Exit Request Modal State (Approve / Reject)
   const [selectedExitReqForAction, setSelectedExitReqForAction] = useState<any>(null);
@@ -156,17 +158,19 @@ function AdminKaryawanView() {
   const [employees, setEmployees] = useState<any[]>(() => {
     if (typeof window === "undefined") return [];
     const compId = getActiveCompanyId();
-    return getCachedData<any[]>(buildCacheKey("admin_employees", compId, { debouncedSearch: "", roleFilter: "Semua", employeeLimit: 10, employeeOffset: 0 }))?.data || [];
+    return getCachedData<any[]>(buildCacheKey("admin_employees", compId, { debouncedSearch: "", roleFilter: "Semua", employeeLimit: 10, offset: 0 }))?.data || [];
   });
   const [totalEmployees, setTotalEmployees] = useState(0);
-  const [employeeOffset, setEmployeeOffset] = useState(0);
   const [employeeLimit] = useState(10);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     const compId = getActiveCompanyId();
-    return !getCachedData(buildCacheKey("admin_employees", compId, { debouncedSearch: "", roleFilter: "Semua", employeeLimit: 10, employeeOffset: 0 }))?.data;
+    return !getCachedData(buildCacheKey("admin_employees", compId, { debouncedSearch: "", roleFilter: "Semua", employeeLimit: 10, offset: 0 }))?.data;
   });
   const [employeeError, setEmployeeError] = useState("");
+  const [isLoadingMoreEmployees, setIsLoadingMoreEmployees] = useState(false);
+  const [loadMoreEmployeesError, setLoadMoreEmployeesError] = useState<string | null>(null);
+  const isFetchingMoreEmployeesRef = useRef(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -178,7 +182,6 @@ function AdminKaryawanView() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
-      setEmployeeOffset(0);
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -190,11 +193,12 @@ function AdminKaryawanView() {
     if (!token) return;
     const compId = activeCompanyId || getActiveCompanyId();
     activeFetchCompanyIdRef.current = compId;
+    setLoadMoreEmployeesError(null);
     const cacheKey = buildCacheKey("admin_employees", compId, {
       debouncedSearch,
       roleFilter,
       employeeLimit,
-      employeeOffset
+      offset: 0
     });
     const cached = getCachedData<any[]>(cacheKey);
     if (cached) {
@@ -210,7 +214,7 @@ function AdminKaryawanView() {
       if (debouncedSearch.trim()) queryParams.append("search", debouncedSearch.trim());
       if (roleFilter !== "Semua") queryParams.append("role", roleFilter);
       queryParams.append("limit", String(employeeLimit));
-      queryParams.append("offset", String(employeeOffset));
+      queryParams.append("offset", "0");
 
       const res = await fetch(getApiUrl(`/companies/employees?${queryParams.toString()}`), {
         headers: { 
@@ -240,14 +244,67 @@ function AdminKaryawanView() {
     }
   };
 
+  const loadMoreEmployees = async () => {
+    if (isLoadingEmployees || isLoadingMoreEmployees || isFetchingMoreEmployeesRef.current || employees.length >= totalEmployees) {
+      return;
+    }
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+    const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
+
+    try {
+      isFetchingMoreEmployeesRef.current = true;
+      setIsLoadingMoreEmployees(true);
+      setLoadMoreEmployeesError(null);
+
+      const queryParams = new URLSearchParams();
+      if (debouncedSearch.trim()) queryParams.append("search", debouncedSearch.trim());
+      if (roleFilter !== "Semua") queryParams.append("role", roleFilter);
+      queryParams.append("limit", String(employeeLimit));
+      queryParams.append("offset", String(employees.length));
+
+      const res = await fetch(getApiUrl(`/companies/employees?${queryParams.toString()}`), {
+        headers: { 
+          "Authorization": `Bearer ${token}`,
+          ...(compId ? { "x-company-id": compId } : {})
+        }
+      });
+      const data = await res.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
+
+      if (data.success) {
+        const newItems = data.data || [];
+        const total = Number(data.pagination?.total ?? data.meta?.total ?? totalEmployees);
+        setTotalEmployees(total);
+        setEmployees((prev) => {
+          const existingIds = new Set(prev.map((e) => e.id));
+          const uniqueItems = newItems.filter((e: any) => !existingIds.has(e.id));
+          return [...prev, ...uniqueItems];
+        });
+      } else {
+        setLoadMoreEmployeesError(data.message || "Gagal memuat karyawan tambahan");
+      }
+    } catch (err) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
+      setLoadMoreEmployeesError("Terjadi kesalahan koneksi");
+    } finally {
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoadingMoreEmployees(false);
+      }
+      isFetchingMoreEmployeesRef.current = false;
+    }
+  };
+
   const fetchExitRequestsData = async () => {
     const token = localStorage.getItem("accessToken");
     if (!token) return;
     const compId = activeCompanyId || getActiveCompanyId();
     activeFetchCompanyIdRef.current = compId;
+    setLoadMoreExitError(null);
     const cacheKey = buildCacheKey("admin_exit_requests", compId, {
       exitRequestsLimit,
-      exitRequestsOffset
+      offset: 0
     });
     const cached = getCachedData<any[]>(cacheKey);
     if (cached) {
@@ -265,7 +322,7 @@ function AdminKaryawanView() {
 
       const queryParams = new URLSearchParams();
       queryParams.append("limit", String(exitRequestsLimit));
-      queryParams.append("offset", String(exitRequestsOffset));
+      queryParams.append("offset", "0");
 
       const res = await fetch(getApiUrl(`/company/exit-requests?${queryParams.toString()}`), {
         headers
@@ -289,6 +346,56 @@ function AdminKaryawanView() {
       if (activeFetchCompanyIdRef.current === compId) {
         setIsLoadingExitRequests(false);
       }
+    }
+  };
+
+  const loadMoreExitRequests = async () => {
+    if (isLoadingExitRequests || isLoadingMoreExit || isFetchingMoreExitRef.current || exitRequests.length >= exitRequestsTotal) {
+      return;
+    }
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+    const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
+
+    try {
+      isFetchingMoreExitRef.current = true;
+      setIsLoadingMoreExit(true);
+      setLoadMoreExitError(null);
+
+      const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+      if (compId) headers["x-company-id"] = compId;
+
+      const queryParams = new URLSearchParams();
+      queryParams.append("limit", String(exitRequestsLimit));
+      queryParams.append("offset", String(exitRequests.length));
+
+      const res = await fetch(getApiUrl(`/company/exit-requests?${queryParams.toString()}`), {
+        headers
+      });
+      const data = await res.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
+
+      if (data.success) {
+        const newReqs = data.data || [];
+        const total = Number(data.pagination?.total ?? data.meta?.total ?? exitRequestsTotal);
+        setExitRequestsTotal(total);
+        setExitRequests((prev) => {
+          const existingIds = new Set(prev.map((r) => r.id));
+          const uniqueItems = newReqs.filter((r: any) => !existingIds.has(r.id));
+          return [...prev, ...uniqueItems];
+        });
+      } else {
+        setLoadMoreExitError(data.message || "Gagal memuat permohonan keluar tambahan");
+      }
+    } catch (err) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
+      setLoadMoreExitError("Terjadi kesalahan jaringan");
+    } finally {
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoadingMoreExit(false);
+      }
+      isFetchingMoreExitRef.current = false;
     }
   };
 
@@ -326,7 +433,6 @@ function AdminKaryawanView() {
         if (exitActionType === "approve") {
           fetchEmployeesData();
         }
-        showToast(exitActionType === "approve" ? "Permohonan keluar berhasil disetujui" : "Permohonan keluar telah ditolak", "info");
       } else {
         setExitActionError(data.message || `Gagal ${exitActionType === 'approve' ? 'mengeluarkan' : 'menolak'} anggota`);
       }
@@ -360,7 +466,6 @@ function AdminKaryawanView() {
         setIsDeleteConfirmOpen(false);
         setSelectedEmployeeForRole(null);
         fetchEmployeesData();
-        showToast("Karyawan berhasil dikeluarkan dari perusahaan", "success");
       } else {
         setDeleteMemberError(data.message || "Gagal mengeluarkan anggota");
       }
@@ -410,7 +515,6 @@ function AdminKaryawanView() {
         setSelectedEmployeeForRole(null);
         fetchEmployeesData();
         await refreshMemberships();
-        showToast("Hak akses berhasil disimpan", "success");
       } else {
         setSaveRoleError(data.message || "Gagal menyimpan hak akses");
       }
@@ -428,10 +532,12 @@ function AdminKaryawanView() {
   // State untuk Permintaan Bergabung
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
   const [joinRequestsTotal, setJoinRequestsTotal] = useState(0);
-  const [joinRequestsOffset, setJoinRequestsOffset] = useState(0);
   const [joinRequestsLimit] = useState(10);
   const [isLoadingRequests, setIsLoadingRequests] = useState(true);
   const [requestsError, setRequestsError] = useState("");
+  const [isLoadingMoreJoin, setIsLoadingMoreJoin] = useState(false);
+  const [loadMoreJoinError, setLoadMoreJoinError] = useState<string | null>(null);
+  const isFetchingMoreJoinRef = useRef(false);
   const [isProcessingReq, setIsProcessingReq] = useState(false);
 
   // Reject Join Request State
@@ -448,9 +554,10 @@ function AdminKaryawanView() {
     if (!token) return;
     const compId = activeCompanyId || getActiveCompanyId();
     activeFetchCompanyIdRef.current = compId;
+    setLoadMoreJoinError(null);
     const cacheKey = buildCacheKey("admin_join_requests", compId, {
       joinRequestsLimit,
-      joinRequestsOffset
+      offset: 0
     });
     const cached = getCachedData<any[]>(cacheKey);
     if (cached) {
@@ -468,7 +575,7 @@ function AdminKaryawanView() {
 
       const queryParams = new URLSearchParams();
       queryParams.append("limit", String(joinRequestsLimit));
-      queryParams.append("offset", String(joinRequestsOffset));
+      queryParams.append("offset", "0");
 
       const res = await fetch(getApiUrl(`/company/join-requests?${queryParams.toString()}`), {
         headers
@@ -495,6 +602,56 @@ function AdminKaryawanView() {
     }
   };
 
+  const loadMoreJoinRequests = async () => {
+    if (isLoadingRequests || isLoadingMoreJoin || isFetchingMoreJoinRef.current || joinRequests.length >= joinRequestsTotal) {
+      return;
+    }
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+    const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
+
+    try {
+      isFetchingMoreJoinRef.current = true;
+      setIsLoadingMoreJoin(true);
+      setLoadMoreJoinError(null);
+
+      const headers: Record<string, string> = { "Authorization": `Bearer ${token}` };
+      if (compId) headers["x-company-id"] = compId;
+
+      const queryParams = new URLSearchParams();
+      queryParams.append("limit", String(joinRequestsLimit));
+      queryParams.append("offset", String(joinRequests.length));
+
+      const res = await fetch(getApiUrl(`/company/join-requests?${queryParams.toString()}`), {
+        headers
+      });
+      const data = await res.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
+
+      if (data.success) {
+        const newReqs = data.data || [];
+        const total = Number(data.pagination?.total ?? data.meta?.total ?? joinRequestsTotal);
+        setJoinRequestsTotal(total);
+        setJoinRequests((prev) => {
+          const existingIds = new Set(prev.map((r) => r.id));
+          const uniqueItems = newReqs.filter((r: any) => !existingIds.has(r.id));
+          return [...prev, ...uniqueItems];
+        });
+      } else {
+        setLoadMoreJoinError(data.message || "Gagal memuat permintaan gabung tambahan");
+      }
+    } catch (err) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
+      setLoadMoreJoinError("Terjadi kesalahan jaringan");
+    } finally {
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoadingMoreJoin(false);
+      }
+      isFetchingMoreJoinRef.current = false;
+    }
+  };
+
   const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
@@ -504,9 +661,12 @@ function AdminKaryawanView() {
       setExitRequests([]);
       setJoinRequests([]);
       setCompanyData(null);
-      setEmployeeOffset(0);
-      setExitRequestsOffset(0);
-      setJoinRequestsOffset(0);
+      setTotalEmployees(0);
+      setExitRequestsTotal(0);
+      setJoinRequestsTotal(0);
+      setLoadMoreEmployeesError(null);
+      setLoadMoreExitError(null);
+      setLoadMoreJoinError(null);
     }
     prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
@@ -517,9 +677,12 @@ function AdminKaryawanView() {
       setExitRequests([]);
       setJoinRequests([]);
       setCompanyData(null);
-      setEmployeeOffset(0);
-      setExitRequestsOffset(0);
-      setJoinRequestsOffset(0);
+      setTotalEmployees(0);
+      setExitRequestsTotal(0);
+      setJoinRequestsTotal(0);
+      setLoadMoreEmployeesError(null);
+      setLoadMoreExitError(null);
+      setLoadMoreJoinError(null);
       setIsLoadingEmployees(true);
       setIsLoadingExitRequests(true);
       setIsLoadingRequests(true);
@@ -531,15 +694,15 @@ function AdminKaryawanView() {
 
   useEffect(() => {
     fetchEmployeesData();
-  }, [activeCompanyId, debouncedSearch, roleFilter, employeeOffset]);
+  }, [activeCompanyId, debouncedSearch, roleFilter]);
 
   useEffect(() => {
     fetchExitRequestsData();
-  }, [activeCompanyId, exitRequestsOffset]);
+  }, [activeCompanyId]);
 
   useEffect(() => {
     fetchRequestsData();
-  }, [activeCompanyId, joinRequestsOffset]);
+  }, [activeCompanyId]);
 
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
@@ -605,7 +768,6 @@ function AdminKaryawanView() {
       setSelectedRequests(prev => prev.filter(id => !targetIds.includes(id)));
       fetchRequestsData();
       fetchEmployeesData();
-      showToast("Permintaan bergabung berhasil disetujui", "success");
 
     } catch (err: any) {
       console.error(err);
@@ -645,7 +807,6 @@ function AdminKaryawanView() {
         setSelectedJoinReqForReject(null);
         setSelectedRequests(prev => prev.filter(id => id !== rejectedId));
         fetchRequestsData();
-        showToast("Permintaan bergabung berhasil ditolak", "info");
       } else {
         setRejectJoinReqError(data.message || "Gagal menolak permintaan bergabung");
       }
@@ -923,13 +1084,16 @@ function AdminKaryawanView() {
               )}
             </div>
 
-            <Pagination
-              total={exitRequestsTotal}
-              limit={exitRequestsLimit}
-              offset={exitRequestsOffset}
-              onPageChange={setExitRequestsOffset}
-              label="permohonan keluar"
-              isLoading={isLoadingExitRequests}
+            <InfiniteScrollFooter
+              hasMore={exitRequests.length < exitRequestsTotal}
+              isLoadingMore={isLoadingMoreExit}
+              onLoadMore={loadMoreExitRequests}
+              error={loadMoreExitError}
+              onRetry={loadMoreExitRequests}
+              isEmpty={exitRequests.length === 0}
+              loadingMessage="Memuat permohonan keluar berikutnya..."
+              endMessage="Semua permohonan keluar telah ditampilkan"
+              className="mt-2"
             />
           </div>
         )}
@@ -977,7 +1141,16 @@ function AdminKaryawanView() {
             {isLoadingRequests && joinRequests.length === 0 ? (
               <CardListSkeleton count={2} type="employee" />
             ) : requestsError ? (
-              <div className="text-center py-5 text-red-500 text-[13px]">{requestsError}</div>
+              <div className="text-center py-5 flex flex-col items-center justify-center gap-2">
+                <span className="text-red-500 text-[13px]">{requestsError}</span>
+                <button
+                  type="button"
+                  onClick={fetchRequestsData}
+                  className="px-4 py-1.5 rounded-full bg-[#356E3B] text-white text-[12px] font-bold hover:bg-[#2b5930] transition-colors cursor-pointer"
+                >
+                  Coba Lagi
+                </button>
+              </div>
             ) : joinRequests.length === 0 ? (
               <div className="text-center py-5 text-gray-400 text-[13px]">Tidak ada permintaan bergabung saat ini.</div>
             ) : (
@@ -1049,13 +1222,16 @@ function AdminKaryawanView() {
             )}
           </div>
 
-          <Pagination
-            total={joinRequestsTotal}
-            limit={joinRequestsLimit}
-            offset={joinRequestsOffset}
-            onPageChange={setJoinRequestsOffset}
-            label="permintaan gabung"
-            isLoading={isLoadingRequests}
+          <InfiniteScrollFooter
+            hasMore={joinRequests.length < joinRequestsTotal}
+            isLoadingMore={isLoadingMoreJoin}
+            onLoadMore={loadMoreJoinRequests}
+            error={loadMoreJoinError}
+            onRetry={loadMoreJoinRequests}
+            isEmpty={joinRequests.length === 0}
+            loadingMessage="Memuat permintaan gabung berikutnya..."
+            endMessage="Semua permintaan gabung telah ditampilkan"
+            className="mt-2"
           />
         </div>
         )}
@@ -1077,7 +1253,16 @@ function AdminKaryawanView() {
             {isLoadingEmployees && employees.length === 0 ? (
               <CardListSkeleton count={3} type="employee" />
             ) : employeeError ? (
-              <div className="text-center py-5 text-red-500 text-[13px]">{employeeError}</div>
+              <div className="text-center py-5 flex flex-col items-center justify-center gap-2">
+                <span className="text-red-500 text-[13px]">{employeeError}</span>
+                <button
+                  type="button"
+                  onClick={fetchEmployeesData}
+                  className="px-4 py-1.5 rounded-full bg-[#356E3B] text-white text-[12px] font-bold hover:bg-[#2b5930] transition-colors cursor-pointer"
+                >
+                  Coba Lagi
+                </button>
+              </div>
             ) : employees.length === 0 ? (
               <div className="text-center py-5 text-[#7d998c] text-[13px]">Belum ada karyawan.</div>
             ) : filteredEmployees.length === 0 ? (
@@ -1151,13 +1336,16 @@ function AdminKaryawanView() {
             )}
           </div>
 
-          <Pagination
-            total={totalEmployees}
-            limit={employeeLimit}
-            offset={employeeOffset}
-            onPageChange={setEmployeeOffset}
-            label="karyawan"
-            isLoading={isLoadingEmployees}
+          <InfiniteScrollFooter
+            hasMore={employees.length < totalEmployees}
+            isLoadingMore={isLoadingMoreEmployees}
+            onLoadMore={loadMoreEmployees}
+            error={loadMoreEmployeesError}
+            onRetry={loadMoreEmployees}
+            isEmpty={employees.length === 0}
+            loadingMessage="Memuat data karyawan berikutnya..."
+            endMessage="Semua karyawan telah ditampilkan"
+            className="mt-2"
           />
         </div>
         )}
@@ -1215,12 +1403,6 @@ function AdminKaryawanView() {
                     companyName={companyName}
                     size={190}
                     showJoinCodeBox={true}
-                    onCopy={() => {
-                      if (joinCode) {
-                        navigator.clipboard.writeText(joinCode);
-                        showToast("Kode berhasil disalin!", "success");
-                      }
-                    }}
                     instructionText="Arahkan kamera ke kode QR untuk bergabung instan"
                   />
                 </div>

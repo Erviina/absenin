@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { formatDate, formatDateWithDay, formatTime } from "@/lib/dateUtils";
 import { getApiUrl } from "@/lib/api";
+import { CardListSkeleton } from "@/components/CardSkeleton";
 
 interface PreviewPhotoData {
   url: string;
@@ -247,10 +248,24 @@ export default function LaporanDetailUser({ params }: { params: Promise<{ id: st
       />
 
       <div className="px-6 pt-6 flex flex-col gap-5 z-10 relative">
-        {isLoading ? (
-          <div className="py-20 flex flex-col items-center justify-center text-[#9CA3AF]">
-            <Loader2 className="w-10 h-10 animate-spin text-[#356E3B] mb-4" />
-            <span className="text-[14px] font-medium">Memuat detail karyawan...</span>
+        {isLoading && !employee ? (
+          <div className="flex flex-col gap-5 animate-in fade-in duration-200">
+            {/* Profile Card Skeleton */}
+            <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#E5E7EB] flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-gray-100 animate-pulse shrink-0 border border-gray-100" />
+              <div className="flex flex-col gap-2 flex-1">
+                <div className="w-40 h-4 rounded bg-gray-100 animate-pulse" />
+                <div className="w-24 h-3 rounded bg-gray-100 animate-pulse" />
+              </div>
+            </div>
+            {/* Summary Cards Skeleton */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="h-20 bg-white rounded-[20px] border border-[#E5E7EB] p-3 animate-pulse" />
+              <div className="h-20 bg-white rounded-[20px] border border-[#E5E7EB] p-3 animate-pulse" />
+              <div className="h-20 bg-white rounded-[20px] border border-[#E5E7EB] p-3 animate-pulse" />
+            </div>
+            {/* List Skeleton */}
+            <CardListSkeleton count={3} type="attendance" />
           </div>
         ) : error ? (
           <div className="py-20 flex flex-col items-center justify-center text-center gap-3">

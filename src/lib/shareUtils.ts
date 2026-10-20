@@ -34,9 +34,6 @@ export async function shareContent(options: {
   if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
     try {
       await navigator.clipboard.writeText(url);
-      if (options.onToast) {
-        options.onToast("Tautan berhasil disalin ke papan klip!", "success");
-      }
       options.onSuccess?.();
       return true;
     } catch (clipErr) {
@@ -56,9 +53,6 @@ export async function shareContent(options: {
     const successful = document.execCommand("copy");
     document.body.removeChild(textArea);
     if (successful) {
-      if (options.onToast) {
-        options.onToast("Tautan berhasil disalin ke papan klip!", "success");
-      }
       options.onSuccess?.();
       return true;
     }

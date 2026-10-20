@@ -9,7 +9,7 @@ import { useDialog } from "@/context/DialogContext";
 import { formatDate } from "@/lib/dateUtils";
 import { sanitizeText } from "@/lib/sanitize";
 import { shareContent } from "@/lib/shareUtils";
-import { Pagination } from "@/components/Pagination";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
@@ -47,19 +47,22 @@ export default function KelolaBeritaPage() {
   const [activeFilter, setActiveFilter] = useState("Semua");
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
-  // Pagination states
-  const [offset, setOffset] = useState(0);
+  // Infinite Scroll & Pagination states
   const [totalNews, setTotalNews] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
   const limit = 10;
 
   const activeFetchCompanyIdRef = useRef<string | null>(null);
   const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
-  // Reset offset and data HANYA saat active company benar-benar berganti
+  // Reset data HANYA saat active company benar-benar berganti
   useEffect(() => {
     if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
       setNews([]);
-      setOffset(0);
+      setTotalNews(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     }
     prevCompanyIdRef.current = activeCompanyId;
@@ -68,17 +71,13 @@ export default function KelolaBeritaPage() {
   useEffect(() => {
     const handleCompanyChanged = () => {
       setNews([]);
-      setOffset(0);
+      setTotalNews(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     };
     window.addEventListener("companyChanged", handleCompanyChanged);
     return () => window.removeEventListener("companyChanged", handleCompanyChanged);
   }, []);
-
-  // Reset offset when filter or search changes
-  useEffect(() => {
-    setOffset(0);
-  }, [searchQuery, activeFilter]);
 
   // Click outside to close more option menu
   useEffect(() => {
@@ -128,10 +127,11 @@ export default function KelolaBeritaPage() {
   const fetchNews = useCallback(async () => {
     const companyId = activeCompanyId || getActiveCompanyId();
     activeFetchCompanyIdRef.current = companyId;
+    setLoadMoreError(null);
     try {
       const cacheKey = buildCacheKey("admin_news", companyId, {
         limit,
-        offset,
+        offset: 0,
         searchQuery,
         activeFilter,
       });
@@ -155,7 +155,7 @@ export default function KelolaBeritaPage() {
 
       const params = new URLSearchParams();
       params.set("limit", String(limit));
-      params.set("offset", String(offset));
+      params.set("offset", "0");
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (activeFilter && activeFilter !== "Semua") params.set("category", activeFilter);
 
@@ -183,7 +183,61 @@ export default function KelolaBeritaPage() {
         setIsLoading(false);
       }
     }
-  }, [activeCompanyId, limit, offset, searchQuery, activeFilter]);
+  }, [activeCompanyId, limit, searchQuery, activeFilter]);
+
+  // Fetch next page automatically on scroll
+  const loadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore || isFetchingMoreRef.current || news.length >= totalNews) {
+      return;
+    }
+
+    const companyId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = companyId;
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      const compId = activeCompanyId || getActiveCompanyId();
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (compId) headers["x-company-id"] = compId;
+
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(news.length));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (activeFilter && activeFilter !== "Semua") params.set("category", activeFilter);
+
+      const res = await fetch(getApiUrl(`/news?${params.toString()}`), { headers });
+      const data = await res.json();
+      if (activeFetchCompanyIdRef.current !== companyId) return;
+
+      if (res.ok && data.success) {
+        const newItems: NewsItem[] = data.data || [];
+        const total = data.pagination?.total ?? data.meta?.total ?? totalNews;
+        setTotalNews(total);
+        setNews((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id));
+          const uniqueItems = newItems.filter((item) => !existingIds.has(item.id));
+          return [...prev, ...uniqueItems];
+        });
+      } else {
+        setLoadMoreError(data.message || "Gagal memuat berita tambahan.");
+      }
+    } catch (err: any) {
+      if (activeFetchCompanyIdRef.current !== companyId) return;
+      console.error("Error loading more news:", err);
+      setLoadMoreError("Tidak dapat terhubung ke server. Silakan coba lagi.");
+    } finally {
+      if (activeFetchCompanyIdRef.current === companyId) {
+        setIsLoadingMore(false);
+      }
+      isFetchingMoreRef.current = false;
+    }
+  }, [isLoading, isLoadingMore, news.length, totalNews, activeCompanyId, limit, searchQuery, activeFilter]);
 
   useEffect(() => {
     fetchNews();
@@ -226,7 +280,6 @@ export default function KelolaBeritaPage() {
         invalidateCache("dashboard_news");
         setNews(prev => prev.filter(n => n.id !== id));
         setTotalNews(prev => Math.max(0, prev - 1));
-        showToast("Berita berhasil dihapus", "success");
       } else {
         const errData = await res.json().catch(() => ({}));
         showToast(errData.message || "Gagal menghapus berita", "error");
@@ -451,13 +504,15 @@ export default function KelolaBeritaPage() {
                 );
               })}
 
-              <Pagination
-                total={totalNews}
-                limit={limit}
-                offset={offset}
-                onPageChange={setOffset}
-                isLoading={isLoading}
-                label="berita"
+              <InfiniteScrollFooter
+                hasMore={news.length < totalNews}
+                isLoadingMore={isLoadingMore}
+                onLoadMore={loadMore}
+                error={loadMoreError}
+                onRetry={loadMore}
+                isEmpty={news.length === 0}
+                loadingMessage="Memuat berita berikutnya..."
+                endMessage="Semua berita telah ditampilkan"
                 className="mt-2"
               />
             </>

@@ -69,12 +69,24 @@ export default function NotifikasiDetailPage() {
 
 
 
-  if (isLoading) {
+  if (isLoading && !notif) {
     return (
-      <div className="min-h-screen bg-[#fbfdfc]">
+      <div className="min-h-screen bg-[#fbfdfc] pb-8 animate-in fade-in duration-200">
         <TopBar title="Detail Aktivitas" onBack={() => router.push("/notifikasi")} />
-        <div className="flex justify-center mt-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#356E3B]"></div>
+        <div className="px-6 pt-6 flex flex-col gap-6">
+          <div className="flex items-center gap-4">
+            <div className="w-[52px] h-[52px] rounded-full bg-gray-100 animate-pulse shrink-0 border border-gray-100" />
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="w-20 h-4 rounded-full bg-gray-100 animate-pulse" />
+              <div className="w-48 h-5 rounded bg-gray-100 animate-pulse" />
+              <div className="w-28 h-3.5 rounded bg-gray-100 animate-pulse" />
+            </div>
+          </div>
+          <div className="bg-white rounded-[20px] p-5 border border-[#E5E7EB] shadow-sm flex flex-col gap-3">
+            <div className="w-full h-4 rounded bg-gray-100 animate-pulse" />
+            <div className="w-3/4 h-4 rounded bg-gray-100 animate-pulse" />
+            <div className="w-1/2 h-4 rounded bg-gray-100 animate-pulse" />
+          </div>
         </div>
       </div>
     );

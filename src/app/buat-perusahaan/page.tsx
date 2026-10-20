@@ -71,7 +71,6 @@ export default function BuatPerusahaanPage() {
     if (berhasil) {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
-      showToast("Kode berhasil disalin!", "success");
     } else {
       showToast("Gagal menyalin kode. Silakan salin secara manual.", "error");
     }
@@ -95,7 +94,6 @@ export default function BuatPerusahaanPage() {
     } else {
       try {
         await navigator.clipboard.writeText(`${text}\n${qrUrl}`);
-        showToast("Link undangan berhasil disalin ke clipboard.", "success");
       } catch (error) {
         console.error("Error copying to clipboard", error);
         showToast("Gagal menyalin link undangan.", "error");
@@ -137,7 +135,6 @@ export default function BuatPerusahaanPage() {
         downloadLink.download = `absenin-qr-${joinCode}.png`;
         downloadLink.href = pngFile;
         downloadLink.click();
-        showToast("QR Code berhasil disimpan!", "success");
       };
       
       img.onerror = () => {

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
 import { formatDateRange } from "@/lib/dateUtils";
-import { Pagination } from "@/components/Pagination";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 
 import { useCompany } from "@/context/CompanyContext";
 import { getActiveCompanyId, getApiUrl } from "@/lib/api";
@@ -59,39 +59,38 @@ export default function KelolaIzinPage() {
     type: "success" | "error";
   } | null>(null);
 
-  // Pagination states
-  const [offset, setOffset] = useState(0);
+  // Infinite Scroll & Pagination states
   const [totalLeaves, setTotalLeaves] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
   const limit = 10;
 
   const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
-  // Reset data and offset on company change
+  // Reset data on company change
   useEffect(() => {
     if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
       setData([]);
-      setOffset(0);
+      setTotalLeaves(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     }
     prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
-  // Reset offset on search or category filter change
-  useEffect(() => {
-    setOffset(0);
-  }, [searchQuery, activeFilter]);
-
-  // Fetch Leaves
+  // Fetch initial Leaves
   const fetchLeaves = useCallback(async () => {
     if (isCompanyLoading) return;
     try {
+      setLoadMoreError(null);
       const token = localStorage.getItem("accessToken");
       if (!token) return;
 
       const companyId = activeCompanyId || getActiveCompanyId();
       const cacheKey = buildCacheKey("admin_leaves", companyId, {
         limit,
-        offset,
+        offset: 0,
         searchQuery,
         activeFilter,
       });
@@ -111,7 +110,7 @@ export default function KelolaIzinPage() {
 
       const params = new URLSearchParams();
       params.set("limit", String(limit));
-      params.set("offset", String(offset));
+      params.set("offset", "0");
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       if (activeFilter && activeFilter !== "Semua") params.set("category", activeFilter);
 
@@ -144,7 +143,66 @@ export default function KelolaIzinPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeCompanyId, isCompanyLoading, limit, offset, searchQuery, activeFilter]);
+  }, [activeCompanyId, isCompanyLoading, limit, searchQuery, activeFilter]);
+
+  // Fetch next page automatically on scroll
+  const loadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore || isFetchingMoreRef.current || data.length >= totalLeaves) {
+      return;
+    }
+
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      const companyId = activeCompanyId || getActiveCompanyId();
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (companyId) headers["x-company-id"] = companyId;
+
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(data.length));
+      if (searchQuery.trim()) params.set("search", searchQuery.trim());
+      if (activeFilter && activeFilter !== "Semua") params.set("category", activeFilter);
+
+      const res = await fetch(getApiUrl(`/leaves/admin?${params.toString()}`), {
+        headers
+      });
+      const resData = await res.json();
+      if (resData.success && Array.isArray(resData.data)) {
+        const mappedData: IzinRequest[] = resData.data.map((item: any) => ({
+          id: item.id,
+          name: item.employee_name || "Unknown",
+          type: item.category_name || "Lainnya",
+          status: item.status,
+          start_date: item.start_date,
+          end_date: item.end_date,
+          reason: item.description || "-",
+          attachment_url: item.attachment_url || undefined,
+          rejection_reason: item.rejection_reason || undefined
+        }));
+        const total = resData.pagination?.total ?? resData.meta?.total ?? totalLeaves;
+        setTotalLeaves(total);
+        setData((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id));
+          const uniqueItems = mappedData.filter((item) => !existingIds.has(item.id));
+          return [...prev, ...uniqueItems];
+        });
+      } else {
+        setLoadMoreError(resData.message || "Gagal memuat permohonan izin tambahan");
+      }
+    } catch (e) {
+      console.error("Error loading more admin leaves:", e);
+      setLoadMoreError("Tidak dapat terhubung ke server. Silakan coba lagi.");
+    } finally {
+      setIsLoadingMore(false);
+      isFetchingMoreRef.current = false;
+    }
+  }, [isLoading, isLoadingMore, data.length, totalLeaves, activeCompanyId, limit, searchQuery, activeFilter]);
 
   useEffect(() => {
     fetchLeaves();
@@ -587,13 +645,15 @@ export default function KelolaIzinPage() {
           </div>
         </div>
 
-        <Pagination
-          total={totalLeaves}
-          limit={limit}
-          offset={offset}
-          onPageChange={setOffset}
-          isLoading={isLoading}
-          label="permohonan izin"
+        <InfiniteScrollFooter
+          hasMore={data.length < totalLeaves}
+          isLoadingMore={isLoadingMore}
+          onLoadMore={loadMore}
+          error={loadMoreError}
+          onRetry={loadMore}
+          isEmpty={data.length === 0}
+          loadingMessage="Memuat permohonan izin berikutnya..."
+          endMessage="Semua permohonan izin telah ditampilkan"
           className="mt-2"
         />
         </>

@@ -211,7 +211,6 @@ function BuatBeritaForm() {
         invalidateCache("news");
         invalidateCache("admin_news");
         invalidateCache("dashboard_news");
-        showToast(editingId ? "Berita berhasil diperbarui" : "Berita berhasil diterbitkan", "success");
         router.push("/admin/berita");
       } else {
         showToast(data.message || "Gagal menyimpan berita", "error");

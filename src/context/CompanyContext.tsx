@@ -164,7 +164,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     inFlightTokenRef.current = token;
 
     const runFetch = async () => {
-      if (!silent) {
+      // Hanya aktifkan full blocking loading jika belum ada data membership atau user sama sekali
+      const hasExistingData = memberships.length > 0 || Boolean(currentUser);
+      if (!silent && !hasExistingData) {
         setIsLoading(true);
       }
       setCompanyError(null);
@@ -701,7 +703,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   }, [activeRole, currentUser]);
 
   const clearCacheAndRefresh = useCallback(() => {
-    fetchMemberships();
+    fetchMemberships(true);
   }, [fetchMemberships]);
 
   const value = useMemo(

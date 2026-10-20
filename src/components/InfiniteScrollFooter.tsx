@@ -27,6 +27,11 @@ export function InfiniteScrollFooter({
   className = "",
 }: InfiniteScrollFooterProps) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const onLoadMoreRef = useRef(onLoadMore);
+
+  useEffect(() => {
+    onLoadMoreRef.current = onLoadMore;
+  }, [onLoadMore]);
 
   useEffect(() => {
     if (!hasMore || isLoadingMore || Boolean(error) || isEmpty) return;
@@ -38,7 +43,7 @@ export function InfiniteScrollFooter({
       (entries) => {
         const first = entries[0];
         if (first && first.isIntersecting) {
-          onLoadMore();
+          onLoadMoreRef.current();
         }
       },
       {
@@ -53,7 +58,7 @@ export function InfiniteScrollFooter({
     return () => {
       observer.disconnect();
     };
-  }, [hasMore, isLoadingMore, error, isEmpty, onLoadMore]);
+  }, [hasMore, isLoadingMore, error, isEmpty]);
 
   if (isEmpty) return null;
 

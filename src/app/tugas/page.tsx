@@ -299,7 +299,6 @@ export default function TugasPage() {
       if (res.ok) {
         invalidateCache("tasks");
         invalidateCache("dashboard_tasks");
-        showToast("Tugas berhasil dihapus", "success");
       } else {
         showToast("Gagal menghapus tugas dari server", "error");
       }
@@ -368,10 +367,8 @@ export default function TugasPage() {
         const savedTask = await res.json();
         if (editingTaskId) {
           setTasks(tasks.map(t => t.id === editingTaskId ? savedTask : t));
-          showToast("Tugas berhasil diperbarui", "success");
         } else {
           setTasks([savedTask, ...tasks]);
-          showToast("Tugas baru berhasil ditambahkan", "success");
         }
         setIsAddingTask(false);
         setEditingTaskId(null);

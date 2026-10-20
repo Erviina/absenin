@@ -9,7 +9,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { Badge } from "@/components/Badge";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { CustomSelect } from "@/components/CustomSelect";
-import { Pagination } from "@/components/Pagination";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 import { createClient } from "@supabase/supabase-js";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
@@ -62,10 +62,12 @@ export default function IzinPage() {
   const [filterDate, setFilterDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("Semua Kategori");
 
-  // Pagination states
-  const [offset, setOffset] = useState(0);
+  // Infinite scroll & Pagination states
   const [totalLeaves, setTotalLeaves] = useState(0);
-  const limit = 10;
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
+  const limit = 8;
 
   const [categories, setCategories] = useState<any[]>(() => {
     if (typeof window === "undefined") return [];
@@ -75,18 +77,13 @@ export default function IzinPage() {
   const [pengajuanList, setPengajuanList] = useState<any[]>(() => {
     if (typeof window === "undefined") return [];
     const compId = getActiveCompanyId();
-    return getCachedData<any[]>(buildCacheKey("leaves", compId, { limit: 10, offset: 0 }))?.data || [];
+    return getCachedData<any[]>(buildCacheKey("leaves", compId, { limit: 8, offset: 0 }))?.data || [];
   });
   const [isLoading, setIsLoading] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     const compId = getActiveCompanyId();
-    return !getCachedData(buildCacheKey("leaves", compId, { limit: 10, offset: 0 }))?.data;
+    return !getCachedData(buildCacheKey("leaves", compId, { limit: 8, offset: 0 }))?.data;
   });
-
-  // Reset offset on filter change
-  useEffect(() => {
-    setOffset(0);
-  }, [filterCategory, filterDate]);
 
   // Fetch categories once
   useEffect(() => {
@@ -123,12 +120,12 @@ export default function IzinPage() {
   const activeFetchCompanyIdRef = useRef<string | null>(null);
   const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
-  // Reset leaves and offset when active company changes
+  // Reset leaves when active company changes
   useEffect(() => {
     if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
       setPengajuanList([]);
       setTotalLeaves(0);
-      setOffset(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     }
     prevCompanyIdRef.current = activeCompanyId;
@@ -138,18 +135,19 @@ export default function IzinPage() {
     const handleCompanyChanged = () => {
       setPengajuanList([]);
       setTotalLeaves(0);
-      setOffset(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     };
     window.addEventListener("companyChanged", handleCompanyChanged);
     return () => window.removeEventListener("companyChanged", handleCompanyChanged);
   }, []);
 
-  // Fetch paginated leaves
+  // Fetch initial paginated leaves
   const fetchLeaves = useCallback(async () => {
     if (isCompanyLoading) return;
     const compId = activeCompanyId || getActiveCompanyId();
     activeFetchCompanyIdRef.current = compId;
+    setLoadMoreError(null);
     if (!compId) {
       setPengajuanList([]);
       setTotalLeaves(0);
@@ -161,7 +159,7 @@ export default function IzinPage() {
       category: filterCategory,
       start_date: filterDate,
       limit,
-      offset,
+      offset: 0,
     });
 
     const cached = getCachedData<any[]>(cacheKey);
@@ -187,7 +185,7 @@ export default function IzinPage() {
 
       const params = new URLSearchParams();
       params.set("limit", String(limit));
-      params.set("offset", String(offset));
+      params.set("offset", "0");
       if (filterCategory && filterCategory !== "Semua Kategori") {
         params.set("category", filterCategory);
       }
@@ -205,16 +203,81 @@ export default function IzinPage() {
         setPengajuanList(list);
         setTotalLeaves(total);
         setCachedData(cacheKey, list, total);
+      } else {
+        setLoadMoreError(leaveData.message || "Gagal memuat data izin");
       }
     } catch (error) {
       if (activeFetchCompanyIdRef.current !== compId) return;
       console.error("Error fetching leaves data:", error);
+      setLoadMoreError("Tidak dapat terhubung ke server. Silakan coba lagi.");
     } finally {
       if (activeFetchCompanyIdRef.current === compId) {
         setIsLoading(false);
       }
     }
-  }, [activeCompanyId, isCompanyLoading, limit, offset, filterCategory, filterDate]);
+  }, [activeCompanyId, isCompanyLoading, limit, filterCategory, filterDate]);
+
+  // Fetch next page automatically on scroll
+  const loadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore || isFetchingMoreRef.current || pengajuanList.length >= totalLeaves) {
+      return;
+    }
+
+    const compId = activeCompanyId || getActiveCompanyId();
+    activeFetchCompanyIdRef.current = compId;
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const token = localStorage.getItem("accessToken");
+      if (!token) return;
+
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      };
+      if (compId) {
+        headers["x-company-id"] = compId;
+      }
+
+      const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      params.set("offset", String(pengajuanList.length));
+      if (filterCategory && filterCategory !== "Semua Kategori") {
+        params.set("category", filterCategory);
+      }
+      if (filterDate) {
+        params.set("start_date", filterDate);
+      }
+
+      const leaveRes = await fetch(getApiUrl(`/leaves?${params.toString()}`), { headers });
+      const leaveData = await leaveRes.json();
+      if (activeFetchCompanyIdRef.current !== compId) return;
+
+      if (leaveData.success) {
+        const newItems = leaveData.data || [];
+        const total = leaveData.pagination?.total ?? leaveData.meta?.total ?? totalLeaves;
+        setTotalLeaves(total);
+        setPengajuanList((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id));
+          const uniqueItems = newItems.filter((item: any) => !existingIds.has(item.id));
+          return [...prev, ...uniqueItems];
+        });
+      } else {
+        setLoadMoreError(leaveData.message || "Gagal memuat riwayat izin tambahan.");
+      }
+    } catch (error) {
+      if (activeFetchCompanyIdRef.current !== compId) return;
+      console.error("Error loading more leaves:", error);
+      setLoadMoreError("Tidak dapat terhubung ke server. Silakan coba lagi.");
+    } finally {
+      if (activeFetchCompanyIdRef.current === compId) {
+        setIsLoadingMore(false);
+      }
+      isFetchingMoreRef.current = false;
+    }
+  }, [isLoading, isLoadingMore, pengajuanList.length, totalLeaves, activeCompanyId, limit, filterCategory, filterDate]);
 
   useEffect(() => {
     fetchLeaves();
@@ -311,7 +374,6 @@ export default function IzinPage() {
         invalidateCache("leaves");
         invalidateCache("admin_leaves");
         await fetchLeaves();
-        showToast("Pengajuan izin berhasil dikirim", "success");
         
         // Reset Form
         setIsAddingIzin(false);
@@ -944,13 +1006,15 @@ export default function IzinPage() {
                     );
                     })}
 
-                    <Pagination
-                      total={totalLeaves}
-                      limit={limit}
-                      offset={offset}
-                      onPageChange={setOffset}
-                      isLoading={isLoading}
-                      label="pengajuan izin"
+                    <InfiniteScrollFooter
+                      hasMore={pengajuanList.length < totalLeaves}
+                      isLoadingMore={isLoadingMore}
+                      onLoadMore={loadMore}
+                      error={loadMoreError}
+                      onRetry={loadMore}
+                      isEmpty={pengajuanList.length === 0}
+                      loadingMessage="Memuat riwayat izin berikutnya..."
+                      endMessage="Semua pengajuan izin telah ditampilkan"
                       className="mt-2"
                     />
                   </>

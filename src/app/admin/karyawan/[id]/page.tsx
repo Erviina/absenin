@@ -395,7 +395,6 @@ export default function DetailKaryawanMonitoringPage() {
 
       const json = await res.json();
       if (res.ok && json.success) {
-        showToast("Hak akses karyawan berhasil diperbarui!", "success");
         setIsRoleModalOpen(false);
         fetchAttendanceData();
       } else {
@@ -422,7 +421,6 @@ export default function DetailKaryawanMonitoringPage() {
 
       const json = await res.json();
       if (res.ok && json.success) {
-        showToast("Karyawan berhasil dikeluarkan dari perusahaan.", "success");
         router.replace("/admin/karyawan");
       } else {
         setDeleteError(json.message || "Gagal mengeluarkan karyawan.");

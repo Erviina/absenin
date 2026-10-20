@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   Building2,
@@ -9,12 +9,11 @@ import {
   Calendar,
   Clock,
   ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
   RotateCw,
   ExternalLink,
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 
 interface CompanyItem {
   id: string;
@@ -48,24 +47,28 @@ export default function PlatformAdminCompaniesPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
 
   // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(search);
-      setPage(1);
     }, 300);
     return () => clearTimeout(handler);
   }, [search]);
 
-  const loadCompanies = async () => {
+  const loadInitialCompanies = useCallback(async () => {
     setIsLoading(true);
+    setLoadMoreError(null);
     try {
       const res = await fetchPlatformApi<CompaniesResponse>(
-        `companies?page=${page}&limit=10&search=${encodeURIComponent(debouncedSearch)}`
+        `companies?page=1&limit=10&search=${encodeURIComponent(debouncedSearch)}`
       );
       if (res.success && res.data) {
         setCompanies(res.data.items);
+        setPage(1);
         setTotal(res.data.pagination.total);
         setTotalPages(res.data.pagination.totalPages);
       }
@@ -74,11 +77,46 @@ export default function PlatformAdminCompaniesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [debouncedSearch]);
+
+  const loadMoreCompanies = useCallback(async () => {
+    if (isLoading || isLoadingMore || isFetchingMoreRef.current || page >= totalPages) {
+      return;
+    }
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const nextPage = page + 1;
+      const res = await fetchPlatformApi<CompaniesResponse>(
+        `companies?page=${nextPage}&limit=10&search=${encodeURIComponent(debouncedSearch)}`
+      );
+      if (res.success && res.data) {
+        const newItems = res.data.items || [];
+        setPage(nextPage);
+        setTotal(res.data.pagination.total);
+        setTotalPages(res.data.pagination.totalPages);
+        setCompanies((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const uniqueItems = newItems.filter((c) => !existingIds.has(c.id));
+          return [...prev, ...uniqueItems];
+        });
+      } else {
+        setLoadMoreError(res.message || "Gagal memuat perusahaan tambahan");
+      }
+    } catch (e: any) {
+      console.error("Load more companies error:", e);
+      setLoadMoreError("Tidak dapat terhubung ke server. Silakan coba lagi.");
+    } finally {
+      setIsLoadingMore(false);
+      isFetchingMoreRef.current = false;
+    }
+  }, [isLoading, isLoadingMore, page, totalPages, debouncedSearch]);
 
   useEffect(() => {
-    loadCompanies();
-  }, [page, debouncedSearch]);
+    loadInitialCompanies();
+  }, [loadInitialCompanies]);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "-";
@@ -119,7 +157,7 @@ export default function PlatformAdminCompaniesPage() {
           </div>
 
           <button
-            onClick={loadCompanies}
+            onClick={loadInitialCompanies}
             disabled={isLoading}
             className="p-2.5 rounded-[16px] bg-white border border-[#DCE9DF] text-[#1E3F2B] hover:bg-[#EEF5F0] transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
             title="Muat Ulang"
@@ -239,36 +277,16 @@ export default function PlatformAdminCompaniesPage() {
           </table>
         </div>
 
-        {/* Pagination Bar */}
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-gray-100 flex items-center justify-between text-[12.5px] bg-[#F9FBFA]">
-            <span className="text-gray-500 font-medium">
-              Halaman <strong>{page}</strong> dari <strong>{totalPages}</strong>
-            </span>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={page <= 1 || isLoading}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="p-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                title="Halaman Sebelumnya"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              <button
-                type="button"
-                disabled={page >= totalPages || isLoading}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="p-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                title="Halaman Selanjutnya"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Infinite Scroll Footer */}
+        <InfiniteScrollFooter
+          isLoadingMore={isLoadingMore}
+          hasMore={companies.length > 0 && page < totalPages}
+          onLoadMore={loadMoreCompanies}
+          error={loadMoreError}
+          onRetry={loadMoreCompanies}
+          endMessage="Semua perusahaan telah ditampilkan"
+          className="py-4 border-t border-gray-100 bg-[#F9FBFA]"
+        />
       </div>
     </div>
   );

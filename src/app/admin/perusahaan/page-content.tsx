@@ -15,6 +15,7 @@ import L from "leaflet";
 import { useDialog } from "@/context/DialogContext";
 import { useCompany } from "@/context/CompanyContext";
 import { getApiUrl } from "@/lib/api";
+import { CompanyProfileSkeleton } from "@/components/CardSkeleton";
 
 const getCustomIcon = (label: string) => new L.DivIcon({
   className: "custom-leaflet-icon",
@@ -483,7 +484,6 @@ export default function KelolaPerusahaanPage() {
       } else if (!data.success) {
         showToast(data.message || "Gagal menyimpan perubahan.", "error");
       } else {
-        showToast("Data perusahaan berhasil diperbarui.", "success");
         setInitialData(prev => ({ 
           ...prev, 
           name: companyData.name, 
@@ -560,7 +560,6 @@ export default function KelolaPerusahaanPage() {
       if (data.success) {
         setCompanyImage(data.data.avatar_company_url);
         await refreshMemberships().catch(console.error);
-        showToast("Foto profil perusahaan berhasil diperbarui!", "success");
       } else {
         showToast(data.message || "Gagal mengupload foto", "error");
       }
@@ -624,7 +623,6 @@ export default function KelolaPerusahaanPage() {
       } else if (!data.success) {
         showToast(data.message || "Gagal menyimpan perubahan.", "error");
       } else {
-        showToast("Informasi perusahaan berhasil diperbarui.", "success");
         setCompanyData(prev => ({ 
           ...prev, 
           name: infoForm.name.trim(), 
@@ -707,7 +705,6 @@ export default function KelolaPerusahaanPage() {
           work_end_time: cleanEnd
         }));
         setIsKelolaJadwalOpen(false);
-        showToast("Jadwal operasional berhasil diperbarui!", "success");
       } else {
         showToast(data.message || "Gagal menyimpan jadwal.", "error");
       }
@@ -742,8 +739,6 @@ export default function KelolaPerusahaanPage() {
         if (flyToMap) {
           flyToMap(latitude, longitude);
         }
-
-        showToast("Lokasi GPS berhasil terdeteksi!", "success");
 
         // Reverse geocode to update address in the modal search bar
         setIsSearching(true);
@@ -842,7 +837,6 @@ export default function KelolaPerusahaanPage() {
           ...(chosenAddress ? { address: chosenAddress } : {})
         }));
         setIsUbahLokasiOpen(false);
-        showToast("Lokasi dan alamat berhasil diperbarui!", "success");
       } else {
         showToast(data.message || "Gagal menyimpan lokasi.", "error");
       }
@@ -885,10 +879,8 @@ export default function KelolaPerusahaanPage() {
         onBack={() => router.push("/admin/dashboard")} 
       />
 
-      {isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin w-8 h-8 border-4 border-[#356E3B] border-t-transparent rounded-full"></div>
-        </div>
+      {isLoading && !companyData.name ? (
+        <CompanyProfileSkeleton />
       ) : (
       <>
       {/* Main Content */}
@@ -1556,7 +1548,6 @@ export default function KelolaPerusahaanPage() {
                   companyName={companyData.name}
                   size={190}
                   showJoinCodeBox={true}
-                  onCopy={() => showToast("Kode bergabung berhasil disalin!", "success")}
                   instructionText="Arahkan kamera ke kode QR untuk bergabung instan"
                 />
               </div>

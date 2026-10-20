@@ -5,7 +5,7 @@ import { CustomCalendar } from "@/components/CustomCalendar";
 import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 import { 
   Search, ListFilter, Bell, Clock, Calendar, Users, 
-  Megaphone, Info, ChevronRight, X, CalendarDays, Check 
+  Megaphone, Info, ChevronRight, X, CalendarDays, Check, Shield, CheckCheck 
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -52,6 +52,16 @@ export default function NotifikasiPage() {
   });
   const [error, setError] = useState("");
 
+  const [unreadCount, setUnreadCount] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    const compId = getActiveCompanyId();
+    return getCachedData<number>(buildCacheKey("dashboard_notif", compId))?.data || 0;
+  });
+  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
+  const [markAllReadError, setMarkAllReadError] = useState<string | null>(null);
+
+  const hasUnread = unreadCount > 0 || notifications.some((n) => !n.is_read);
+
   const activeFetchCompanyIdRef = useRef<string | null>(null);
   const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
@@ -60,7 +70,9 @@ export default function NotifikasiPage() {
     if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
       setNotifications([]);
       setTotalNotifications(0);
+      setUnreadCount(0);
       setLoadMoreError(null);
+      setMarkAllReadError(null);
       setIsLoading(true);
     }
     prevCompanyIdRef.current = activeCompanyId;
@@ -70,7 +82,9 @@ export default function NotifikasiPage() {
     const handleCompanyChanged = () => {
       setNotifications([]);
       setTotalNotifications(0);
+      setUnreadCount(0);
       setLoadMoreError(null);
+      setMarkAllReadError(null);
       setIsLoading(true);
     };
     window.addEventListener("companyChanged", handleCompanyChanged);
@@ -117,10 +131,20 @@ export default function NotifikasiPage() {
         headers["x-company-id"] = compId;
       }
 
-      const res = await fetch(getApiUrl(`/notifications?${params.toString()}`), {
-        headers
-      });
+      const [res, unreadRes] = await Promise.all([
+        fetch(getApiUrl(`/notifications?${params.toString()}`), { headers }),
+        fetch(getApiUrl("/notifications/unread-count"), { headers }),
+      ]);
       const json = await res.json();
+      try {
+        const unreadJson = await unreadRes.json();
+        if (unreadJson.success && typeof unreadJson.data?.count === "number" && activeFetchCompanyIdRef.current === compId) {
+          setUnreadCount(unreadJson.data.count);
+          setCachedData(buildCacheKey("dashboard_notif", compId), unreadJson.data.count);
+        }
+      } catch (e) {
+        console.warn("Failed to parse unread count:", e);
+      }
       if (activeFetchCompanyIdRef.current !== compId) return;
 
       if (json.success) {
@@ -219,6 +243,8 @@ export default function NotifikasiPage() {
         return { category: "Sistem", icon: <Users className="w-5 h-5 text-[#0D9488]" />, bgIcon: "bg-[#f0fdfa]" };
       case "NEW_ANNOUNCEMENT":
         return { category: "Sistem", icon: <Megaphone className="w-5 h-5 text-[#8B5CF6]" />, bgIcon: "bg-[#f5f3ff]" };
+      case "ROLE_CHANGED":
+        return { category: "Sistem", icon: <Shield className="w-5 h-5 text-[#356E3B]" />, bgIcon: "bg-[#eef5f0]" };
       default:
         return { category: "Sistem", icon: <Info className="w-5 h-5 text-[#0EA5E9]" />, bgIcon: "bg-[#f0f9ff]" };
     }
@@ -236,13 +262,70 @@ export default function NotifikasiPage() {
     return `${Math.floor(diffInSeconds / 86400)} hari yang lalu`;
   };
 
+  const handleMarkAllAsRead = async () => {
+    if (isMarkingAllRead || !hasUnread) return;
+    setIsMarkingAllRead(true);
+    setMarkAllReadError(null);
+
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        setMarkAllReadError("Sesi telah berakhir. Silakan masuk kembali.");
+        return;
+      }
+
+      const compId = activeCompanyId || getActiveCompanyId();
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
+      if (compId) headers["x-company-id"] = compId;
+
+      const res = await fetch(getApiUrl("/notifications/read-all"), {
+        method: "PATCH",
+        headers,
+      });
+      const json = await res.json();
+
+      if (res.ok && json.success) {
+        // 1. Perbarui status semua notifikasi di state menjadi sudah dibaca
+        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+        // 2. Reset unread count lokal
+        setUnreadCount(0);
+        // 3. Update client cache
+        const notifCacheKey = buildCacheKey("dashboard_notif", compId);
+        setCachedData(notifCacheKey, 0);
+        invalidateCache("notifications");
+        invalidateCache("admin_dashboard");
+        // 4. Siarkan event agar komponen lain langsung tersinkronisasi
+        window.dispatchEvent(new CustomEvent("notificationsUpdated", { detail: { unreadCount: 0 } }));
+      } else {
+        setMarkAllReadError(json.message || "Gagal menandai semua notifikasi sebagai sudah dibaca.");
+      }
+    } catch (err: any) {
+      console.error("Error marking all notifications as read:", err);
+      setMarkAllReadError("Terjadi kesalahan jaringan saat menandai notifikasi.");
+    } finally {
+      setIsMarkingAllRead(false);
+    }
+  };
+
   const handleNotificationClick = async (notif: any) => {
     invalidateCache("notifications");
     await handleNotificationNavigation(
       notif,
       { activeCompanyId, activeRole, memberships, switchCompany },
       router,
-      (id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+      (id) => {
+        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+        setUnreadCount((prev) => {
+          const next = Math.max(0, prev - 1);
+          const compId = activeCompanyId || getActiveCompanyId();
+          setCachedData(buildCacheKey("dashboard_notif", compId), next);
+          window.dispatchEvent(new CustomEvent("notificationsUpdated", { detail: { unreadCount: next } }));
+          return next;
+        });
+      }
     );
   };
 
@@ -341,12 +424,53 @@ export default function NotifikasiPage() {
           </p>
         )}
 
+        {/* Tombol Tandai Semua Dibaca */}
+        {hasUnread && (
+          <div className="flex justify-end -mt-1">
+            <button
+              type="button"
+              onClick={handleMarkAllAsRead}
+              disabled={isMarkingAllRead}
+              className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#356E3B] hover:text-[#28572e] bg-[#eef5f0] hover:bg-[#e2ece5] active:scale-95 px-3 py-1.5 rounded-full border border-[#356E3B]/20 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-xs"
+              title="Tandai semua dibaca"
+              aria-label="Tandai semua dibaca"
+            >
+              <CheckCheck className="w-4 h-4 text-[#356E3B]" />
+              <span>{isMarkingAllRead ? "Menandai..." : "Tandai semua dibaca"}</span>
+            </button>
+          </div>
+        )}
+
+        {/* Banner Error jika aksi gagal */}
+        {markAllReadError && (
+          <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-600 text-[13px] flex items-center justify-between shadow-xs">
+            <span>{markAllReadError}</span>
+            <button
+              type="button"
+              onClick={() => setMarkAllReadError(null)}
+              className="text-red-400 hover:text-red-700 p-1 rounded-lg transition-colors cursor-pointer"
+              aria-label="Tutup pesan error"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Notifications List */}
         <div className="flex flex-col gap-3">
           {isLoading && notifications.length === 0 ? (
             <CardListSkeleton count={4} type="notification" />
           ) : error && notifications.length === 0 ? (
-            <p className="text-sm text-red-500 text-center py-6">{error}</p>
+            <div className="py-8 text-center flex flex-col items-center justify-center gap-2">
+              <p className="text-sm text-red-500">{error}</p>
+              <button
+                type="button"
+                onClick={fetchInitialNotifications}
+                className="px-4 py-1.5 rounded-full bg-[#356E3B] text-white text-[12px] font-bold hover:bg-[#2b5930] transition-colors cursor-pointer"
+              >
+                Coba Lagi
+              </button>
+            </div>
           ) : notifications.length > 0 ? (
             <>
               {notifications.map((notif) => {

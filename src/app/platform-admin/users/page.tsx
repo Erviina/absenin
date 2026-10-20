@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Users,
   Search,
@@ -8,8 +8,6 @@ import {
   CheckCircle2,
   UserCheck,
   UserX,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   RotateCw,
   Mail,
@@ -19,6 +17,7 @@ import {
   Filter,
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 
 export interface UserMembershipItem {
   company_id: string;
@@ -85,6 +84,9 @@ export default function PlatformAdminUsersPage() {
   const [selectedUserForModal, setSelectedUserForModal] = useState<UserItem | null>(null);
   const [openDropdownUserId, setOpenDropdownUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
 
   // Baca query parameter dari URL saat pertama kali dimuat
   useEffect(() => {
@@ -125,16 +127,16 @@ export default function PlatformAdminUsersPage() {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(search);
-      setPage(1);
     }, 300);
     return () => clearTimeout(handler);
   }, [search]);
 
-  const loadUsers = async () => {
+  const loadInitialUsers = useCallback(async () => {
     setIsLoading(true);
+    setLoadMoreError(null);
     try {
       const queryParams = new URLSearchParams({
-        page: page.toString(),
+        page: "1",
         limit: "10",
         search: debouncedSearch,
       });
@@ -149,7 +151,8 @@ export default function PlatformAdminUsersPage() {
 
       const res = await fetchPlatformApi<UsersResponse>(`users?${queryParams.toString()}`);
       if (res.success && res.data) {
-        setUsers(res.data.items);
+        setUsers(res.data.items || []);
+        setPage(1);
         setSummary({
           totalUsers: res.data.summary.totalUsers || 0,
           affiliatedUsers: res.data.summary.affiliatedUsers || 0,
@@ -164,11 +167,68 @@ export default function PlatformAdminUsersPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [debouncedSearch, selectedCompanyId, filterMultiOnly]);
+
+  const loadMoreUsers = useCallback(async () => {
+    if (isLoading || isLoadingMore || isFetchingMoreRef.current || page >= totalPages) {
+      return;
+    }
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const nextPage = page + 1;
+      const queryParams = new URLSearchParams({
+        page: nextPage.toString(),
+        limit: "10",
+        search: debouncedSearch,
+      });
+
+      if (selectedCompanyId) {
+        queryParams.append("company_id", selectedCompanyId);
+      }
+
+      if (filterMultiOnly) {
+        queryParams.append("multi_only", "true");
+      }
+
+      const res = await fetchPlatformApi<UsersResponse>(`users?${queryParams.toString()}`);
+      if (res.success && res.data) {
+        const newItems = res.data.items || [];
+        setUsers((prev) => {
+          const existingIds = new Set(prev.map((u) => u.id));
+          const uniqueNew = newItems.filter((u) => !existingIds.has(u.id));
+          return [...prev, ...uniqueNew];
+        });
+        setPage(nextPage);
+        setTotal(res.data.pagination.total);
+        setTotalPages(res.data.pagination.totalPages);
+        if (res.data.summary) {
+          setSummary({
+            totalUsers: res.data.summary.totalUsers || 0,
+            affiliatedUsers: res.data.summary.affiliatedUsers || 0,
+            multiCompanyUsers: res.data.summary.multiCompanyUsers || 0,
+            activeUsers: res.data.summary.activeUsers || 0,
+          });
+        }
+      }
+    } catch (e: any) {
+      console.error("Gagal memuat lebih banyak pengguna:", e);
+      setLoadMoreError(e?.message || "Gagal memuat lebih banyak pengguna");
+    } finally {
+      setIsLoadingMore(false);
+      isFetchingMoreRef.current = false;
+    }
+  }, [isLoading, isLoadingMore, page, totalPages, debouncedSearch, selectedCompanyId, filterMultiOnly]);
 
   useEffect(() => {
-    loadUsers();
-  }, [page, debouncedSearch, selectedCompanyId, filterMultiOnly]);
+    loadInitialUsers();
+  }, [loadInitialUsers]);
+
+  const loadUsers = () => {
+    loadInitialUsers();
+  };
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "-";
@@ -720,34 +780,23 @@ export default function PlatformAdminUsersPage() {
           </table>
         </div>
 
-        {/* Pagination Bar */}
-        <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-white text-[12.5px] text-gray-500">
-          <div>
-            Menampilkan <span className="font-semibold text-gray-900">{users.length}</span> dari{" "}
-            <span className="font-semibold text-gray-900">{total}</span> pengguna
+        {/* Infinite Scroll Footer */}
+        <div className="border-t border-gray-100 bg-[#F9FBFA]">
+          <div className="px-6 py-2.5 text-[12px] text-gray-500 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              Menampilkan <span className="font-semibold text-gray-900">{users.length}</span> dari{" "}
+              <span className="font-semibold text-gray-900">{total}</span> pengguna
+            </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1 || isLoading}
-              className="px-3 py-1.5 rounded-[12px] border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Sebelumnya</span>
-            </button>
-            <span className="px-2 text-gray-700 font-medium">
-              {page} / {totalPages || 1}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || isLoading}
-              className="px-3 py-1.5 rounded-[12px] border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 transition-colors"
-            >
-              <span>Berikutnya</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          <InfiniteScrollFooter
+            isLoadingMore={isLoadingMore}
+            hasMore={users.length > 0 && page < totalPages}
+            onLoadMore={loadMoreUsers}
+            error={loadMoreError}
+            onRetry={loadMoreUsers}
+            endMessage="Semua pengguna telah ditampilkan"
+            className="py-4 bg-[#F9FBFA]"
+          />
         </div>
       </div>
 

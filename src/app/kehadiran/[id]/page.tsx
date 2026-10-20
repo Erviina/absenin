@@ -157,10 +157,17 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
         onBack={() => router.push("/kehadiran")} 
       />
 
-      {isLoading ? (
-        <div className="flex-1 flex flex-col items-center justify-center h-[50vh]">
-          <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
-          <p className="text-[#4B5563] font-medium text-[14px]">Memuat detail kehadiran...</p>
+      {isLoading && !data ? (
+        <div className="px-6 pt-6 pb-12 flex flex-col gap-6 animate-in fade-in duration-200">
+          <div className="flex justify-between items-center">
+            <div className="w-40 h-5 rounded bg-gray-100 animate-pulse" />
+            <div className="w-20 h-6 rounded-full bg-gray-100 animate-pulse" />
+          </div>
+          <div className="bg-white rounded-[20px] p-5 border border-[#E5E7EB] shadow-sm flex flex-col gap-4">
+            <div className="w-full h-14 rounded-xl bg-gray-100 animate-pulse" />
+            <div className="w-full h-14 rounded-xl bg-gray-100 animate-pulse" />
+          </div>
+          <div className="w-full h-44 rounded-[20px] bg-gray-100 animate-pulse" />
         </div>
       ) : error ? (
         <div className="flex-1 flex flex-col items-center justify-center h-[50vh] p-6 text-center">

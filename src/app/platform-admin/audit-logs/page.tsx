@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   ShieldCheck,
   Search,
   Filter,
   RotateCw,
-  ChevronLeft,
-  ChevronRight,
   CheckCircle2,
   XCircle,
   AlertCircle,
@@ -18,6 +16,7 @@ import {
   Shield,
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 
 interface AuditLogItem {
   id: string;
@@ -70,27 +69,31 @@ export default function PlatformAdminAuditLogsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedAction, setSelectedAction] = useState("ALL");
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
 
   // Debounce search input
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(search);
-      setPage(1);
     }, 300);
     return () => clearTimeout(handler);
   }, [search]);
 
-  const loadLogs = async () => {
+  const loadInitialLogs = useCallback(async () => {
     setIsLoading(true);
+    setLoadMoreError(null);
     try {
       const res = await fetchPlatformApi<AuditLogsResponse>(
-        `audit-logs?page=${page}&limit=12&search=${encodeURIComponent(
+        `audit-logs?page=1&limit=12&search=${encodeURIComponent(
           debouncedSearch
         )}&action=${selectedAction}`
       );
       if (res.success && res.data) {
-        setLogs(res.data.items);
+        setLogs(res.data.items || []);
         setSummary(res.data.summary);
+        setPage(1);
         setTotal(res.data.pagination.total);
         setTotalPages(res.data.pagination.totalPages);
       }
@@ -99,11 +102,51 @@ export default function PlatformAdminAuditLogsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [debouncedSearch, selectedAction]);
+
+  const loadMoreLogs = useCallback(async () => {
+    if (isLoading || isLoadingMore || isFetchingMoreRef.current || page >= totalPages) {
+      return;
+    }
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const nextPage = page + 1;
+      const res = await fetchPlatformApi<AuditLogsResponse>(
+        `audit-logs?page=${nextPage}&limit=12&search=${encodeURIComponent(
+          debouncedSearch
+        )}&action=${selectedAction}`
+      );
+      if (res.success && res.data) {
+        const newItems = res.data.items || [];
+        setLogs((prev) => {
+          const existingIds = new Set(prev.map((l) => l.id));
+          const uniqueNew = newItems.filter((l) => !existingIds.has(l.id));
+          return [...prev, ...uniqueNew];
+        });
+        setPage(nextPage);
+        setSummary(res.data.summary);
+        setTotal(res.data.pagination.total);
+        setTotalPages(res.data.pagination.totalPages);
+      }
+    } catch (e: any) {
+      console.error("Gagal memuat lebih banyak log audit:", e);
+      setLoadMoreError(e?.message || "Gagal memuat lebih banyak log audit");
+    } finally {
+      setIsLoadingMore(false);
+      isFetchingMoreRef.current = false;
+    }
+  }, [isLoading, isLoadingMore, page, totalPages, debouncedSearch, selectedAction]);
 
   useEffect(() => {
-    loadLogs();
-  }, [page, debouncedSearch, selectedAction]);
+    loadInitialLogs();
+  }, [loadInitialLogs]);
+
+  const loadLogs = () => {
+    loadInitialLogs();
+  };
 
   const formatDate = (dateStr: string) => {
     try {
@@ -382,34 +425,23 @@ export default function PlatformAdminAuditLogsPage() {
           </table>
         </div>
 
-        {/* Pagination Bar */}
-        <div className="p-4 border-t border-gray-100 flex items-center justify-between bg-white text-[12.5px] text-gray-500">
-          <div>
-            Menampilkan <span className="font-semibold text-gray-900">{logs.length}</span> dari{" "}
-            <span className="font-semibold text-gray-900">{total}</span> catatan
+        {/* Infinite Scroll Footer */}
+        <div className="border-t border-gray-100 bg-[#F9FBFA]">
+          <div className="px-6 py-2.5 text-[12px] text-gray-500 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              Menampilkan <span className="font-semibold text-gray-900">{logs.length}</span> dari{" "}
+              <span className="font-semibold text-gray-900">{total}</span> catatan
+            </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1 || isLoading}
-              className="px-3 py-1.5 rounded-[12px] border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Sebelumnya</span>
-            </button>
-            <span className="px-2 text-gray-700 font-medium">
-              {page} / {totalPages || 1}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || isLoading}
-              className="px-3 py-1.5 rounded-[12px] border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 transition-colors"
-            >
-              <span>Berikutnya</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          <InfiniteScrollFooter
+            isLoadingMore={isLoadingMore}
+            hasMore={logs.length > 0 && page < totalPages}
+            onLoadMore={loadMoreLogs}
+            error={loadMoreError}
+            onRetry={loadMoreLogs}
+            endMessage="Semua catatan audit log telah ditampilkan"
+            className="py-4 bg-[#F9FBFA]"
+          />
         </div>
       </div>
     </div>

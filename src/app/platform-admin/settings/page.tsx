@@ -32,7 +32,6 @@ export default function PlatformAdminSettingsPage() {
   const handleClearCache = () => {
     if (confirm("Bersihkan cache lokal Platform Admin?")) {
       sessionStorage.clear();
-      alert("Cache sesi berhasil dibersihkan.");
     }
   };
 

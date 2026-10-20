@@ -344,7 +344,6 @@ export default function KehadiranPage() {
     });
 
     doc.save("Rekap_Kehadiran.pdf");
-    showToast("Rekap kehadiran PDF berhasil diunduh!", "success");
   };
 
   const handleDownloadExcel = async () => {
@@ -369,7 +368,6 @@ export default function KehadiranPage() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Kehadiran");
     XLSX.writeFile(workbook, "Rekap_Kehadiran.xlsx");
-    showToast("Rekap kehadiran Excel berhasil diunduh!", "success");
   };
 
   return (

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { sql, eq } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
-import { companies, profiles } from "../db/schema";
+import { companies, profiles, notifications } from "../db/schema";
 import multer from "multer";
 import { uploadCompanyPhoto } from "../utils/storage";
 import { resolveTenant } from "../utils/tenant";
@@ -48,6 +48,14 @@ const roleUpdateSchema = z.object({
 }).refine(data => data.roles.includes("Employee"), {
   message: "Role Employee wajib disertakan"
 });
+
+const roleLabelMap: Record<string, string> = {
+  admin: "Admin",
+  manager: "Manager",
+  member: "Karyawan",
+  employee: "Karyawan",
+  owner: "Owner",
+};
 
 // GET /api/companies/categories
 router.get("/categories", async (req: Request, res: Response): Promise<any> => {
@@ -791,6 +799,23 @@ router.patch("/employees/:employeeId/roles", authenticate, async (req: Request, 
 
     // 5. Update both company_members and profile_roles in a single transaction
     await db.transaction(async (tx) => {
+      // Re-fetch current role with row-locking to ensure idempotency and prevent duplicate notifications on rapid requests
+      const lockRes = await tx.execute(sql`
+        SELECT role
+        FROM company_members
+        WHERE company_id = ${companyId}
+          AND profile_id = ${employeeId}
+          AND deleted_at IS NULL
+        FOR UPDATE
+      `);
+
+      if (lockRes.rows.length === 0) {
+        throw new Error("Karyawan tidak ditemukan dalam perusahaan");
+      }
+
+      const lockedCurrentRole = ((lockRes.rows[0].role as string) || "member").toLowerCase();
+      const isRoleChanged = lockedCurrentRole !== targetCompanyRole;
+
       await tx.execute(sql`
         UPDATE company_members
         SET role = ${targetCompanyRole}, updated_at = now()
@@ -809,6 +834,21 @@ router.patch("/employees/:employeeId/roles", authenticate, async (req: Request, 
           INSERT INTO profile_roles (profile_id, role)
           VALUES (${employeeId}, ${role})
         `);
+      }
+
+      // 6. Buat notifikasi permanen HANYA jika hak akses benar-benar berubah
+      if (isRoleChanged) {
+        const newRoleLabel = roleLabelMap[targetCompanyRole] || "Karyawan";
+
+        await tx.insert(notifications).values({
+          company_id: companyId,
+          recipient_id: employeeId as string,
+          type: "ROLE_CHANGED",
+          title: "Perubahan Hak Akses",
+          message: `Hak akses akun Anda telah diperbarui menjadi ${newRoleLabel}.`,
+          reference_id: null,
+          is_read: false,
+        });
       }
     });
 

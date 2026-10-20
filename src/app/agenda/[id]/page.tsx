@@ -88,12 +88,20 @@ export default function AgendaDetailPage() {
     fetchAgendaDetail();
   }, [id, activeCompanyId, router]);
 
-  if (loading) {
+  if (loading && !agenda) {
     return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
+      <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] animate-in fade-in duration-200">
         <TopBar title="Detail Agenda" onBack={() => router.push("/agenda")} />
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-gray-500 text-sm">Memuat agenda...</p>
+        <div className="px-6 pt-6 flex flex-col gap-5">
+          <div className="bg-white rounded-[20px] p-5 border border-[#E5E7EB] shadow-sm flex flex-col gap-4">
+            <div className="flex gap-2">
+              <div className="w-20 h-5 rounded-full bg-gray-100 animate-pulse" />
+              <div className="w-20 h-5 rounded-full bg-gray-100 animate-pulse" />
+            </div>
+            <div className="w-3/4 h-6 rounded bg-gray-100 animate-pulse" />
+            <div className="w-1/2 h-4 rounded bg-gray-100 animate-pulse" />
+            <div className="w-full h-20 rounded-xl bg-gray-100 animate-pulse mt-1" />
+          </div>
         </div>
       </div>
     );

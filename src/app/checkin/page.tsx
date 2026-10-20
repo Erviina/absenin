@@ -12,7 +12,6 @@ import { TopBar } from '@/components/TopBar';
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Badge } from "@/components/Badge";
 import { useCompany } from "@/context/CompanyContext";
-import { useDialog } from "@/context/DialogContext";
 import { evaluateSchedule, getNextCheckInSchedule, calculateServerOffsetMs, CompanyScheduleData } from "@/lib/schedule";
 import { formatDateTime } from "@/lib/dateUtils";
 const LeafletMap = dynamic(() => import('@/components/MapLocation'), {
@@ -25,7 +24,6 @@ import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 export default function CheckinPage() {
   const router = useRouter();
   const { activeCompanyId, isLoading: isCompanyLoading } = useCompany();
-  const { showToast } = useDialog();
   const [step, setStep] = useState(1);
   const [workMode, setWorkMode] = useState<"WFO" | "WFH">("WFO");
 
@@ -434,7 +432,6 @@ export default function CheckinPage() {
 
       // Success
       if (photoUrl) URL.revokeObjectURL(photoUrl);
-      showToast(attendanceStatus === "CHECKED_IN" ? "Presensi keluar berhasil!" : "Presensi masuk berhasil!", "success");
       router.push("/dashboard");
     } catch (err: any) {
       setSubmitError(err.message || "Terjadi kesalahan sistem");

@@ -58,7 +58,7 @@ router.get("/", authenticate, async (req: Request, res: Response): Promise<any> 
       } else if (category === "Izin & Cuti") {
         categoryCond = sql`AND type IN ('LEAVE_PENDING', 'LEAVE_APPROVED', 'LEAVE_REJECTED')`;
       } else if (category === "Sistem") {
-        categoryCond = sql`AND type IN ('JOIN_REQUEST_PENDING', 'JOIN_REQUEST_APPROVED', 'JOIN_REQUEST_REJECTED', 'NEW_ANNOUNCEMENT')`;
+        categoryCond = sql`AND type IN ('JOIN_REQUEST_PENDING', 'JOIN_REQUEST_APPROVED', 'JOIN_REQUEST_REJECTED', 'NEW_ANNOUNCEMENT', 'ROLE_CHANGED', 'member_removed')`;
       }
     } else if (type && typeof type === "string") {
       categoryCond = sql`AND type = ${type}`;

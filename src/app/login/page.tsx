@@ -157,8 +157,6 @@ function LoginForm() {
         // 2. Muat membership pengguna dan tunggu hingga role & activeCompany terkonfirmasi
         await refreshMemberships();
 
-        showToast("Login berhasil!", "success");
-
         // Cek jika terdapat target redirect yang aman dari tautan yang dibagikan
         const safeRedirect = getSafeInternalRedirect(redirectParam);
         if (safeRedirect) {

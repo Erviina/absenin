@@ -2,11 +2,11 @@
 
 import { TopBar } from "@/components/TopBar";
 import { useRouter } from "next/navigation";
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Search, ListFilter, Check, User, ChevronRight, ChevronLeft, FileDown, CalendarDays, CheckCircle2, Clock, FileWarning, Loader2, X } from "lucide-react";
 
 import { useDialog } from "@/context/DialogContext";
-import { Pagination } from "@/components/Pagination";
+import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
 import { useCompany } from "@/context/CompanyContext";
 import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
@@ -17,9 +17,10 @@ export default function LaporanKehadiranPage() {
   const { showToast } = useDialog();
   const { activeCompanyId, isLoading: isCompanyLoading } = useCompany();
   
-  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const monthNames = useMemo(() => ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"], []);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
     return `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
@@ -35,14 +36,20 @@ export default function LaporanKehadiranPage() {
     if (typeof window === "undefined") return [];
     const compId = getActiveCompanyId();
     const now = new Date();
-    const key = buildCacheKey("admin_attendance_summary", compId, { month: now.getMonth() + 1, year: now.getFullYear() });
+    const key = buildCacheKey("admin_attendance_summary", compId, { month: now.getMonth() + 1, year: now.getFullYear(), limit: 10, offset: 0 });
     return getCachedData<any[]>(key)?.data || [];
   });
+  const [totalKaryawan, setTotalKaryawan] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const isFetchingMoreRef = useRef(false);
+  const limit = 10;
+
   const [isLoading, setIsLoading] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     const compId = getActiveCompanyId();
     const now = new Date();
-    const key = buildCacheKey("admin_attendance_summary", compId, { month: now.getMonth() + 1, year: now.getFullYear() });
+    const key = buildCacheKey("admin_attendance_summary", compId, { month: now.getMonth() + 1, year: now.getFullYear(), limit: 10, offset: 0 });
     return !getCachedData(key)?.data;
   });
   const [error, setError] = useState<string | null>(null);
@@ -50,73 +57,156 @@ export default function LaporanKehadiranPage() {
   const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
     // Reset data HANYA saat active company benar-benar berganti
     if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== activeCompanyId) {
       setDataKaryawan([]);
+      setTotalKaryawan(0);
+      setLoadMoreError(null);
       setIsLoading(true);
     }
     prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
-  useEffect(() => {
+  const fetchSummary = useCallback(async () => {
     if (isCompanyLoading) return;
-    const fetchSummary = async () => {
-      setError(null);
-      try {
-        const token = localStorage.getItem("accessToken");
-        if (!token) {
-          router.push("/login");
-          return;
-        }
-
-        const [monthName, yearString] = selectedMonth.split(" ");
-        const monthNum = monthNames.indexOf(monthName) + 1;
-        const yearNum = parseInt(yearString);
-
-        const compId = activeCompanyId || getActiveCompanyId();
-        const cacheKey = buildCacheKey("admin_attendance_summary", compId, { month: monthNum, year: yearNum });
-        const cached = getCachedData<any[]>(cacheKey);
-        if (cached?.data) {
-          setDataKaryawan(cached.data);
-          setIsLoading(false);
-        } else {
-          setIsLoading(true);
-        }
-
-        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        if (compId) headers["x-company-id"] = compId;
-
-        const res = await fetch(getApiUrl(`/attendances/management/summary?month=${monthNum}&year=${yearNum}`), {
-          headers
-        });
-        
-        const data = await res.json();
-        
-        if (res.status === 401) {
-          router.push("/login");
-          return;
-        }
-
-        if (res.status === 403) {
-          router.push("/unauthorized");
-          return;
-        }
-
-        if (data.success) {
-          setDataKaryawan(data.data || []);
-          setCachedData(cacheKey, data.data || []);
-        } else {
-          setError(data.message || "Gagal memuat laporan kehadiran");
-        }
-      } catch (err) {
-        console.error("Fetch summary error:", err);
-        setError("Terjadi kesalahan jaringan");
-      } finally {
-        setIsLoading(false);
+    setError(null);
+    setLoadMoreError(null);
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) {
+        router.push("/login");
+        return;
       }
-    };
+
+      const [monthName, yearString] = selectedMonth.split(" ");
+      const monthNum = monthNames.indexOf(monthName) + 1;
+      const yearNum = parseInt(yearString);
+
+      const compId = activeCompanyId || getActiveCompanyId();
+      const cacheKey = buildCacheKey("admin_attendance_summary", compId, { month: monthNum, year: yearNum, limit, offset: 0, search: debouncedSearch.trim() });
+      const cached = getCachedData<any[]>(cacheKey);
+      if (cached?.data) {
+        setDataKaryawan(cached.data);
+        if (typeof cached.total === "number") setTotalKaryawan(cached.total);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
+      }
+
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (compId) headers["x-company-id"] = compId;
+
+      const params = new URLSearchParams({
+        month: String(monthNum),
+        year: String(yearNum),
+        limit: String(limit),
+        offset: "0",
+      });
+      if (debouncedSearch.trim()) {
+        params.set("search", debouncedSearch.trim());
+      }
+
+      const res = await fetch(getApiUrl(`/attendances/management/summary?${params.toString()}`), {
+        headers
+      });
+      
+      const data = await res.json();
+      
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
+
+      if (res.status === 403) {
+        router.push("/unauthorized");
+        return;
+      }
+
+      if (data.success) {
+        const items = data.data || [];
+        const total = Number(data.pagination?.total ?? data.meta?.total ?? items.length);
+        setDataKaryawan(items);
+        setTotalKaryawan(total);
+        setCachedData(cacheKey, items, total);
+      } else {
+        setError(data.message || "Gagal memuat laporan kehadiran");
+      }
+    } catch (err) {
+      console.error("Fetch summary error:", err);
+      setError("Terjadi kesalahan jaringan");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedMonth, debouncedSearch, activeCompanyId, isCompanyLoading, router, limit, monthNames]);
+
+  useEffect(() => {
     fetchSummary();
-  }, [selectedMonth, activeCompanyId, isCompanyLoading, router]);
+  }, [fetchSummary]);
+
+  const loadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore || isFetchingMoreRef.current || dataKaryawan.length >= totalKaryawan) {
+      return;
+    }
+
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+
+    const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId) return;
+
+    try {
+      isFetchingMoreRef.current = true;
+      setIsLoadingMore(true);
+      setLoadMoreError(null);
+
+      const [monthName, yearString] = selectedMonth.split(" ");
+      const monthNum = monthNames.indexOf(monthName) + 1;
+      const yearNum = parseInt(yearString);
+
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      headers["x-company-id"] = compId;
+
+      const params = new URLSearchParams({
+        month: String(monthNum),
+        year: String(yearNum),
+        limit: String(limit),
+        offset: String(dataKaryawan.length),
+      });
+      if (debouncedSearch.trim()) {
+        params.set("search", debouncedSearch.trim());
+      }
+
+      const res = await fetch(getApiUrl(`/attendances/management/summary?${params.toString()}`), {
+        headers,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Gagal memuat data laporan tambahan");
+      }
+
+      const newItems = data.data || [];
+      const total = Number(data.pagination?.total ?? data.meta?.total ?? totalKaryawan);
+      setTotalKaryawan(total);
+      setDataKaryawan((prev) => {
+        const existingIds = new Set(prev.map((item) => item.id));
+        const uniqueItems = newItems.filter((item: any) => !existingIds.has(item.id));
+        return [...prev, ...uniqueItems];
+      });
+    } catch (err: any) {
+      console.error("Load more summary error:", err);
+      setLoadMoreError(err?.message || "Tidak dapat terhubung ke server. Silakan coba lagi.");
+    } finally {
+      setIsLoadingMore(false);
+      isFetchingMoreRef.current = false;
+    }
+  }, [isLoading, isLoadingMore, dataKaryawan.length, totalKaryawan, selectedMonth, debouncedSearch, activeCompanyId, limit, monthNames]);
 
   const handlePrevMonth = () => {
     const [monthName, yearString] = selectedMonth.split(" ");
@@ -227,7 +317,6 @@ export default function LaporanKehadiranPage() {
         });
         
         doc.save(`${fileName}.pdf`);
-        showToast("Laporan PDF berhasil diunduh!", "success");
       } else if (type === 'xlsx') {
         const XLSX = await import("xlsx");
         const wsData = [
@@ -241,7 +330,6 @@ export default function LaporanKehadiranPage() {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Laporan Kehadiran");
         XLSX.writeFile(wb, `${fileName}.xlsx`);
-        showToast("Laporan Excel berhasil diunduh!", "success");
       }
     } catch (err) {
       console.error("Export error", err);
@@ -370,7 +458,16 @@ export default function LaporanKehadiranPage() {
             {isLoading && dataKaryawan.length === 0 ? (
               <CardListSkeleton count={3} type="admin-report" />
             ) : error ? (
-              <div className="py-10 text-center text-red-500 text-[13px]">{error}</div>
+              <div className="py-10 text-center flex flex-col items-center justify-center gap-2">
+                <span className="text-red-500 text-[13px]">{error}</span>
+                <button
+                  type="button"
+                  onClick={fetchSummary}
+                  className="px-4 py-1.5 rounded-full bg-[#356E3B] text-white text-[12px] font-bold hover:bg-[#2b5930] transition-colors cursor-pointer"
+                >
+                  Coba Lagi
+                </button>
+              </div>
             ) : filteredData.length === 0 ? (
               <div className="py-10 text-center text-gray-400 text-[13px]">Karyawan tidak ditemukan</div>
             ) : (
@@ -424,6 +521,18 @@ export default function LaporanKehadiranPage() {
               ))
             )}
           </div>
+
+          <InfiniteScrollFooter
+            hasMore={dataKaryawan.length < totalKaryawan}
+            isLoadingMore={isLoadingMore}
+            onLoadMore={loadMore}
+            error={loadMoreError}
+            onRetry={loadMore}
+            isEmpty={dataKaryawan.length === 0}
+            loadingMessage="Memuat data laporan berikutnya..."
+            endMessage="Semua data laporan telah ditampilkan"
+            className="mt-2"
+          />
         </div>
 
       </div>

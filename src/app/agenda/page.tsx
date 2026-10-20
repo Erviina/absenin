@@ -255,13 +255,14 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
       setAgendasMap({});
       setCategories([]);
       setIsLoading(true);
+      setErrorMsg("");
     }
     prevCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
 
   const fetchCategories = useCallback(async () => {
-    if (isCompanyLoading) return;
     const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId && isCompanyLoading) return;
     try {
       if (!compId) {
         setCategories([]);
@@ -293,18 +294,9 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
 
   const activeFetchCompanyIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    const handleCompanyChanged = () => {
-      setAgendasMap({});
-      setIsLoading(true);
-    };
-    window.addEventListener("companyChanged", handleCompanyChanged);
-    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
-  }, []);
-
   const fetchAgendas = useCallback(async () => {
-    if (isCompanyLoading) return;
     const compId = activeCompanyId || getActiveCompanyId();
+    if (!compId && isCompanyLoading) return;
     activeFetchCompanyIdRef.current = compId;
     try {
       if (!compId) {
@@ -320,12 +312,18 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
         setAgendasMap(cached.data);
         setIsLoading(false);
       } else {
-        setIsLoading(true);
+        setAgendasMap((prev) => {
+          if (Object.keys(prev).length === 0) {
+            setIsLoading(true);
+          }
+          return prev;
+        });
       }
       setErrorMsg("");
 
       const token = localStorage.getItem("accessToken");
       if (!token) {
+        setIsLoading(false);
         const currentPath = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/agenda";
         router.replace(`/login?redirect=${encodeURIComponent(currentPath)}`);
         return;
@@ -344,72 +342,76 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
 
       const newMap: Record<string, AgendaItem[]> = {};
       
-      data.data.forEach((item: any) => {
-        const startDate = new Date(item.start_time);
-        const endDate = new Date(item.end_time);
-        
-        const startTimeStr = `${String(startDate.getHours()).padStart(2, '0')}.${String(startDate.getMinutes()).padStart(2, '0')}`;
-        const endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}.${String(endDate.getMinutes()).padStart(2, '0')}`;
-        
-        const isSameDay = startDate.getFullYear() === endDate.getFullYear() &&
-                          startDate.getMonth() === endDate.getMonth() &&
-                          startDate.getDate() === endDate.getDate();
+      if (Array.isArray(data.data)) {
+        data.data.forEach((item: any) => {
+          const startDate = new Date(item.start_time);
+          const endDate = new Date(item.end_time);
+          if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return;
+          
+          const startTimeStr = `${String(startDate.getHours()).padStart(2, '0')}.${String(startDate.getMinutes()).padStart(2, '0')}`;
+          const endTimeStr = `${String(endDate.getHours()).padStart(2, '0')}.${String(endDate.getMinutes()).padStart(2, '0')}`;
+          
+          const isSameDay = startDate.getFullYear() === endDate.getFullYear() &&
+                            startDate.getMonth() === endDate.getMonth() &&
+                            startDate.getDate() === endDate.getDate();
 
-        const sDay = startDate.getDate();
-        const sMonth = FULL_MONTH_NAMES[startDate.getMonth()];
-        const sYear = startDate.getFullYear();
-        const eDay = endDate.getDate();
-        const eMonth = FULL_MONTH_NAMES[endDate.getMonth()];
-        const eYear = endDate.getFullYear();
+          const sDay = startDate.getDate();
+          const sMonth = FULL_MONTH_NAMES[startDate.getMonth()];
+          const sYear = startDate.getFullYear();
+          const eDay = endDate.getDate();
+          const eMonth = FULL_MONTH_NAMES[endDate.getMonth()];
+          const eYear = endDate.getFullYear();
 
-        const isAllDay = Boolean(item.is_all_day);
-        const timeDisplay = isAllDay
-          ? isSameDay
-            ? "Seharian"
-            : sYear === eYear
-              ? `${sDay} ${sMonth} - ${eDay} ${eMonth} ${eYear} (Seharian)`
-              : `${sDay} ${sMonth} ${sYear} - ${eDay} ${eMonth} ${eYear} (Seharian)`
-          : isSameDay 
-            ? `${startTimeStr} - ${endTimeStr} WIB`
-            : sYear === eYear
-              ? `${sDay} ${sMonth} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`
-              : `${sDay} ${sMonth} ${sYear} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`;
+          const isAllDay = Boolean(item.is_all_day);
+          const timeDisplay = isAllDay
+            ? isSameDay
+              ? "Seharian"
+              : sYear === eYear
+                ? `${sDay} ${sMonth} - ${eDay} ${eMonth} ${eYear} (Seharian)`
+                : `${sDay} ${sMonth} ${sYear} - ${eDay} ${eMonth} ${eYear} (Seharian)`
+            : isSameDay 
+              ? `${startTimeStr} - ${endTimeStr} WIB`
+              : sYear === eYear
+                ? `${sDay} ${sMonth} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`
+                : `${sDay} ${sMonth} ${sYear} ${startTimeStr} - ${eDay} ${eMonth} ${eYear} ${endTimeStr} WIB`;
 
-        const linkOrLoc = item.link_or_location || item.link || null;
-        const agendaNotes = item.notes || null;
+          const linkOrLoc = item.link_or_location || item.link || null;
+          const agendaNotes = item.notes || null;
 
-        const agendaObj: AgendaItem = {
-          id: item.id,
-          title: item.title,
-          time: timeDisplay,
-          location: linkOrLoc || agendaNotes || "Tanpa Keterangan",
-          link_or_location: linkOrLoc,
-          notes: agendaNotes,
-          type: item.category?.name || "Acara",
-          category_id: item.category?.id || null,
-          scope: item.type === "COMPANY" ? "COMPANY" : "PERSONAL",
-          start_time: item.start_time,
-          end_time: item.end_time,
-          link: linkOrLoc,
-          is_all_day: isAllDay,
-        };
+          const agendaObj: AgendaItem = {
+            id: item.id,
+            title: item.title,
+            time: timeDisplay,
+            location: linkOrLoc || agendaNotes || "Tanpa Keterangan",
+            link_or_location: linkOrLoc,
+            notes: agendaNotes,
+            type: item.category?.name || "Acara",
+            category_id: item.category?.id || null,
+            scope: item.type === "COMPANY" ? "COMPANY" : "PERSONAL",
+            start_time: item.start_time,
+            end_time: item.end_time,
+            link: linkOrLoc,
+            is_all_day: isAllDay,
+          };
 
-        // Populate every single day in the date range
-        const curr = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-        const endLimit = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-        
-        while (curr <= endLimit) {
-          const dateStr = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-${String(curr.getDate()).padStart(2, '0')}`;
-          if (!newMap[dateStr]) {
-            newMap[dateStr] = [];
+          // Populate every single day in the date range
+          const curr = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+          const endLimit = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+          
+          while (curr <= endLimit) {
+            const dateStr = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-${String(curr.getDate()).padStart(2, '0')}`;
+            if (!newMap[dateStr]) {
+              newMap[dateStr] = [];
+            }
+            newMap[dateStr].push(agendaObj);
+            curr.setDate(curr.getDate() + 1);
           }
-          newMap[dateStr].push(agendaObj);
-          curr.setDate(curr.getDate() + 1);
-        }
-      });
+        });
+      }
       
       setAgendasMap(newMap);
       setCachedData(cacheKey, newMap);
+      setErrorMsg("");
     } catch (err: any) {
       if (activeFetchCompanyIdRef.current !== compId) return;
       console.error("Fetch agendas error:", err);
@@ -419,7 +421,20 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
         setIsLoading(false);
       }
     }
-  }, [router, activeCompanyId]);
+  }, [router, activeCompanyId, isCompanyLoading]);
+
+  useEffect(() => {
+    const handleCompanyChanged = () => {
+      setAgendasMap({});
+      setCategories([]);
+      setIsLoading(true);
+      setErrorMsg("");
+      fetchCategories();
+      fetchAgendas();
+    };
+    window.addEventListener("companyChanged", handleCompanyChanged);
+    return () => window.removeEventListener("companyChanged", handleCompanyChanged);
+  }, [fetchCategories, fetchAgendas]);
 
   useEffect(() => {
     fetchCategories();
@@ -594,7 +609,6 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
       setIsFormModalOpen(false);
       invalidateCache("agendas");
       invalidateCache("dashboard_agendas");
-      showToast(formId ? "Agenda berhasil diperbarui" : "Agenda baru berhasil ditambahkan", "success");
       fetchAgendas();
     } catch (err: any) {
       setSubmitError(err.message || "Terjadi kesalahan sistem");
@@ -637,7 +651,6 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
       setSelectedAgendaDetail(null);
       invalidateCache("agendas");
       invalidateCache("dashboard_agendas");
-      showToast("Agenda berhasil dihapus", "success");
       fetchAgendas();
     } catch (err: any) {
       showToast(err.message || "Gagal menghapus agenda", "error");
@@ -746,8 +759,12 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
             <p className="text-[#EF4444] text-[14px] font-bold mb-2">Gagal Memuat Agenda</p>
             <p className="text-[#6B7280] text-[13px]">{errorMsg}</p>
             <button 
-              onClick={() => fetchAgendas()}
-              className="mt-4 px-6 py-2 bg-[#356E3B] text-white text-[13px] font-bold rounded-full hover:bg-[#2A582F] transition-colors"
+              onClick={() => {
+                setErrorMsg("");
+                fetchCategories();
+                fetchAgendas();
+              }}
+              className="mt-4 px-6 py-2 bg-[#356E3B] text-white text-[13px] font-bold rounded-full hover:bg-[#2A582F] transition-colors cursor-pointer"
             >
               Coba Lagi
             </button>
@@ -1009,6 +1026,17 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
               })
               ) : isLoading ? (
                 <CardListSkeleton count={2} type="agenda" />
+              ) : errorMsg && displayedAgendas.length === 0 ? (
+                <div className="py-8 text-center flex flex-col items-center justify-center gap-2">
+                  <p className="text-sm text-red-500">{errorMsg}</p>
+                  <button
+                    type="button"
+                    onClick={() => { setErrorMsg(""); fetchAgendas(); }}
+                    className="px-4 py-1.5 rounded-full bg-[#356E3B] text-white text-[12px] font-bold hover:bg-[#2b5930] transition-colors cursor-pointer"
+                  >
+                    Coba Lagi
+                  </button>
+                </div>
               ) : (
                 <p className="text-sm text-gray-500 text-center py-6">
                   Belum ada agenda.

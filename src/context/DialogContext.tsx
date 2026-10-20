@@ -59,6 +59,11 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
 
   // Show Toast
   const showToast = useCallback((message: string, type: ToastType = "info", duration = 2000) => {
+    // Abaikan seluruh notifikasi pop-up bertipe success (keberhasilan aksi)
+    if (type === "success") {
+      return;
+    }
+
     const id = `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     setToasts((prev) => [...prev, { id, message, type }]);
 

@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
+import { AdminDashboardSkeleton } from "@/components/CardSkeleton";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -104,19 +105,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <>{children}</>;
   }
 
-  // Tampilan pemuatan awal
-  if (isLoading || isVerifying) {
-    return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#FAFCF9]">
-        <TopBar title="Manajemen" onBack={() => router.push("/dashboard")} />
-        <div className="flex-1 flex flex-col items-center justify-center p-6 gap-3">
-          <Loader2 className="w-8 h-8 text-[#356E3B] animate-spin" />
-          <p className="text-[#5C786C] text-[13px] font-medium">
-            {isVerifying ? "Memverifikasi hak akses manajemen..." : "Memuat data manajemen..."}
-          </p>
-        </div>
-      </div>
-    );
+  // Tampilan pemuatan awal HANYA jika belum pernah terverifikasi
+  // Saat reload data di latar belakang, biarkan children tetap tampil tanpa mengganggu interaksi
+  if (!hasVerified && (isLoading || isVerifying)) {
+    return <AdminDashboardSkeleton />;
   }
 
   // JIKA TIDAK MEMILIKI HAK AKSES MANAJEMEN:

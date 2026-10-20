@@ -110,10 +110,9 @@ function GabungPerusahaanContent() {
       console.error("Gagal refresh memberships context:", e);
     }
 
-    showToast("Berhasil bergabung dengan perusahaan!", "success");
     router.replace("/dashboard");
     // Pertahankan isLoading = true agar loading overlay tetap menutupi layar sampai Next.js selesai berganti ke dashboard
-  }, [activeRequestId, targetCompanyId, setCurrentUser, refreshMemberships, showToast, router]);
+  }, [activeRequestId, targetCompanyId, setCurrentUser, refreshMemberships, router]);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;

@@ -39,7 +39,7 @@ import {
 import { Badge } from "@/components/Badge";
 import { ViewAllButton } from "@/components/ViewAllButton";
 import { getAgendaCategoryColor } from "@/app/agenda/page";
-import { CardListSkeleton } from "@/components/CardSkeleton";
+import { CardListSkeleton, DashboardSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
 
 export default function DashboardPage() {
@@ -177,7 +177,7 @@ export default function DashboardPage() {
     return () => window.removeEventListener("companyChanged", handleCompanyChanged);
   }, []);
 
-  // Listener event pembersihan atau pembaruan sesi autentikasi untuk mereset dashboard seketika
+  // Listener event pembersihan atau pembaruan sesi autentikasi dan notifikasi untuk mereset dashboard seketika
   useEffect(() => {
     const handleAuthChange = () => {
       setNews([]);
@@ -191,13 +191,23 @@ export default function DashboardPage() {
       setIsTasksAgendasLoading(true);
       setUser(null);
     };
+
+    const handleNotificationsUpdated = (e: any) => {
+      const newCount = typeof e.detail?.unreadCount === "number" ? e.detail.unreadCount : 0;
+      setUnreadCount(newCount);
+      const compId = activeCompanyId || getActiveCompanyId();
+      setCachedData(buildCacheKey("dashboard_notif", compId), newCount);
+    };
+
     window.addEventListener("authSessionCleared", handleAuthChange);
     window.addEventListener("authSessionUpdated", handleAuthChange);
+    window.addEventListener("notificationsUpdated", handleNotificationsUpdated);
     return () => {
       window.removeEventListener("authSessionCleared", handleAuthChange);
       window.removeEventListener("authSessionUpdated", handleAuthChange);
+      window.removeEventListener("notificationsUpdated", handleNotificationsUpdated);
     };
-  }, []);
+  }, [activeCompanyId]);
 
     const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
 
@@ -602,12 +612,7 @@ export default function DashboardPage() {
   };
 
   if (isCompanyLoading && !currentUser && memberships.length === 0) {
-    return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] items-center justify-center p-6 gap-3">
-        <Loader2 className="w-8 h-8 text-[#1E4738] animate-spin" />
-        <p className="text-[#5C786C] text-[13px] font-medium">Memuat data perusahaan...</p>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (companyError && memberships.length === 0 && !activeCompanyId) {
@@ -770,8 +775,12 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* CTA Check In / Out Floating Full Rounded Pill at Bottom Right (Hanya muncul jika belum selesai presensi hari ini dan bukan hari libur) */}
-          {attendanceStatus !== "CHECKED_OUT" && !isDayOff && (
+          {/* CTA Check In / Out Floating Full Rounded Pill at Bottom Right */}
+          {isAttendanceLoading && !attendanceStatus ? (
+            <div className="absolute bottom-3.5 right-3.5 z-10 flex flex-col items-end">
+              <div className="w-36 h-10 rounded-full bg-white/70 animate-pulse border-[3px] border-white shadow-sm" />
+            </div>
+          ) : attendanceStatus !== "CHECKED_OUT" && !isDayOff && (
             <div className="absolute bottom-3.5 right-3.5 z-10 flex flex-col items-end">
               {showScheduleNotice && btnHelperText && (
                 <div className="mb-2 bg-[#1E4738] text-white text-[11px] font-medium px-3.5 py-2 rounded-[14px] shadow-lg flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200 max-w-[260px] text-left relative border border-white/20">

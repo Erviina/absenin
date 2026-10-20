@@ -33,6 +33,7 @@ import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useDialog } from "@/context/DialogContext";
+import { CompanyProfileSkeleton } from "@/components/CardSkeleton";
 import { useCompany } from "@/context/CompanyContext";
 import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
 import { getActiveCompanyId, getApiUrl } from "@/lib/api";
@@ -288,7 +289,6 @@ export default function ProfilPerusahaanContent() {
 
       const data = await res.json();
       if (data.success) {
-        showToast("Permohonan keluar berhasil dibatalkan.", "success");
         setPendingExitRequest(null);
       } else {
         showToast(data.message || "Gagal membatalkan permohonan", "error");
@@ -325,7 +325,6 @@ export default function ProfilPerusahaanContent() {
 
       const data = await res.json();
       if (data.success) {
-        showToast("Permohonan keluar berhasil diajukan.", "success");
         setIsExitModalOpen(false);
         setExitReason("");
         setPendingExitRequest(data.data);
@@ -367,14 +366,11 @@ export default function ProfilPerusahaanContent() {
     return `https://wa.me/${clean}`;
   };
 
-  if (isLoading) {
+  if (isLoading && !company) {
     return (
       <div className="flex flex-col min-h-screen bg-[#FBFDFC]">
         <TopBar title="Profil Perusahaan" onBack={() => router.back()} />
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-8 h-8 border-3 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-3" />
-          <p className="text-[14px] text-gray-500 font-medium">Memuat profil perusahaan...</p>
-        </div>
+        <CompanyProfileSkeleton />
       </div>
     );
   }
@@ -684,7 +680,6 @@ export default function ProfilPerusahaanContent() {
                   type="button"
                   onClick={() => {
                     navigator.clipboard.writeText(company.join_code);
-                    showToast("Kode bergabung berhasil disalin!", "success");
                   }}
                   className="flex items-center gap-1.5 py-2 px-3 bg-white border border-gray-200 text-gray-700 hover:text-[#356E3B] hover:border-[#356E3B] rounded-[12px] text-[12px] font-bold transition-all shadow-sm active:scale-95"
                 >
@@ -886,7 +881,6 @@ export default function ProfilPerusahaanContent() {
                 companyName={company.name}
                 size={190}
                 showJoinCodeBox={true}
-                onCopy={() => showToast("Kode bergabung berhasil disalin!", "success")}
                 instructionText="Arahkan kamera ke kode QR untuk bergabung instan"
               />
             </div>

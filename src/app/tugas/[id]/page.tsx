@@ -46,10 +46,7 @@ export default function TugasDetailPage() {
       });
 
       if (res.ok) {
-        showToast(
-          nextCompleted ? "Tugas berhasil diselesaikan! 🎉" : "Tugas ditandai belum selesai.",
-          "success"
-        );
+        // Status updated successfully
       } else {
         // Revert on failure
         setTask((prev: any) => ({ ...prev, completed: !nextCompleted }));
@@ -112,12 +109,19 @@ export default function TugasDetailPage() {
     fetchTask();
   }, [id, router]);
 
-  if (loading) {
+  if (loading && !task) {
     return (
-      <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8]">
+      <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] animate-in fade-in duration-200">
         <TopBar title="Detail Tugas" onBack={() => router.push("/tugas")} />
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-gray-500 text-sm">Memuat tugas...</p>
+        <div className="px-6 pt-6 flex flex-col gap-5">
+          <div className="bg-white rounded-[20px] p-5 border border-[#E5E7EB] shadow-sm flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 rounded-lg bg-gray-100 animate-pulse shrink-0" />
+              <div className="w-3/4 h-5 rounded bg-gray-100 animate-pulse" />
+            </div>
+            <div className="w-full h-16 rounded-xl bg-gray-100 animate-pulse" />
+            <div className="w-36 h-4 rounded bg-gray-100 animate-pulse" />
+          </div>
         </div>
       </div>
     );

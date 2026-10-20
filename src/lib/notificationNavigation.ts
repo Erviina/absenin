@@ -100,6 +100,10 @@ export function getNotificationDestination(
       // Pengajuan keluar ditolak oleh manajemen, kembali ke profil
       return { route: "/profil", targetCompanyId };
 
+    // === PERUBAHAN HAK AKSES ===
+    case "ROLE_CHANGED":
+      return { route: "/profil", targetCompanyId };
+
     // === PENGUMUMAN / BERITA ===
     case "NEW_ANNOUNCEMENT":
       return { route: "/berita", targetCompanyId };

@@ -424,16 +424,23 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const prevCompanyIdRef = useRef<string | null | undefined>(undefined);
+
   useEffect(() => {
     if (isCompanyLoading) return;
-    setCompany(null);
-    setAttendanceStats(null);
-    setLeaveStats(null);
-    setActivities([]);
-    setIsLoading(true);
-    setIsStatsLoading(true);
-    setIsLeaveStatsLoading(true);
-    setIsActivitiesLoading(true);
+    const compId = activeCompanyId || getActiveCompanyId();
+    // Reset data kartu HANYA saat perusahaan benar-benar berganti ke ID lain
+    if (prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== compId) {
+      setCompany(null);
+      setAttendanceStats(null);
+      setLeaveStats(null);
+      setActivities([]);
+      setIsLoading(true);
+      setIsStatsLoading(true);
+      setIsLeaveStatsLoading(true);
+      setIsActivitiesLoading(true);
+    }
+    prevCompanyIdRef.current = compId;
     fetchDashboardData();
   }, [router, activeCompanyId, isCompanyLoading]);
 
