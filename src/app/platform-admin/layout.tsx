@@ -63,7 +63,7 @@ export default function PlatformAdminLayout({
       } else {
         // Akses ditolak oleh server (tidak masuk allowlist atau token kedaluwarsa)
         setAccessDeniedMessage(
-          res.message || "Akun Anda tidak memiliki hak akses sebagai Platform Owner."
+          res.message || "Akun Anda tidak memiliki hak akses sebagai Pemilik Platform."
         );
       }
     } catch (err: any) {
@@ -116,7 +116,7 @@ export default function PlatformAdminLayout({
           Memverifikasi Otorisasi Platform Admin...
         </h2>
         <p className="text-[12.5px] text-[#5C786C] max-w-sm">
-          Memeriksa izin akun dan enkripsi allowlist server untuk Platform Owner.
+          Memeriksa izin akun dan enkripsi daftar izin server untuk Pemilik Platform.
         </p>
       </div>
     );
@@ -168,6 +168,57 @@ export default function PlatformAdminLayout({
     );
   }
 
+  const getHeaderInfo = (path: string) => {
+    if (path.startsWith("/platform-admin/analytics/growth")) {
+      return {
+        title: "Analitik Pertumbuhan",
+        subtitle: "Tren akuisisi tenant baru, pertumbuhan basis pengguna, dan kecepatan adopsi presensi",
+      };
+    }
+    if (path.startsWith("/platform-admin/companies")) {
+      return {
+        title: "Direktori Perusahaan",
+        subtitle: "Manajemen organisasi dan tenant terdaftar di platform AbsenIn",
+      };
+    }
+    if (path.startsWith("/platform-admin/users")) {
+      return {
+        title: "Direktori Pengguna",
+        subtitle: "Manajemen dan pemantauan akun pengguna di seluruh organisasi",
+      };
+    }
+    if (path.startsWith("/platform-admin/analytics/features")) {
+      return {
+        title: "Analitik Fitur",
+        subtitle: "Pemanfaatan modul presensi, tugas kerja, agenda, dan perizinan",
+      };
+    }
+    if (path.startsWith("/platform-admin/system-health")) {
+      return {
+        title: "Kesehatan Sistem",
+        subtitle: "Diagnostik server, koneksi database Supabase, dan status layanan",
+      };
+    }
+    if (path.startsWith("/platform-admin/audit-logs")) {
+      return {
+        title: "Log Audit",
+        subtitle: "Pencatatan akuntabilitas autentikasi dan riwayat aktivitas administratif",
+      };
+    }
+    if (path.startsWith("/platform-admin/settings")) {
+      return {
+        title: "Pengaturan Platform",
+        subtitle: "Preferensi pemantauan, notifikasi operasional, dan parameter akun",
+      };
+    }
+    return {
+      title: "Ringkasan Platform",
+      subtitle: "Pusat Kendali & Analitik Pertumbuhan AbsenIn",
+    };
+  };
+
+  const headerInfo = getHeaderInfo(pathname);
+
   // 4. Authorized State: Tampilkan Platform Admin Layout lengkap
   return (
     <PlatformAdminContext.Provider
@@ -188,6 +239,8 @@ export default function PlatformAdminLayout({
         <div className="flex-1 lg:pl-64 flex flex-col min-w-0 min-h-screen w-full">
           <PlatformAdminHeader
             profile={profile}
+            title={headerInfo.title}
+            subtitle={headerInfo.subtitle}
             onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           />
 

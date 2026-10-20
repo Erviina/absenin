@@ -73,7 +73,7 @@ export default function PlatformAdminLoginPage() {
         logoutPlatformAdmin();
         setErrorMessage(
           verifyRes.message ||
-            "Akun Google Anda berhasil diverifikasi, namun email tersebut tidak terdaftar dalam allowlist Platform Owner Absenin."
+            "Akun Google Anda berhasil diverifikasi, namun email tersebut tidak terdaftar dalam daftar izin (allowlist) Pemilik Platform AbsenIn."
         );
       }
     } catch (err: any) {
@@ -88,7 +88,7 @@ export default function PlatformAdminLoginPage() {
     return (
       <div className="min-h-screen bg-[#F4F9F6] flex flex-col items-center justify-center p-6 text-center">
         <Loader2 className="w-8 h-8 animate-spin text-[#1E3F2B] mb-2" />
-        <span className="text-[13px] font-medium text-[#5C786C]">Memeriksa sesi Platform Owner...</span>
+        <span className="text-[13px] font-medium text-[#5C786C]">Memeriksa sesi Pemilik Platform...</span>
       </div>
     );
   }
@@ -111,7 +111,7 @@ export default function PlatformAdminLoginPage() {
               AbsenIn
             </span>
             <span className="text-[11px] text-[#86EFAC] font-semibold tracking-wide">
-              Platform Admin Portal
+              Portal Admin Platform
             </span>
           </div>
         </div>
@@ -131,11 +131,11 @@ export default function PlatformAdminLoginPage() {
           {/* Security Badge */}
           <div className="inline-flex items-center gap-2 bg-[#EEF5F0] border border-[#DCE9DF] px-3.5 py-1.5 rounded-full text-[11px] font-extrabold text-[#1E4738] mb-5 shadow-2xs">
             <Lock className="w-3.5 h-3.5 text-[#356E3B]" />
-            <span>PORTAL KHUSUS PLATFORM OWNER</span>
+            <span>PORTAL KHUSUS PEMILIK PLATFORM</span>
           </div>
 
           <h2 className="text-[22px] sm:text-[24px] font-black text-[#111827] tracking-tight leading-tight mb-2">
-            Selamat Datang, Owner
+            Selamat Datang, Pemilik Platform
           </h2>
           <p className="text-[13px] text-gray-500 leading-relaxed mb-6 max-w-xs">
             Akses analitik pertumbuhan platform global, direktori perusahaan, dan telemetri sistem.
@@ -171,7 +171,7 @@ export default function PlatformAdminLoginPage() {
           {isLoading && (
             <div className="flex items-center gap-2 text-[12.5px] text-[#1E4738] font-bold mt-4 animate-pulse">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Memverifikasi otorisasi allowlist...</span>
+              <span>Memverifikasi otorisasi akses...</span>
             </div>
           )}
 
@@ -179,7 +179,7 @@ export default function PlatformAdminLoginPage() {
           <div className="mt-8 pt-5 border-t border-gray-100 w-full flex flex-col gap-2 text-[11px] text-gray-400">
             <div className="flex items-center justify-center gap-1.5 text-gray-500 font-medium">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#356E3B]" />
-              <span>Dilindungi Server-Side Allowlist Kriptografi</span>
+              <span>Dilindungi Sistem Izin Server-Side Kriptografi</span>
             </div>
             <span>Hanya akun Google yang terdaftar yang dapat melihat data.</span>
           </div>
@@ -188,7 +188,7 @@ export default function PlatformAdminLoginPage() {
 
       {/* Bottom Footer */}
       <div className="p-6 text-center text-white/40 text-[11.5px] z-10">
-        &copy; {new Date().getFullYear()} AbsenIn Internal Platform Administration. All rights reserved.
+        &copy; {new Date().getFullYear()} Administrasi Platform Internal AbsenIn. Seluruh hak cipta dilindungi.
       </div>
     </div>
   );

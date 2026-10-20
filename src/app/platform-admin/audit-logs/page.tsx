@@ -155,21 +155,16 @@ export default function PlatformAdminAuditLogsPage() {
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300">
       {/* Header & Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-[#356E3B]" />
-            <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
-              Audit Logs & Riwayat Administratif
-            </h2>
-          </div>
-          <span className="text-[12.5px] text-[#6B7280]">
-            Pencatatan akuntabilitas otentikasi Google OAuth, akses pengawasan, dan aksi Platform Owner
-          </span>
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-5 h-5 text-[#356E3B]" />
+          <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
+            Log Audit Administratif
+          </h2>
         </div>
 
         {/* Search & Refresh */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative sm:w-64">
+        <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
+          <div className="relative flex-1 sm:w-64">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -183,7 +178,7 @@ export default function PlatformAdminAuditLogsPage() {
           <button
             onClick={loadLogs}
             disabled={isLoading}
-            className="p-2 rounded-[16px] bg-white border border-[#DCE9DF] text-[#1E3F2B] hover:bg-[#EEF5F0] transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+            className="p-2.5 rounded-[16px] bg-white border border-[#DCE9DF] text-[#1E3F2B] hover:bg-[#EEF5F0] transition-colors shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
             title="Muat Ulang"
           >
             <RotateCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -219,7 +214,7 @@ export default function PlatformAdminAuditLogsPage() {
               {summary.uniqueActors}
             </span>
             <span className="text-[11.5px] text-gray-500 mt-0.5">
-              Akun Platform Owner aktif
+              Akun Pemilik Platform aktif
             </span>
           </div>
           <div className="w-12 h-12 rounded-[16px] bg-[#EEF5F0] flex items-center justify-center text-[#356E3B]">

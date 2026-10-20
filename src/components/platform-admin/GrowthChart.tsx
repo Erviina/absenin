@@ -81,25 +81,21 @@ export function GrowthChart({ data, isLoading = false }: GrowthChartProps) {
       : "";
 
   return (
-    <div className="bg-white border border-[#E8F0EA] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+    <div className="bg-white border border-[#E8F0EA] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col">
       {/* Header & Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-[#356E3B]" />
-            <h3 className="text-[16px] font-bold text-[#111827]">
-              Tren Pertumbuhan Platform
-            </h3>
-          </div>
-          <span className="text-[12px] text-[#6B7280]">
-            Total dalam periode terpilih:{" "}
-            <strong className="text-[#111827] font-extrabold">{totalValue}</strong>{" "}
-            {currentConfig.label.toLowerCase()}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <TrendingUp className="w-4 h-4 text-[#356E3B] shrink-0" />
+          <h3 className="text-[15px] sm:text-[16px] font-bold text-[#111827] whitespace-nowrap">
+            Tren Pertumbuhan
+          </h3>
+          <span className="text-[11px] font-bold text-[#1E3F2B] bg-[#EEF5F0] border border-[#DCE9DF] px-2.5 py-0.5 rounded-full whitespace-nowrap">
+            {totalValue} Total
           </span>
         </div>
 
         {/* Metric Selector Tabs */}
-        <div className="flex items-center gap-1 p-1 bg-gray-100/80 rounded-[14px] shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-1 p-1 bg-gray-100/80 rounded-[14px] shrink-0 overflow-x-auto max-w-full">
           {(Object.keys(metricConfigs) as MetricType[]).map((key) => {
             const conf = metricConfigs[key];
             const Icon = conf.icon;
@@ -112,7 +108,7 @@ export function GrowthChart({ data, isLoading = false }: GrowthChartProps) {
                   setActiveMetric(key);
                   setHoveredIndex(null);
                 }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-[11px] font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
                   isTabActive
                     ? "bg-white text-gray-900 shadow-2xs"
                     : "text-gray-500 hover:text-gray-900"

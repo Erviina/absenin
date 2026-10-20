@@ -32,17 +32,12 @@ export function RecentActivityList({ activities }: RecentActivityListProps) {
   };
 
   return (
-    <div className="bg-white border border-[#E8F0EA] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-[#356E3B]" />
-          <h3 className="text-[16px] font-bold text-[#111827]">
-            Aktivitas Presensi Terakhir Platform
-          </h3>
-        </div>
-        <span className="text-[11.5px] font-semibold text-gray-500">
-          Live Platform Stream
-        </span>
+    <div className="bg-white border border-[#E8F0EA] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col">
+      <div className="flex items-center gap-2 mb-4">
+        <Activity className="w-4 h-4 text-[#356E3B]" />
+        <h3 className="text-[15px] sm:text-[16px] font-bold text-[#111827]">
+          Aktivitas Presensi Terbaru
+        </h3>
       </div>
 
       <div className="space-y-3">

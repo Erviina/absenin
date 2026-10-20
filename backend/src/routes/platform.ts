@@ -320,8 +320,34 @@ router.get("/companies", authenticatePlatformOwner, async (req: Request, res: Re
 });
 
 /**
+ * GET /api/platform/companies/lookup
+ * Daftar ringkas perusahaan untuk opsi filter dropdown
+ */
+router.get("/companies/lookup", authenticatePlatformOwner, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const listRes = await db.execute(sql`
+      SELECT id, name, avatar_company_url
+      FROM companies
+      WHERE deleted_at IS NULL
+      ORDER BY name ASC
+    `);
+    return res.status(200).json({
+      success: true,
+      message: "Daftar perusahaan berhasil dimuat",
+      data: listRes.rows,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat daftar perusahaan",
+      errors: [error.message],
+    });
+  }
+});
+
+/**
  * GET /api/platform/users
- * Direktori Seluruh Pengguna Platform Absenin
+ * Direktori Seluruh Pengguna Platform Absenin (Multi-Tenant Support)
  */
 router.get("/users", authenticatePlatformOwner, async (req: Request, res: Response): Promise<any> => {
   try {
@@ -330,20 +356,40 @@ router.get("/users", authenticatePlatformOwner, async (req: Request, res: Respon
     const offset = (page - 1) * limit;
     const search = (req.query.search as string || "").trim().toLowerCase();
     const companyId = (req.query.company_id as string || "").trim();
+    const multiOnly = (req.query.multi_only as string || "").trim() === "true";
 
     const searchCondition = search 
       ? sql`AND (LOWER(p.full_name) LIKE ${`%${search}%`} OR LOWER(p.email) LIKE ${`%${search}%`})` 
       : sql``;
     
     const companyCondition = companyId 
-      ? sql`AND p.company_id = ${companyId}::uuid` 
+      ? sql`AND (p.id IN (SELECT profile_id FROM company_members WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL AND status = 'active') OR p.company_id = ${companyId}::uuid)` 
       : sql``;
 
-    // Summary counts
+    const multiCondition = multiOnly
+      ? sql`AND p.id IN (
+          SELECT profile_id FROM (
+            SELECT profile_id, company_id FROM company_members WHERE deleted_at IS NULL AND status = 'active'
+            UNION
+            SELECT id as profile_id, company_id FROM profiles WHERE company_id IS NOT NULL AND deleted_at IS NULL
+          ) all_m
+          GROUP BY profile_id HAVING COUNT(DISTINCT company_id) > 1
+        )`
+      : sql``;
+
+    // Summary counts (Mendukung Multi-Tenant)
     const summaryRes = await db.execute(sql`
       SELECT
         (SELECT COUNT(*)::int FROM profiles WHERE deleted_at IS NULL) as total_users,
-        (SELECT COUNT(*)::int FROM profiles WHERE deleted_at IS NULL AND company_id IS NOT NULL) as affiliated_users,
+        (SELECT COUNT(DISTINCT profile_id)::int FROM (
+          SELECT profile_id FROM company_members WHERE deleted_at IS NULL AND status = 'active'
+          UNION
+          SELECT id as profile_id FROM profiles WHERE company_id IS NOT NULL AND deleted_at IS NULL
+        ) aff) as affiliated_users,
+        (SELECT COUNT(*)::int FROM (
+          SELECT profile_id FROM company_members WHERE deleted_at IS NULL AND status = 'active'
+          GROUP BY profile_id HAVING COUNT(DISTINCT company_id) > 1
+        ) multi) as multi_company_users,
         (SELECT COUNT(DISTINCT profile_id)::int FROM attendances WHERE deleted_at IS NULL) as active_users
     `);
     const summary = summaryRes.rows[0] as any;
@@ -351,10 +397,11 @@ router.get("/users", authenticatePlatformOwner, async (req: Request, res: Respon
     const countRes = await db.execute(sql`
       SELECT COUNT(*)::int as total
       FROM profiles p
-      WHERE p.deleted_at IS NULL ${searchCondition} ${companyCondition}
+      WHERE p.deleted_at IS NULL ${searchCondition} ${companyCondition} ${multiCondition}
     `);
     const totalCount = (countRes.rows[0] as any)?.total || 0;
 
+    // Query Pengguna dengan Agregasi Seluruh Keanggotaan PT (Multi-Tenant JSON)
     const usersRes = await db.execute(sql`
       SELECT 
         p.id, 
@@ -362,27 +409,80 @@ router.get("/users", authenticatePlatformOwner, async (req: Request, res: Respon
         p.email, 
         p.avatar_url, 
         p.created_at,
-        p.company_id,
-        c.name as company_name,
-        m.role,
+        p.company_id as active_company_id,
         (SELECT COUNT(*)::int FROM attendances WHERE profile_id = p.id AND deleted_at IS NULL) as total_attendances,
-        (SELECT MAX(check_in_time) FROM attendances WHERE profile_id = p.id AND deleted_at IS NULL) as last_attendance
+        (SELECT MAX(check_in_time) FROM attendances WHERE profile_id = p.id AND deleted_at IS NULL) as last_attendance,
+        COALESCE(
+          (
+            SELECT json_agg(
+              json_build_object(
+                'company_id', m_all.comp_id,
+                'company_name', m_all.comp_name,
+                'role', m_all.comp_role,
+                'status', m_all.comp_status,
+                'joined_at', m_all.comp_joined_at,
+                'is_active', (p.company_id = m_all.comp_id)
+              ) ORDER BY (p.company_id = m_all.comp_id) DESC, m_all.comp_name ASC
+            )
+            FROM (
+              SELECT DISTINCT ON (comp_id)
+                comp_id,
+                comp_name,
+                comp_role,
+                comp_status,
+                comp_joined_at
+              FROM (
+                SELECT 
+                  cm.company_id as comp_id, 
+                  comp.name as comp_name, 
+                  cm.role as comp_role, 
+                  cm.status as comp_status,
+                  cm.joined_at as comp_joined_at
+                FROM company_members cm
+                JOIN companies comp ON comp.id = cm.company_id AND comp.deleted_at IS NULL
+                WHERE cm.profile_id = p.id AND cm.deleted_at IS NULL AND cm.status = 'active'
+                UNION ALL
+                SELECT 
+                  c_leg.id as comp_id,
+                  c_leg.name as comp_name,
+                  'member' as comp_role,
+                  'active' as comp_status,
+                  p.created_at as comp_joined_at
+                FROM companies c_leg
+                WHERE c_leg.id = p.company_id AND c_leg.deleted_at IS NULL
+              ) sub_all
+            ) m_all
+          ),
+          '[]'::json
+        ) as memberships
       FROM profiles p
-      LEFT JOIN companies c ON c.id = p.company_id AND c.deleted_at IS NULL
-      LEFT JOIN company_members m ON m.profile_id = p.id AND m.company_id = p.company_id AND m.status = 'active' AND m.deleted_at IS NULL
-      WHERE p.deleted_at IS NULL ${searchCondition} ${companyCondition}
+      WHERE p.deleted_at IS NULL ${searchCondition} ${companyCondition} ${multiCondition}
       ORDER BY p.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
+
+    const formattedUsers = usersRes.rows.map((row: any) => {
+      const memberships = Array.isArray(row.memberships) ? row.memberships : [];
+      const primaryMembership = memberships[0] || null;
+      return {
+        ...row,
+        memberships,
+        companies_count: memberships.length,
+        company_name: primaryMembership?.company_name || null,
+        role: primaryMembership?.role || null,
+        company_id: primaryMembership?.company_id || row.active_company_id || null,
+      };
+    });
 
     return res.status(200).json({
       success: true,
       message: "Daftar pengguna platform berhasil dimuat",
       data: {
-        items: usersRes.rows,
+        items: formattedUsers,
         summary: {
           totalUsers: summary?.total_users || 0,
           affiliatedUsers: summary?.affiliated_users || 0,
+          multiCompanyUsers: summary?.multi_company_users || 0,
           activeUsers: summary?.active_users || 0,
         },
         pagination: {

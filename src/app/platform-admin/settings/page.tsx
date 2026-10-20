@@ -39,16 +39,11 @@ export default function PlatformAdminSettingsPage() {
   return (
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300 max-w-4xl">
       {/* Header */}
-      <div className="flex flex-col">
-        <div className="flex items-center gap-2">
-          <Settings className="w-5 h-5 text-[#356E3B]" />
-          <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
-            Pengaturan Platform Admin
-          </h2>
-        </div>
-        <span className="text-[12.5px] text-[#6B7280]">
-          Preferensi pemantauan, notifikasi operasional, dan parameter akun Platform Owner
-        </span>
+      <div className="flex items-center gap-2">
+        <Settings className="w-5 h-5 text-[#356E3B]" />
+        <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
+          Pengaturan Platform Admin
+        </h2>
       </div>
 
       {isSaved && (
@@ -66,7 +61,7 @@ export default function PlatformAdminSettingsPage() {
           </div>
           <div>
             <h3 className="font-extrabold text-[16px] text-gray-900 leading-tight">
-              Identitas Platform Owner
+              Identitas Pemilik Platform
             </h3>
             <span className="text-[12px] text-gray-400">
               Hak akses administratif tertinggi Absenin
@@ -80,7 +75,7 @@ export default function PlatformAdminSettingsPage() {
               Nama Lengkap
             </span>
             <span className="text-[14px] font-bold text-gray-900 mt-1">
-              {profile?.fullName || "Platform Administrator"}
+              {profile?.fullName || "Administrator Platform"}
             </span>
           </div>
 
@@ -99,7 +94,7 @@ export default function PlatformAdminSettingsPage() {
             </span>
             <div className="mt-1">
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#EEF5F0] text-[#1E3F2B] border border-[#DCE9DF]">
-                PLATFORM OWNER
+                PEMILIK PLATFORM
               </span>
             </div>
           </div>
@@ -128,10 +123,10 @@ export default function PlatformAdminSettingsPage() {
           </div>
           <div>
             <h3 className="font-extrabold text-[16px] text-gray-900 leading-tight">
-              Preferensi Monitoring & Pelaporan
+              Preferensi Pemantauan & Pelaporan
             </h3>
             <span className="text-[12px] text-gray-400">
-              Konfigurasi auto-refresh dan sensitivitas metrik
+              Konfigurasi pembaruan otomatis dan sensitivitas metrik
             </span>
           </div>
         </div>
@@ -140,10 +135,10 @@ export default function PlatformAdminSettingsPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2 border-b border-gray-100">
             <div>
               <span className="font-bold text-[13.5px] text-gray-900 block">
-                Interval Auto-Refresh System Health
+                Interval Pembaruan Otomatis Kesehatan Sistem
               </span>
               <span className="text-[12px] text-gray-400">
-                Frekuensi polling otomatis data latensi dan status server
+                Frekuensi pemeriksaan otomatis data latensi dan status server
               </span>
             </div>
             <select
@@ -154,7 +149,7 @@ export default function PlatformAdminSettingsPage() {
               <option value="15">Setiap 15 detik</option>
               <option value="30">Setiap 30 detik (Standar)</option>
               <option value="60">Setiap 60 detik</option>
-              <option value="0">Nonaktifkan auto-refresh</option>
+              <option value="0">Nonaktifkan pembaruan otomatis</option>
             </select>
           </div>
 
@@ -178,10 +173,10 @@ export default function PlatformAdminSettingsPage() {
           <div className="flex items-center justify-between py-2">
             <div>
               <span className="font-bold text-[13.5px] text-gray-900 block">
-                Peringatan Akses Unauthorized
+                Peringatan Akses Tanpa Izin
               </span>
               <span className="text-[12px] text-gray-400">
-                Catat ke log audit setiap upaya login Google di luar allowlist
+                Catat ke log audit setiap upaya masuk Google di luar daftar izin
               </span>
             </div>
             <input
@@ -216,7 +211,7 @@ export default function PlatformAdminSettingsPage() {
               Bersihkan Cache Sesi
             </span>
             <span className="text-[11.5px] text-gray-500">
-              Menghapus memori cache sementara dashboard pada browser ini
+              Menghapus memori cache sementara dasbor pada peramban ini
             </span>
           </div>
           <button
@@ -233,7 +228,7 @@ export default function PlatformAdminSettingsPage() {
               Keluar dari Platform Admin
             </span>
             <span className="text-[11.5px] text-gray-500">
-              Mengakhiri sesi otentikasi Platform Owner pada perangkat ini
+              Mengakhiri sesi autentikasi Pemilik Platform pada perangkat ini
             </span>
           </div>
           <button

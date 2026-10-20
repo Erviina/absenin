@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Building2,
   Search,
@@ -97,16 +98,11 @@ export default function PlatformAdminCompaniesPage() {
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300">
       {/* Header & Search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-[#356E3B]" />
-            <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
-              Direktori Perusahaan
-            </h2>
-          </div>
-          <span className="text-[12.5px] text-[#6B7280]">
-            Total {total} organisasi / tenant terdaftar di Absenin
-          </span>
+        <div className="flex items-center gap-2">
+          <Building2 className="w-5 h-5 text-[#356E3B]" />
+          <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
+            Direktori Perusahaan
+          </h2>
         </div>
 
         {/* Search Input Bar */}
@@ -201,10 +197,14 @@ export default function PlatformAdminCompaniesPage() {
 
                     {/* Anggota Count */}
                     <td className="py-4 px-4 text-center">
-                      <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-[12px] font-bold">
-                        <Users className="w-3.5 h-3.5 text-gray-500" />
+                      <Link
+                        href={`/platform-admin/users?company_id=${c.id}`}
+                        className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-[#EEF5F0] hover:text-[#1E3F2B] text-gray-800 px-3 py-1 rounded-full text-[12px] font-bold transition-all cursor-pointer group/link border border-transparent hover:border-[#DCE9DF]"
+                        title="Klik untuk melihat seluruh pengguna di organisasi ini"
+                      >
+                        <Users className="w-3.5 h-3.5 text-gray-500 group-hover/link:text-[#356E3B]" />
                         <span>{c.member_count}</span>
-                      </span>
+                      </Link>
                     </td>
 
                     {/* Presensi Count */}
@@ -224,7 +224,7 @@ export default function PlatformAdminCompaniesPage() {
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-400 italic">Default</span>
+                        <span className="text-gray-400 italic">Standar</span>
                       )}
                     </td>
 

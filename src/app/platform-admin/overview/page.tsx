@@ -94,23 +94,15 @@ export default function PlatformAdminOverviewPage() {
   return (
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300">
       {/* Top Controls: Welcome & Date Filter */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="bg-[#1E3F2B] text-white text-[10px] font-black px-2.5 py-0.5 rounded-full tracking-wider uppercase">
-              LIVE PLATFORM METRICS
-            </span>
-            <span className="text-gray-400 text-[12px] font-medium hidden sm:inline">•</span>
-            <span className="text-gray-500 text-[12px] font-medium hidden sm:inline">
-              Data Aktual Database Absenin
-            </span>
-          </div>
-          <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight mt-1">
-            Ringkasan Eksekutif Platform
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <Activity className="w-5 h-5 text-[#356E3B]" />
+          <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
+            Ringkasan Eksekutif
           </h2>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           <DateRangeFilter
             selectedPeriod={period}
             onChange={handlePeriodChange}
@@ -121,8 +113,8 @@ export default function PlatformAdminOverviewPage() {
             type="button"
             onClick={handleManualRefresh}
             disabled={isLoading || isRefreshing}
-            className="p-2.5 rounded-[16px] bg-white border border-[#DCE9DF] text-[#1E3F2B] hover:bg-[#EEF5F0] transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
-            title="Refresh Data Terkini"
+            className="p-2.5 rounded-[16px] bg-white border border-[#DCE9DF] text-[#1E3F2B] hover:bg-[#EEF5F0] transition-colors shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
+            title="Perbarui Data Terkini"
           >
             <RotateCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
           </button>
@@ -171,7 +163,7 @@ export default function PlatformAdminOverviewPage() {
           <KpiCard
             title="Perusahaan Aktif"
             value={data?.kpi?.activeCompanies || 0}
-            subValue={`dari ${data?.kpi?.totalCompanies || 0} total tenant`}
+            subValue={`dari ${data?.kpi?.totalCompanies || 0} total organisasi`}
             badge="Tercatat Aktif"
             badgeColor="purple"
             icon={Activity}
@@ -194,7 +186,7 @@ export default function PlatformAdminOverviewPage() {
       )}
 
       {/* Row 1: Growth Chart (2/3) + Activation Funnel (1/3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2">
           <GrowthChart data={data?.trends || []} isLoading={isLoading} />
         </div>
@@ -204,7 +196,7 @@ export default function PlatformAdminOverviewPage() {
       </div>
 
       {/* Row 2: Recent Companies (1/2) + Recent Live Activity (1/2) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <RecentCompaniesTable companies={data?.recentCompanies || []} />
         <RecentActivityList activities={data?.recentActivity || []} />
       </div>

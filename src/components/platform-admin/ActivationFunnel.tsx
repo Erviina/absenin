@@ -14,22 +14,13 @@ interface ActivationFunnelProps {
 
 export function ActivationFunnel({ data }: ActivationFunnelProps) {
   return (
-    <div className="bg-white border border-[#E8F0EA] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-[#356E3B]" />
-          <h3 className="text-[16px] font-bold text-[#111827]">
-            Funnel Aktivasi Perusahaan
-          </h3>
-        </div>
-        <span className="text-[11.5px] font-semibold text-[#5C786C] bg-[#EEF5F0] border border-[#DCE9DF] px-2.5 py-1 rounded-full">
-          Onboarding Lifecycle
-        </span>
+    <div className="bg-white border border-[#E8F0EA] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] flex flex-col">
+      <div className="flex items-center gap-2 mb-4">
+        <Layers className="w-4 h-4 text-[#356E3B] shrink-0" />
+        <h3 className="text-[15px] sm:text-[16px] font-bold text-[#111827]">
+          Tahapan Aktivasi
+        </h3>
       </div>
-
-      <p className="text-[12px] text-gray-500 mb-5 leading-relaxed">
-        Mengukur tingkat konversi tenant baru sejak pendaftaran hingga adopsi aktif di platform Absenin.
-      </p>
 
       <div className="space-y-3.5">
         {data.map((item, idx) => {

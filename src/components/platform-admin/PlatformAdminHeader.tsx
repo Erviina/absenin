@@ -13,8 +13,8 @@ interface PlatformAdminHeaderProps {
 export function PlatformAdminHeader({
   profile,
   onOpenMobileSidebar,
-  title = "Platform Overview",
-  subtitle = "Pusat Kendali & Analitik Pertumbuhan Absenin",
+  title = "Ringkasan Platform",
+  subtitle = "Pusat Kendali & Analitik Pertumbuhan AbsenIn",
 }: PlatformAdminHeaderProps) {
   return (
     <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-[#E8F0EA] px-4 sm:px-6 py-3.5 transition-all">
@@ -49,7 +49,7 @@ export function PlatformAdminHeader({
           <div className="flex items-center gap-2 bg-[#F9FAFB] border border-gray-200/80 px-2.5 py-1 rounded-full">
             <ShieldCheck className="w-4 h-4 text-[#356E3B]" />
             <span className="text-[11px] font-bold text-gray-700 hidden sm:inline">
-              Allowlist Verified
+              Akses Terverifikasi
             </span>
           </div>
         </div>

@@ -128,29 +128,24 @@ export default function PlatformAdminSystemHealthPage() {
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-[#356E3B]" />
-            <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
-              Kesehatan Sistem & Operasional
-            </h2>
-          </div>
-          <span className="text-[12.5px] text-[#6B7280]">
-            Diagnostik menyeluruh koneksi database Supabase, runtime Express, dan layanan platform
-          </span>
+        <div className="flex items-center gap-2">
+          <Activity className="w-5 h-5 text-[#356E3B]" />
+          <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
+            Kesehatan Sistem
+          </h2>
         </div>
 
         {/* Status Pill & Refresh Button */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-[#EEF5F0] border border-[#DCE9DF] rounded-[16px] text-[#1E3F2B] text-[12px] font-bold shadow-2xs">
             <span className="w-2.5 h-2.5 rounded-full bg-[#2E7D32] animate-pulse" />
-            <span>Sistem Beroperasi Normal</span>
+            <span>Sistem Normal</span>
           </div>
 
           <button
             onClick={loadHealth}
             disabled={isLoading}
-            className="p-2.5 rounded-[16px] bg-white border border-[#DCE9DF] text-[#1E3F2B] hover:bg-[#EEF5F0] transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+            className="p-2.5 rounded-[16px] bg-white border border-[#DCE9DF] text-[#1E3F2B] hover:bg-[#EEF5F0] transition-colors shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
             title="Muat Ulang Status"
           >
             <RotateCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -199,7 +194,7 @@ export default function PlatformAdminSystemHealthPage() {
               </span>
             </div>
             <span className="text-[11.5px] text-gray-500 mt-1 block">
-              Uptime: {data ? formatUptime(data.uptimeSeconds) : "-"}
+              Waktu Aktif: {data ? formatUptime(data.uptimeSeconds) : "-"}
             </span>
           </div>
         </div>
@@ -242,11 +237,11 @@ export default function PlatformAdminSystemHealthPage() {
           <div className="mt-2">
             <div className="flex items-baseline gap-2">
               <span className="text-[20px] font-black text-[#356E3B]">
-                Strict Allowlist
+                Daftar Izin Ketat
               </span>
             </div>
             <span className="text-[11.5px] text-gray-500 mt-1 block">
-              4 Akun Owner Terproteksi
+              4 Akun Pemilik Terproteksi
             </span>
           </div>
         </div>
@@ -278,10 +273,20 @@ export default function PlatformAdminSystemHealthPage() {
                 </div>
                 <div>
                   <h4 className="font-bold text-[13.5px] text-gray-900 leading-tight">
-                    {svc.name}
+                    {svc.name === "PostgreSQL Database"
+                      ? "Database PostgreSQL"
+                      : svc.name === "Google OAuth Verification"
+                      ? "Verifikasi Google OAuth"
+                      : svc.name === "Express REST Engine"
+                      ? "Mesin REST Express"
+                      : svc.name === "Tenant Isolation Security"
+                      ? "Keamanan Isolasi Organisasi"
+                      : svc.name}
                   </h4>
                   <span className="text-[11.5px] text-gray-400">
-                    {svc.provider || svc.version || svc.mode || "Internal Module"}
+                    {svc.mode === "Allowlist Strict Guard"
+                      ? "Proteksi Ketat Daftar Izin"
+                      : svc.provider || svc.version || svc.mode || "Modul Internal"}
                   </span>
                 </div>
               </div>
@@ -293,7 +298,7 @@ export default function PlatformAdminSystemHealthPage() {
                   </span>
                 )}
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#E8F5E9] text-[#2E7D32]">
-                  Operational
+                  {svc.status === "enforced" ? "Aktif" : "Beroperasi Normal"}
                 </span>
               </div>
             </div>
@@ -311,7 +316,7 @@ export default function PlatformAdminSystemHealthPage() {
             </h3>
           </div>
           <span className="text-[12px] text-[#356E3B] font-semibold bg-[#EEF5F0] px-2.5 py-1 rounded-full">
-            Supabase Cloud Pool
+            Koneksi Cloud Supabase
           </span>
         </div>
 
@@ -328,7 +333,7 @@ export default function PlatformAdminSystemHealthPage() {
 
           <div className="p-4 rounded-[16px] bg-[#F9FBFA] border border-gray-100 flex flex-col">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-              Profil User
+              Profil Pengguna
             </span>
             <span className="text-[20px] font-black text-[#1E3F2B] mt-1">
               {data?.database?.tables?.profiles || 0}

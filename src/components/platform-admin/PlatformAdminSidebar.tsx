@@ -26,42 +26,42 @@ interface PlatformAdminSidebarProps {
 
 const NAV_ITEMS = [
   {
-    title: "Overview",
+    title: "Ringkasan",
     href: "/platform-admin/overview",
     icon: LayoutDashboard,
   },
   {
-    title: "Growth Analytics",
+    title: "Analitik Pertumbuhan",
     href: "/platform-admin/analytics/growth",
     icon: TrendingUp,
   },
   {
-    title: "Companies",
+    title: "Perusahaan",
     href: "/platform-admin/companies",
     icon: Building2,
   },
   {
-    title: "Users",
+    title: "Pengguna",
     href: "/platform-admin/users",
     icon: Users,
   },
   {
-    title: "Feature Analytics",
+    title: "Analitik Fitur",
     href: "/platform-admin/analytics/features",
     icon: BarChart3,
   },
   {
-    title: "System Health",
+    title: "Kesehatan Sistem",
     href: "/platform-admin/system-health",
     icon: Activity,
   },
   {
-    title: "Audit Logs",
+    title: "Log Audit",
     href: "/platform-admin/audit-logs",
     icon: ShieldCheck,
   },
   {
-    title: "Settings",
+    title: "Pengaturan",
     href: "/platform-admin/settings",
     icon: Settings,
   },
@@ -98,7 +98,7 @@ export function PlatformAdminSidebar({
               </span>
             </div>
             <span className="text-[11px] text-white/60 font-medium mt-1">
-              Owner Administration
+              Administrasi Platform
             </span>
           </div>
         </div>
@@ -178,7 +178,7 @@ export function PlatformAdminSidebar({
             )}
             <div className="flex flex-col min-w-0">
               <span className="text-[12.5px] font-bold text-white truncate leading-tight">
-                {profile?.fullName || "Platform Owner"}
+                {profile?.fullName || "Pemilik Platform"}
               </span>
               <span className="text-[10.5px] text-white/60 truncate" title={profile?.email}>
                 {profile?.email}

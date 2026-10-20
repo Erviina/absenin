@@ -114,19 +114,14 @@ export default function PlatformAdminFeatureAnalyticsPage() {
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300">
       {/* Header & Filter Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-[#356E3B]" />
-            <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
-              Analitik Adopsi Fitur
-            </h2>
-          </div>
-          <span className="text-[12.5px] text-[#6B7280]">
-            Pemanfaatan modul presensi, tugas kerja, kalender agenda, dan perizinan lintas organisasi
-          </span>
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-[#356E3B]" />
+          <h2 className="text-[20px] sm:text-[22px] font-black text-[#111827] tracking-tight">
+            Analitik Adopsi Fitur
+          </h2>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
           <DateRangeFilter
             selectedPeriod={period}
             onChange={(p) => setPeriod(p)}
@@ -135,7 +130,7 @@ export default function PlatformAdminFeatureAnalyticsPage() {
           <button
             onClick={loadData}
             disabled={isLoading}
-            className="p-2.5 rounded-[16px] bg-white border border-[#DCE9DF] text-[#1E3F2B] hover:bg-[#EEF5F0] transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+            className="p-2.5 rounded-[16px] bg-white border border-[#DCE9DF] text-[#1E3F2B] hover:bg-[#EEF5F0] transition-colors shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
             title="Muat Ulang"
           >
             <RotateCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -295,7 +290,7 @@ export default function PlatformAdminFeatureAnalyticsPage() {
                 </span>
                 <span className="text-amber-600 flex items-center gap-1">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  Pending: {data?.tasks.pending || 0}
+                  Tertunda: {data?.tasks.pending || 0}
                 </span>
               </div>
               <div className="h-3 w-full bg-amber-100 rounded-full overflow-hidden flex">
