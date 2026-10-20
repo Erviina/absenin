@@ -16,9 +16,7 @@
     },
     "backend": {
       "root": "backend",
-      "framework": "express",
-      "entrypoint": "src/index.ts",
-      "installCommand": "npm install"
+      "framework": "express"
     }
   },
   "rewrites": [
