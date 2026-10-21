@@ -11,6 +11,7 @@ import {
   ArrowUpDown,
   RotateCw,
   ExternalLink,
+  ChevronRight,
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
 import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
@@ -178,19 +179,20 @@ export default function PlatformAdminCompaniesPage() {
                 <th className="py-3.5 px-4 text-center">Anggota</th>
                 <th className="py-3.5 px-4 text-center">Total Presensi</th>
                 <th className="py-3.5 px-4">Jam Kerja</th>
-                <th className="py-3.5 pr-6 text-right">Terdaftar</th>
+                <th className="py-3.5 px-4 text-center">Terdaftar</th>
+                <th className="py-3.5 pr-6 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 text-[13px]">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                  <td colSpan={7} className="py-12 text-center text-gray-400">
                     Memuat data perusahaan...
                   </td>
                 </tr>
               ) : companies.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-gray-400">
+                  <td colSpan={7} className="py-12 text-center text-gray-400">
                     Tidak ditemukan perusahaan yang cocok dengan pencarian
                   </td>
                 </tr>
@@ -199,8 +201,12 @@ export default function PlatformAdminCompaniesPage() {
                   <tr key={c.id} className="hover:bg-gray-50/80 transition-colors group">
                     {/* Perusahaan Info */}
                     <td className="py-4 pl-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-[14px] bg-[#EEF5F0] text-[#1E4738] flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden border border-[#DCE9DF]">
+                      <Link
+                        href={`/platform-admin/companies/${c.id}`}
+                        className="flex items-center gap-3 group/company"
+                        title="Klik untuk melihat detail profil perusahaan"
+                      >
+                        <div className="w-10 h-10 rounded-[14px] bg-[#EEF5F0] text-[#1E4738] flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden border border-[#DCE9DF] group-hover/company:scale-105 transition-transform shadow-2xs">
                           {c.avatar_company_url ? (
                             <img
                               src={c.avatar_company_url}
@@ -212,14 +218,14 @@ export default function PlatformAdminCompaniesPage() {
                           )}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="font-bold text-gray-900 group-hover:text-[#1E3F2B] transition-colors truncate max-w-xs">
+                          <span className="font-bold text-gray-900 group-hover/company:text-[#1E3F2B] transition-colors truncate max-w-xs text-[13.5px]">
                             {c.name}
                           </span>
                           <span className="text-[11px] text-gray-400 truncate max-w-xs">
                             {c.address || "Alamat belum diatur"}
                           </span>
                         </div>
-                      </div>
+                      </Link>
                     </td>
 
                     {/* Join Code */}
@@ -267,8 +273,20 @@ export default function PlatformAdminCompaniesPage() {
                     </td>
 
                     {/* Tanggal Terdaftar */}
-                    <td className="py-4 pr-6 text-right text-gray-500 text-[12px] font-medium">
+                    <td className="py-4 px-4 text-center text-gray-500 text-[12px] font-medium whitespace-nowrap">
                       {formatDate(c.created_at)}
+                    </td>
+
+                    {/* Aksi */}
+                    <td className="py-4 pr-6 text-right whitespace-nowrap">
+                      <Link
+                        href={`/platform-admin/companies/${c.id}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[12px] bg-[#EEF5F0] hover:bg-[#1E3F2B] text-[#1E3F2B] hover:text-white text-[12px] font-bold transition-all border border-[#DCE9DF] shadow-2xs group/btn cursor-pointer"
+                        title="Buka detail profil & analitik perusahaan"
+                      >
+                        <span>Detail</span>
+                        <ChevronRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
+                      </Link>
                     </td>
                   </tr>
                 ))

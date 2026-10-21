@@ -347,6 +347,569 @@ router.get("/companies/lookup", authenticatePlatformOwner, async (req: Request, 
 });
 
 /**
+ * GET /api/platform/companies/:id
+ * Profil Lengkap Perusahaan, Informasi Pemilik, dan Ringkasan KPI
+ */
+router.get("/companies/:id", authenticatePlatformOwner, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const companyId = req.params.id;
+
+    const companyRes = await db.execute(sql`
+      SELECT 
+        c.id, 
+        c.name, 
+        c.address,
+        c.latitude,
+        c.longitude,
+        c.phone,
+        c.join_code,
+        c.avatar_company_url,
+        c.work_days,
+        c.work_start_time,
+        c.work_end_time,
+        c.created_at,
+        c.updated_at,
+        p_owner.id as owner_id,
+        p_owner.full_name as owner_name,
+        p_owner.email as owner_email,
+        p_owner.avatar_url as owner_avatar
+      FROM companies c
+      LEFT JOIN company_members cm_owner 
+        ON cm_owner.company_id = c.id 
+        AND cm_owner.role = 'owner' 
+        AND cm_owner.deleted_at IS NULL 
+        AND cm_owner.status = 'active'
+      LEFT JOIN profiles p_owner 
+        ON p_owner.id = COALESCE(cm_owner.profile_id, c.created_by)
+      WHERE c.id = ${companyId}::uuid AND c.deleted_at IS NULL
+      LIMIT 1;
+    `);
+
+    if (companyRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Perusahaan tidak ditemukan",
+      });
+    }
+
+    const company = companyRes.rows[0] as any;
+
+    const statsRes = await db.execute(sql`
+      SELECT 
+        (SELECT COUNT(*)::int FROM company_members WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL AND status = 'active') as active_members,
+        (SELECT COUNT(*)::int FROM company_members WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL AND role = 'admin' AND status = 'active') as admin_count,
+        (SELECT COUNT(*)::int FROM company_members WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL AND role = 'owner' AND status = 'active') as owner_count,
+        (SELECT COUNT(*)::int FROM attendances WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL) as total_attendances,
+        (SELECT COUNT(*)::int FROM tasks WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL) as total_tasks,
+        (SELECT COUNT(*)::int FROM tasks WHERE company_id = ${companyId}::uuid AND is_completed = true AND deleted_at IS NULL) as completed_tasks,
+        (SELECT COUNT(*)::int FROM agendas WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL) as total_agendas,
+        (SELECT COUNT(*)::int FROM leave_requests WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL) as total_leaves,
+        (SELECT COUNT(*)::int FROM leave_requests WHERE company_id = ${companyId}::uuid AND status::text IN ('Disetujui', 'approved') AND deleted_at IS NULL) as approved_leaves,
+        (SELECT COUNT(*)::int FROM leave_requests WHERE company_id = ${companyId}::uuid AND status::text IN ('Menunggu', 'pending') AND deleted_at IS NULL) as pending_leaves,
+        (SELECT COUNT(*)::int FROM leave_requests WHERE company_id = ${companyId}::uuid AND status::text IN ('Ditolak', 'rejected') AND deleted_at IS NULL) as rejected_leaves,
+        (SELECT COUNT(*)::int FROM news WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL) as total_news,
+        (SELECT MAX(check_in_time) FROM attendances WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL) as last_attendance_activity;
+    `);
+
+    const stats = statsRes.rows[0] as any;
+
+    return res.status(200).json({
+      success: true,
+      message: "Detail perusahaan berhasil dimuat",
+      data: {
+        ...company,
+        stats: {
+          ...stats,
+          task_completion_rate: stats.total_tasks > 0 ? Math.round((stats.completed_tasks / stats.total_tasks) * 100) : 0,
+          leave_approval_rate: stats.total_leaves > 0 ? Math.round((stats.approved_leaves / stats.total_leaves) * 100) : 0,
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching company detail:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat detail perusahaan",
+      errors: [error.message],
+    });
+  }
+});
+
+/**
+ * GET /api/platform/companies/:id/analytics
+ * Analitik Performa Fitur Terperinci pada Perusahaan Tertentu
+ */
+router.get("/companies/:id/analytics", authenticatePlatformOwner, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const companyId = req.params.id;
+
+    const compConfig = await db.execute(sql`
+      SELECT work_start_time FROM companies WHERE id = ${companyId}::uuid LIMIT 1;
+    `);
+    const startStr = compConfig.rows[0]?.work_start_time ? String(compConfig.rows[0]?.work_start_time).substring(0, 5) : "08:00";
+
+    // 1. Attendance features stats
+    const attRes = await db.execute(sql`
+      SELECT 
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 1 END)::int as on_time,
+        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${startStr}::time THEN 1 END)::int as late,
+        COUNT(CASE WHEN work_mode = 'WFO' THEN 1 END)::int as wfo_count,
+        COUNT(CASE WHEN work_mode = 'WFH' THEN 1 END)::int as wfh_count,
+        COUNT(DISTINCT profile_id)::int as active_attendees
+      FROM attendances
+      WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL;
+    `);
+    const attStats = attRes.rows[0] as any;
+    const onTimeRate = attStats.total > 0 ? Math.round((attStats.on_time / attStats.total) * 100) : 0;
+
+    // Daily attendance trend (14 hari terakhir)
+    const trendRes = await db.execute(sql`
+      SELECT 
+        TO_CHAR(d.day, 'YYYY-MM-DD') as date,
+        TO_CHAR(d.day, 'Dy, DD Mon') as display_date,
+        COUNT(a.id)::int as total,
+        COUNT(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 1 END)::int as on_time,
+        COUNT(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${startStr}::time THEN 1 END)::int as late
+      FROM generate_series(
+        CURRENT_DATE - INTERVAL '13 days',
+        CURRENT_DATE,
+        INTERVAL '1 day'
+      ) d(day)
+      LEFT JOIN attendances a 
+        ON DATE(a.check_in_time AT TIME ZONE 'Asia/Jakarta') = DATE(d.day)
+        AND a.company_id = ${companyId}::uuid
+        AND a.deleted_at IS NULL
+      GROUP BY d.day
+      ORDER BY d.day ASC;
+    `);
+
+    // 2. Task analytics
+    const taskRes = await db.execute(sql`
+      SELECT 
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN is_completed = true THEN 1 END)::int as completed,
+        COUNT(CASE WHEN is_completed = false OR is_completed IS NULL THEN 1 END)::int as pending,
+        COUNT(CASE WHEN (is_completed = false OR is_completed IS NULL) AND deadline < NOW() THEN 1 END)::int as overdue,
+        COUNT(CASE WHEN type = 'personal' THEN 1 END)::int as personal_tasks,
+        COUNT(CASE WHEN type != 'personal' OR type IS NULL THEN 1 END)::int as company_tasks
+      FROM tasks
+      WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL;
+    `);
+    const taskStats = taskRes.rows[0] as any;
+    const taskRate = taskStats.total > 0 ? Math.round((taskStats.completed / taskStats.total) * 100) : 0;
+
+    // 3. Agenda analytics
+    const agendaRes = await db.execute(sql`
+      SELECT 
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN end_time >= NOW() OR (end_time IS NULL AND start_time >= NOW()) THEN 1 END)::int as upcoming,
+        COUNT(CASE WHEN end_time < NOW() OR (end_time IS NULL AND start_time < NOW()) THEN 1 END)::int as past,
+        COUNT(CASE WHEN type = 'COMPANY' THEN 1 END)::int as company_type,
+        COUNT(CASE WHEN type = 'PERSONAL' THEN 1 END)::int as personal_type
+      FROM agendas
+      WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL;
+    `);
+    const agendaStats = agendaRes.rows[0] as any;
+
+    // 4. Leave analytics
+    const leaveRes = await db.execute(sql`
+      SELECT 
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN status::text IN ('Disetujui', 'approved') THEN 1 END)::int as approved,
+        COUNT(CASE WHEN status::text IN ('Menunggu', 'pending') THEN 1 END)::int as pending,
+        COUNT(CASE WHEN status::text IN ('Ditolak', 'rejected') THEN 1 END)::int as rejected
+      FROM leave_requests
+      WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL;
+    `);
+    const leaveStats = leaveRes.rows[0] as any;
+    const leaveApprovalRate = leaveStats.total > 0 ? Math.round((leaveStats.approved / leaveStats.total) * 100) : 0;
+
+    const leaveCatRes = await db.execute(sql`
+      SELECT 
+        COALESCE(lc.name, 'Lainnya') as category_name,
+        COUNT(lr.id)::int as count
+      FROM leave_requests lr
+      LEFT JOIN leave_categories lc ON lc.id = lr.leave_category_id
+      WHERE lr.company_id = ${companyId}::uuid AND lr.deleted_at IS NULL
+      GROUP BY lc.name
+      ORDER BY count DESC
+      LIMIT 6;
+    `);
+
+    // 5. News
+    const newsRes = await db.execute(sql`
+      SELECT COUNT(*)::int as total
+      FROM news
+      WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL;
+    `);
+
+    return res.status(200).json({
+      success: true,
+      message: "Analitik performa fitur perusahaan berhasil dimuat",
+      data: {
+        attendance: {
+          ...attStats,
+          on_time_rate: onTimeRate,
+          trend: trendRes.rows,
+        },
+        tasks: {
+          ...taskStats,
+          completion_rate: taskRate,
+        },
+        agendas: agendaStats,
+        leaves: {
+          ...leaveStats,
+          approval_rate: leaveApprovalRate,
+          categories: leaveCatRes.rows,
+        },
+        news: {
+          total: newsRes.rows[0]?.total || 0,
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching company analytics:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat analitik perusahaan",
+      errors: [error.message],
+    });
+  }
+});
+
+/**
+ * GET /api/platform/companies/:id/members
+ * Daftar Karyawan Perusahaan Beserta Ringkasan Performa Masing-Masing
+ */
+router.get("/companies/:id/members", authenticatePlatformOwner, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const companyId = req.params.id;
+    const search = ((req.query.search as string) || "").trim().toLowerCase();
+    const roleFilter = ((req.query.role as string) || "").trim().toLowerCase();
+
+    const compConfig = await db.execute(sql`
+      SELECT work_start_time FROM companies WHERE id = ${companyId}::uuid LIMIT 1;
+    `);
+    const startStr = compConfig.rows[0]?.work_start_time ? String(compConfig.rows[0]?.work_start_time).substring(0, 5) : "08:00";
+
+    const searchCondition = search
+      ? sql`AND (LOWER(p.full_name) LIKE ${`%${search}%`} OR LOWER(p.email) LIKE ${`%${search}%`})`
+      : sql``;
+    const roleCondition = roleFilter && roleFilter !== "all"
+      ? sql`AND LOWER(cm.role) = ${roleFilter}`
+      : sql``;
+
+    const membersRes = await db.execute(sql`
+      SELECT 
+        cm.id as membership_id,
+        cm.profile_id,
+        cm.role,
+        cm.status,
+        cm.joined_at,
+        p.full_name,
+        p.email,
+        p.avatar_url,
+        p.is_developer,
+        COALESCE(att.total_attendances, 0) as total_attendances,
+        COALESCE(att.on_time_attendances, 0) as on_time_attendances,
+        COALESCE(att.late_attendances, 0) as late_attendances,
+        att.last_attendance,
+        COALESCE(tsk.total_tasks, 0) as total_tasks,
+        COALESCE(tsk.completed_tasks, 0) as completed_tasks,
+        COALESCE(lve.total_leaves, 0) as total_leaves
+      FROM company_members cm
+      JOIN profiles p ON p.id = cm.profile_id
+      LEFT JOIN (
+        SELECT 
+          profile_id,
+          COUNT(*)::int as total_attendances,
+          COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 1 END)::int as on_time_attendances,
+          COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${startStr}::time THEN 1 END)::int as late_attendances,
+          MAX(check_in_time) as last_attendance
+        FROM attendances
+        WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL
+        GROUP BY profile_id
+      ) att ON att.profile_id = cm.profile_id
+      LEFT JOIN (
+        SELECT 
+          profile_id,
+          COUNT(*)::int as total_tasks,
+          COUNT(CASE WHEN is_completed = true THEN 1 END)::int as completed_tasks
+        FROM tasks
+        WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL
+        GROUP BY profile_id
+      ) tsk ON tsk.profile_id = cm.profile_id
+      LEFT JOIN (
+        SELECT 
+          profile_id,
+          COUNT(*)::int as total_leaves
+        FROM leave_requests
+        WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL
+        GROUP BY profile_id
+      ) lve ON lve.profile_id = cm.profile_id
+      WHERE cm.company_id = ${companyId}::uuid AND cm.deleted_at IS NULL
+        ${searchCondition}
+        ${roleCondition}
+      ORDER BY 
+        CASE 
+          WHEN cm.role = 'owner' THEN 1
+          WHEN cm.role = 'admin' THEN 2
+          WHEN cm.role = 'manager' THEN 3
+          ELSE 4 
+        END,
+        cm.joined_at ASC;
+    `);
+
+    const formatted = membersRes.rows.map((row: any) => {
+      const totAtt = row.total_attendances || 0;
+      const onTime = row.on_time_attendances || 0;
+      const totTsk = row.total_tasks || 0;
+      const compTsk = row.completed_tasks || 0;
+
+      return {
+        ...row,
+        on_time_rate: totAtt > 0 ? Math.round((onTime / totAtt) * 100) : 0,
+        task_completion_rate: totTsk > 0 ? Math.round((compTsk / totTsk) * 100) : 0,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Daftar karyawan perusahaan berhasil dimuat",
+      data: formatted,
+    });
+  } catch (error: any) {
+    console.error("Error fetching company members:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat karyawan perusahaan",
+      errors: [error.message],
+    });
+  }
+});
+
+/**
+ * GET /api/platform/companies/:id/members/:memberId/performance
+ * Detail Profil & Analisis Performa Karyawan Spesifik dalam Perusahaan Ini
+ */
+router.get("/companies/:id/members/:memberId/performance", authenticatePlatformOwner, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id: companyId, memberId: profileId } = req.params;
+
+    const compConfig = await db.execute(sql`
+      SELECT work_start_time FROM companies WHERE id = ${companyId}::uuid LIMIT 1;
+    `);
+    const startStr = compConfig.rows[0]?.work_start_time ? String(compConfig.rows[0]?.work_start_time).substring(0, 5) : "08:00";
+
+    // 1. Member profile & membership info
+    const profileRes = await db.execute(sql`
+      SELECT 
+        p.id, p.full_name, p.email, p.avatar_url, p.is_developer,
+        cm.role, cm.status, cm.joined_at
+      FROM company_members cm
+      JOIN profiles p ON p.id = cm.profile_id
+      WHERE cm.company_id = ${companyId}::uuid AND cm.profile_id = ${profileId}::uuid AND cm.deleted_at IS NULL
+      LIMIT 1;
+    `);
+
+    if (profileRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Karyawan tidak ditemukan di perusahaan ini",
+      });
+    }
+    const member = profileRes.rows[0] as any;
+
+    // 2. Attendance performance
+    const attStatsRes = await db.execute(sql`
+      SELECT 
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 1 END)::int as on_time,
+        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${startStr}::time THEN 1 END)::int as late,
+        COUNT(CASE WHEN work_mode = 'WFO' THEN 1 END)::int as wfo_count,
+        COUNT(CASE WHEN work_mode = 'WFH' THEN 1 END)::int as wfh_count,
+        MAX(check_in_time) as last_attendance
+      FROM attendances
+      WHERE company_id = ${companyId}::uuid AND profile_id = ${profileId}::uuid AND deleted_at IS NULL;
+    `);
+    const attStats = attStatsRes.rows[0] as any;
+    const onTimeRate = attStats.total > 0 ? Math.round((attStats.on_time / attStats.total) * 100) : 0;
+
+    // Recent attendances (last 10)
+    const recentAttendances = await db.execute(sql`
+      SELECT 
+        id,
+        check_in_time,
+        check_out_time,
+        work_mode,
+        check_in_address,
+        CASE 
+          WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 'on_time'
+          ELSE 'late'
+        END as status
+      FROM attendances
+      WHERE company_id = ${companyId}::uuid AND profile_id = ${profileId}::uuid AND deleted_at IS NULL
+      ORDER BY check_in_time DESC
+      LIMIT 10;
+    `);
+
+    // 3. Task performance
+    const taskStatsRes = await db.execute(sql`
+      SELECT 
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN is_completed = true THEN 1 END)::int as completed,
+        COUNT(CASE WHEN is_completed = false OR is_completed IS NULL THEN 1 END)::int as pending,
+        COUNT(CASE WHEN (is_completed = false OR is_completed IS NULL) AND deadline < NOW() THEN 1 END)::int as overdue
+      FROM tasks
+      WHERE company_id = ${companyId}::uuid 
+        AND (profile_id = ${profileId}::uuid OR assigned_to = ${profileId}::uuid)
+        AND deleted_at IS NULL;
+    `);
+    const taskStats = taskStatsRes.rows[0] as any;
+    const taskRate = taskStats.total > 0 ? Math.round((taskStats.completed / taskStats.total) * 100) : 0;
+
+    const recentTasks = await db.execute(sql`
+      SELECT id, title, deadline, is_completed, created_at, type
+      FROM tasks
+      WHERE company_id = ${companyId}::uuid 
+        AND (profile_id = ${profileId}::uuid OR assigned_to = ${profileId}::uuid)
+        AND deleted_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 6;
+    `);
+
+    // 4. Leave history
+    const leaveStatsRes = await db.execute(sql`
+      SELECT 
+        COUNT(*)::int as total,
+        COUNT(CASE WHEN status::text IN ('Disetujui', 'approved') THEN 1 END)::int as approved,
+        COUNT(CASE WHEN status::text IN ('Menunggu', 'pending') THEN 1 END)::int as pending,
+        COUNT(CASE WHEN status::text IN ('Ditolak', 'rejected') THEN 1 END)::int as rejected
+      FROM leave_requests
+      WHERE company_id = ${companyId}::uuid AND profile_id = ${profileId}::uuid AND deleted_at IS NULL;
+    `);
+    const leaveStats = leaveStatsRes.rows[0] as any;
+
+    const recentLeaves = await db.execute(sql`
+      SELECT 
+        lr.id, lr.start_date, lr.end_date, lr.description, lr.status, lr.created_at,
+        COALESCE(lc.name, 'Lainnya') as category_name
+      FROM leave_requests lr
+      LEFT JOIN leave_categories lc ON lc.id = lr.leave_category_id
+      WHERE lr.company_id = ${companyId}::uuid AND lr.profile_id = ${profileId}::uuid AND lr.deleted_at IS NULL
+      ORDER BY lr.created_at DESC
+      LIMIT 6;
+    `);
+
+    return res.status(200).json({
+      success: true,
+      message: "Analitik performa karyawan berhasil dimuat",
+      data: {
+        profile: member,
+        attendance: {
+          ...attStats,
+          on_time_rate: onTimeRate,
+          recent: recentAttendances.rows,
+        },
+        tasks: {
+          ...taskStats,
+          completion_rate: taskRate,
+          recent: recentTasks.rows,
+        },
+        leaves: {
+          ...leaveStats,
+          recent: recentLeaves.rows,
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching member performance:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat analitik performa karyawan",
+      errors: [error.message],
+    });
+  }
+});
+
+/**
+ * GET /api/platform/companies/:id/activities
+ * Log Aktivitas Terkini (Activity Feed) di Perusahaan
+ */
+router.get("/companies/:id/activities", authenticatePlatformOwner, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const companyId = req.params.id;
+
+    const activitiesRes = await db.execute(sql`
+      (
+        SELECT 
+          'ATTENDANCE' as type,
+          a.id,
+          p.full_name as user_name,
+          p.email as user_email,
+          p.avatar_url as user_avatar,
+          CONCAT('Melakukan presensi (', a.work_mode, ')') as description,
+          a.check_in_time as timestamp
+        FROM attendances a
+        JOIN profiles p ON p.id = a.profile_id
+        WHERE a.company_id = ${companyId}::uuid AND a.deleted_at IS NULL
+        ORDER BY a.check_in_time DESC
+        LIMIT 10
+      )
+      UNION ALL
+      (
+        SELECT 
+          'TASK' as type,
+          t.id,
+          COALESCE(p.full_name, 'Sistem') as user_name,
+          p.email as user_email,
+          p.avatar_url as user_avatar,
+          CONCAT(CASE WHEN t.is_completed = true THEN 'Menyelesaikan tugas: ' ELSE 'Membuat tugas: ' END, t.title) as description,
+          COALESCE(t.updated_at, t.created_at) as timestamp
+        FROM tasks t
+        LEFT JOIN profiles p ON p.id = t.profile_id
+        WHERE t.company_id = ${companyId}::uuid AND t.deleted_at IS NULL
+        ORDER BY timestamp DESC
+        LIMIT 10
+      )
+      UNION ALL
+      (
+        SELECT 
+          'LEAVE' as type,
+          lr.id,
+          p.full_name as user_name,
+          p.email as user_email,
+          p.avatar_url as user_avatar,
+          CONCAT('Mengajukan izin: ', COALESCE(lc.name, 'Lainnya'), ' (', lr.status, ')') as description,
+          lr.created_at as timestamp
+        FROM leave_requests lr
+        JOIN profiles p ON p.id = lr.profile_id
+        LEFT JOIN leave_categories lc ON lc.id = lr.leave_category_id
+        WHERE lr.company_id = ${companyId}::uuid AND lr.deleted_at IS NULL
+        ORDER BY lr.created_at DESC
+        LIMIT 10
+      )
+      ORDER BY timestamp DESC
+      LIMIT 25;
+    `);
+
+    return res.status(200).json({
+      success: true,
+      message: "Log aktivitas perusahaan berhasil dimuat",
+      data: activitiesRes.rows,
+    });
+  } catch (error: any) {
+    console.error("Error fetching company activities:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat log aktivitas perusahaan",
+      errors: [error.message],
+    });
+  }
+});
+
+/**
  * GET /api/platform/users
  * Direktori Seluruh Pengguna Platform Absenin (Multi-Tenant Support)
  */
