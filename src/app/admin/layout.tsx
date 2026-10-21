@@ -4,8 +4,8 @@ import { useCompany } from "@/context/CompanyContext";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { TopBar } from "@/components/TopBar";
 import { AdminDashboardSkeleton } from "@/components/CardSkeleton";
+import { UnauthorizedView } from "@/components/UnauthorizedView";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -112,14 +112,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   // JIKA TIDAK MEMILIKI HAK AKSES MANAJEMEN:
-  // Buat tampilan seketika menjadi BLANK (tidak me-render children / data admin sama sekali)
-  // untuk mencegah kebocoran informasi manajemen saat akses dicabut
+  // Seketika keluarkan page 403 (atau 401 jika belum login sama sekali)
   if (!isManagement || !activeCompanyId || memberships.length === 0) {
-    return (
-      <div className="min-h-[100dvh] bg-[#FAFCF9] flex items-center justify-center">
-        {/* Blank state saat proses redirect ke /unauthorized sedang berlangsung */}
-      </div>
-    );
+    const hasToken = typeof window !== "undefined" ? Boolean(localStorage.getItem("accessToken")) : false;
+    if (!hasToken) {
+      return <UnauthorizedView type="401" redirect={pathname} />;
+    }
+    return <UnauthorizedView type="403" />;
   }
 
   return <>{children}</>;

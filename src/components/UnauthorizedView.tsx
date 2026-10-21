@@ -1,15 +1,41 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface UnauthorizedViewProps {
   type?: "401" | "403";
+  redirect?: string;
+  heading?: string;
+  description?: string;
+  buttonLabel?: string;
+  onAction?: () => void;
 }
 
-export function UnauthorizedView({ type = "403" }: UnauthorizedViewProps) {
+export function UnauthorizedView({ 
+  type = "403",
+  redirect,
+  heading: customHeading,
+  description: customDescription,
+  buttonLabel: customButtonLabel,
+  onAction
+}: UnauthorizedViewProps) {
   const router = useRouter();
   const is401 = type === "401";
+
+  const [redirectTarget, setRedirectTarget] = useState(redirect || "");
+
+  useEffect(() => {
+    if (!redirect && typeof window !== "undefined") {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const r = sp.get("redirect");
+        if (r) {
+          setRedirectTarget(r);
+        }
+      } catch {}
+    }
+  }, [redirect]);
 
   useEffect(() => {
     document.title = is401
@@ -17,12 +43,31 @@ export function UnauthorizedView({ type = "403" }: UnauthorizedViewProps) {
       : "403 - Akses Ditolak | AbsenIn";
   }, [is401]);
 
-  const heading = is401 ? "Login Diperlukan" : "Akses Ditolak";
-  const description = is401
-    ? "Silakan login terlebih dahulu untuk melanjutkan."
-    : "Anda tidak memiliki izin untuk membuka halaman ini.";
-  const buttonLabel = is401 ? "Login Sekarang" : "Kembali ke Halaman Utama";
-  const buttonAction = is401 ? "/login" : "/dashboard";
+  const heading = customHeading || (is401 ? "Login Diperlukan" : "Akses Ditolak");
+  const description = customDescription || (
+    is401
+      ? "Silakan login terlebih dahulu untuk mengakses halaman ini."
+      : "Anda tidak memiliki izin atau hak akses Anda telah dicabut untuk membuka halaman ini."
+  );
+
+  const defaultButtonLabel = is401 ? "Login Sekarang" : "Kembali ke Halaman Utama";
+  const buttonLabel = customButtonLabel || defaultButtonLabel;
+
+  const handleAction = () => {
+    if (onAction) {
+      onAction();
+      return;
+    }
+
+    if (is401) {
+      const target = redirectTarget 
+        ? `/login?redirect=${encodeURIComponent(redirectTarget)}`
+        : "/login";
+      router.push(target);
+    } else {
+      router.push("/dashboard");
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#FAFCF9] items-center justify-center px-8">
@@ -51,13 +96,14 @@ export function UnauthorizedView({ type = "403" }: UnauthorizedViewProps) {
         </h1>
 
         {/* Description */}
-        <p className="text-[13px] text-[#6B7280] leading-relaxed mb-8 max-w-[220px]">
+        <p className="text-[13px] text-[#6B7280] leading-relaxed mb-8 max-w-[240px]">
           {description}
         </p>
 
         {/* CTA Button — same style as 404 */}
         <button
-          onClick={() => router.push(buttonAction)}
+          type="button"
+          onClick={handleAction}
           className="w-full h-12 bg-[#356E3B] hover:bg-[#2A582F] text-white font-bold text-[14px] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(53,110,59,0.22)] active:scale-[0.97] transition-all cursor-pointer"
         >
           {buttonLabel}

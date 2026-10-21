@@ -548,8 +548,8 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
             clearAuthSession();
 
             const redirectTarget = currentPath + (window.location.search || "");
-            const loginUrl = `/login?redirect=${encodeURIComponent(redirectTarget)}`;
-            window.location.href = loginUrl;
+            const unauthorizedUrl = `/unauthorized?type=401&redirect=${encodeURIComponent(redirectTarget)}`;
+            window.location.href = unauthorizedUrl;
           }
         }
 
