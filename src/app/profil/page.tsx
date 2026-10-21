@@ -180,19 +180,6 @@ export default function ProfilPage() {
       <TopBar
         title="Profil"
         onBack={() => router.push("/dashboard")}
-        rightAction={
-          (user?.isDeveloper || currentUser?.isDeveloper) ? (
-            <button
-              type="button"
-              onClick={() => router.push("/platform-admin/overview")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[12px] font-bold border border-white/30 transition-all active:scale-95 shadow-sm backdrop-blur-sm cursor-pointer"
-              title="Akses Platform Admin (Khusus Developer)"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-white" />
-              <span>Platform Admin</span>
-            </button>
-          ) : undefined
-        }
       />
 
       <div className="px-6 pt-6 flex flex-col gap-6">
@@ -391,10 +378,33 @@ export default function ProfilPage() {
           </div>
         </div>
 
+        {/* Platform Admin Card (Khusus Developer / Platform Owner) */}
+        {(user?.isDeveloper || currentUser?.isDeveloper) && (
+          <div 
+            onClick={() => router.push("/platform-admin/overview")}
+            className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-9 flex justify-center">
+                <ShieldCheck className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#111827] text-[14px] font-bold">Platform Admin</span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#EEF5F0] text-[#1E4738] border border-[#DCE9DF]">
+                    Developer
+                  </span>
+                </div>
+                <span className="text-[#6B7280] text-[12px]">Kelola seluruh perusahaan, pengguna & platform</span>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+          </div>
+        )}
+
         {/* Keluar dari Akun Card */}
         <div 
           onClick={handleLogout}
-
           className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
         >
           <div className="flex items-center gap-4">
