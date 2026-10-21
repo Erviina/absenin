@@ -16,9 +16,48 @@ const updateProfileSchema = z.object({
   avatar_url: z.string().url("Format URL tidak valid").optional(),
 }).strict(); // Tolak field yang tidak diizinkan
 
+// GET /api/profile - Ambil data profil milik pengguna yang sedang login (least privilege)
+router.get("/", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = (req as any).user.id;
+    const profileResult = await db
+      .select({
+        id: profiles.id,
+        full_name: profiles.full_name,
+        email: profiles.email,
+        avatar_url: profiles.avatar_url,
+        company_id: profiles.company_id,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, userId))
+      .limit(1);
+
+
+    if (profileResult.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Profil tidak ditemukan",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: profileResult[0],
+    });
+  } catch (error: any) {
+    console.error("Get profile error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      errors: [error.message],
+    });
+  }
+});
+
 router.patch("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const userId = (req as any).user.id;
+
 
     // 1. Validasi Body
     const parseResult = updateProfileSchema.safeParse(req.body);

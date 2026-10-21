@@ -358,9 +358,43 @@ export default function ProfilPage() {
           </div>
         </div>
 
+        {/* Privasi & Persetujuan Data Card */}
+        <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
+          <div className="p-5 flex items-center gap-3 border-b border-[#F3F4F6]">
+            <div className="w-[34px] h-[34px] rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
+            </div>
+            <h2 className="text-[#111827] text-[15px] font-bold">Privasi & Perlindungan Data</h2>
+          </div>
+
+          <div className="flex flex-col">
+            <div 
+              onClick={() => router.push("/kebijakan-privasi")}
+              className="p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <ShieldCheck className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.75} />
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#111827] text-[14px] font-bold">Kebijakan Privasi</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      v1.0 Aktif
+                    </span>
+                  </div>
+                  <span className="text-[#6B7280] text-[12px]">Pelajari transparansi pemrosesan PII dan hak privasi Anda</span>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+            </div>
+          </div>
+        </div>
+
         {/* Keluar dari Akun Card */}
         <div 
           onClick={handleLogout}
+
           className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
         >
           <div className="flex items-center gap-4">

@@ -439,4 +439,66 @@ router.put("/:id/status", authenticate, async (req: Request, res: Response): Pro
   }
 });
 
+// GET /api/leaves/:id - Detail permohonan izin dengan perlindungan IDOR & least privilege
+router.get("/:id", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userAuth = (req as any).user;
+    const leaveId = Array.isArray(req.params.id) ? req.params.id[0] : (req.params.id as string);
+
+    // UUID format check
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(leaveId)) {
+      return res.status(400).json({ success: false, message: "Format ID izin tidak valid" });
+    }
+
+
+    // Ambil data izin
+    const leaveRes = await db.execute(sql`
+      SELECT 
+        lr.id, lr.profile_id, lr.company_id, lr.leave_category_id, lr.start_date, lr.end_date,
+        lr.description, lr.attachment_url, lr.status, lr.rejection_reason, lr.approved_by, lr.approved_at,
+        lr.created_at, lr.updated_at,
+        COALESCE(p.full_name, p.email, 'Karyawan') as employee_name,
+        p.avatar_url as employee_avatar,
+        COALESCE(lc.name, 'Lainnya') as category_name
+      FROM leave_requests lr
+      LEFT JOIN profiles p ON p.id = lr.profile_id
+      LEFT JOIN leave_categories lc ON lc.id = lr.leave_category_id
+      WHERE lr.id = ${leaveId} AND lr.deleted_at IS NULL
+      LIMIT 1
+    `);
+
+    if (leaveRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Permohonan izin tidak ditemukan" });
+    }
+
+    const leave = leaveRes.rows[0];
+
+    // Otorisasi: pemilik data dapat melihat, atau manajemen (owner/admin/manager) di perusahaan yang sama
+    const isOwner = leave.profile_id === userAuth.id;
+
+    if (!isOwner) {
+      const tenant = await resolveTenant(req, userAuth.id);
+      const isCompanyManagement = tenant && tenant.companyId === leave.company_id && tenant.isManagement;
+
+      if (!isCompanyManagement) {
+        return res.status(403).json({
+          success: false,
+          message: "Akses ditolak: Anda tidak memiliki izin untuk melihat detail izin karyawan lain.",
+          errors: ["Forbidden: Cross-user leave access blocked"],
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: leave,
+    });
+  } catch (error: any) {
+    console.error("Get leave detail error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
 export default router;
+

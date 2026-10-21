@@ -2,8 +2,9 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useGoogleLogin } from "@react-oauth/google";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 
 import { getPersonalModePreference, isTokenValid, getSafeInternalRedirect } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
@@ -43,6 +44,9 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isVerifyingSession, setIsVerifyingSession] = useState(false);
   const [sessionVerifyError, setSessionVerifyError] = useState<string | null>(null);
+  const [isConsentAccepted, setIsConsentAccepted] = useState(false);
+  const [consentErrorHighlight, setConsentErrorHighlight] = useState(false);
+
 
   // Verifikasi ke backend jika terdapat token lokal sebelum melakukan redirect
   useEffect(() => {
@@ -128,12 +132,22 @@ function LoginForm() {
   const handleGoogleSuccess = async (authPayload: { idToken?: string; accessToken?: string }) => {
     if (isLoading || isVerifyingSession || (!authPayload.idToken && !authPayload.accessToken)) return;
 
+    if (!isConsentAccepted) {
+      setConsentErrorHighlight(true);
+      showToast("Persetujuan pemrosesan data pribadi wajib disetujui terlebih dahulu.", "warning");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const res = await fetch(getApiUrl("/auth/google"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(authPayload),
+        body: JSON.stringify({
+          ...authPayload,
+          consent_accepted: isConsentAccepted,
+          policy_version: "v1.0",
+        }),
       });
 
       const contentType = res.headers.get("content-type");
@@ -205,6 +219,17 @@ function LoginForm() {
     prompt: "select_account",
   });
 
+  const handleInitiateGoogleLogin = () => {
+    if (!isConsentAccepted) {
+      setConsentErrorHighlight(true);
+      showToast("Persetujuan pemrosesan data pribadi wajib dicentang untuk melanjutkan.", "warning");
+      return;
+    }
+    setConsentErrorHighlight(false);
+    loginWithGoogle();
+  };
+
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
 
@@ -264,12 +289,57 @@ function LoginForm() {
             </div>
           )}
 
-          <div className="flex justify-center w-full mt-2">
+          {/* Checkbox Persetujuan Pengguna (PII & Kebijakan Privasi) */}
+          <div 
+            className={`rounded-2xl p-3.5 transition-all duration-200 border text-left ${
+              consentErrorHighlight 
+                ? "bg-red-50/80 border-red-300 ring-2 ring-red-100" 
+                : "bg-[#F9FAFB] border-[#E5E7EB]"
+            }`}
+          >
+            <label 
+              htmlFor="privacy-consent-checkbox" 
+              className="flex items-start gap-3 cursor-pointer select-none"
+            >
+              <input
+                id="privacy-consent-checkbox"
+                type="checkbox"
+                checked={isConsentAccepted}
+                onChange={(e) => {
+                  setIsConsentAccepted(e.target.checked);
+                  if (e.target.checked) setConsentErrorHighlight(false);
+                }}
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#356E3B] focus:ring-[#356E3B] focus:ring-offset-0 cursor-pointer accent-[#356E3B] shrink-0"
+              />
+              <span className="text-[12px] text-[#4B5563] leading-[1.5]">
+                Saya menyetujui pemrosesan data pribadi sesuai dengan{" "}
+                <Link
+                  href="/kebijakan-privasi"
+                  className="text-[#1E4738] font-bold underline hover:text-[#356E3B] transition-colors inline-block"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Kebijakan Privasi
+                </Link>
+                .
+              </span>
+
+            </label>
+            {consentErrorHighlight && (
+              <p className="text-[11px] font-semibold text-red-600 mt-2 pl-7 animate-in fade-in duration-150">
+                * Wajib dicentang untuk melanjutkan ke AbsenIN
+              </p>
+            )}
+          </div>
+
+          <div className="flex justify-center w-full mt-1">
             <button
               type="button"
-              onClick={() => loginWithGoogle()}
+              onClick={handleInitiateGoogleLogin}
               disabled={isLoading || isVerifyingSession}
-              className="relative w-full max-w-[300px] h-11 bg-white border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#c6c8cc] active:bg-[#f1f3f4] text-[#3c4043] font-medium text-[14px] rounded-full shadow-[0_1px_2px_rgba(60,64,67,0.08)] flex items-center justify-center transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+              title={!isConsentAccepted ? "Centang persetujuan di atas terlebih dahulu" : "Lanjutkan login dengan Google"}
+              className={`relative w-full max-w-[300px] h-11 bg-white border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#c6c8cc] active:bg-[#f1f3f4] text-[#3c4043] font-medium text-[14px] rounded-full shadow-[0_1px_2px_rgba(60,64,67,0.08)] flex items-center justify-center transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none cursor-pointer ${
+                !isConsentAccepted ? "opacity-75 hover:opacity-100" : ""
+              }`}
             >
               <div className="absolute left-4 w-5 h-5 flex items-center justify-center">
                 {isLoading ? (
@@ -285,6 +355,7 @@ function LoginForm() {
           </div>
         </div>
       </div>
+
 
       {/* Bottom Illustration */}
       <div className="absolute bottom-0 left-0 w-full h-[60vh] pointer-events-none z-0">

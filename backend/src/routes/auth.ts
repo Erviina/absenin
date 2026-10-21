@@ -7,13 +7,19 @@ import { eq, sql } from "drizzle-orm";
 import { supabaseAdmin } from "../lib/supabase";
 import { authenticate } from "../middleware/auth";
 import { resolveTenant } from "../utils/tenant";
+import { 
+  getUserConsent, 
+  recordUserConsent, 
+  getUserConsentHistory, 
+  CURRENT_PRIVACY_POLICY_VERSION 
+} from "../utils/consent";
 
 const router = Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 router.post("/google", async (req: Request, res: Response): Promise<any> => {
   try {
-    const { idToken, accessToken: googleAccessToken } = req.body;
+    const { idToken, accessToken: googleAccessToken, consent_accepted, policy_version } = req.body;
 
     if (!idToken && !googleAccessToken) {
       return res.status(400).json({
@@ -22,6 +28,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
         errors: ["idToken or accessToken is required"],
       });
     }
+
 
     let email = "";
     let fullName = "";
@@ -84,6 +91,15 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
     // I will insert it if it doesn't exist, using a new UUID.
     
     if (!profile) {
+      // Validasi server: Pengguna baru WAJIB menyetujui pemrosesan data pribadi sebelum akun dibuat
+      if (consent_accepted !== true) {
+        return res.status(400).json({
+          success: false,
+          message: "Persetujuan pemrosesan data pribadi wajib disetujui untuk melanjutkan pendaftaran akun.",
+          errors: ["Consent required for new user registration"],
+        });
+      }
+
       let userId = "";
 
       // 1. Try to create user via Supabase Admin API
@@ -133,7 +149,36 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       }
       
       profile = profileResultRaw.rows[0] as any;
+
+      // Catat persetujuan pengguna baru secara resmi di database
+      try {
+        await recordUserConsent({
+          profileId: profile.id,
+          policyVersion: policy_version || CURRENT_PRIVACY_POLICY_VERSION,
+          isAccepted: true,
+          ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip || (req.socket?.remoteAddress as string),
+          userAgent: req.headers["user-agent"] as string,
+        });
+      } catch (consentErr) {
+        console.error("Gagal mencatat consent pengguna baru:", consentErr);
+      }
+    } else {
+      // Pengguna lama: jika mencentang persetujuan pada login, catat/perbarui persetujuannya
+      if (consent_accepted === true) {
+        try {
+          await recordUserConsent({
+            profileId: profile.id,
+            policyVersion: policy_version || CURRENT_PRIVACY_POLICY_VERSION,
+            isAccepted: true,
+            ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip || (req.socket?.remoteAddress as string),
+            userAgent: req.headers["user-agent"] as string,
+          });
+        } catch (consentErr) {
+          console.error("Gagal mencatat consent pengguna lama:", consentErr);
+        }
+      }
     }
+
 
     // Fetch active company — prioritaskan profile.company_id jika status aktif di company_members
     let company = null;
@@ -250,6 +295,9 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       { expiresIn: (process.env.JWT_EXPIRES_IN || "24h") as any }
     );
 
+    // Check consent status
+    const consentStatus = await getUserConsent(profile.id);
+
     res.json({
       success: true,
       message: "Request berhasil",
@@ -265,9 +313,15 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
           activeRole: activeRole,
           isManagement: ["owner", "admin", "manager"].includes(activeRole),
           isDeveloper: profile.is_developer === true,
+          consent: {
+            hasConsented: consentStatus.hasConsented,
+            policyVersion: consentStatus.activePolicyVersion,
+            consentedAt: consentStatus.consentedAt,
+          },
         },
       },
     });
+
 
   } catch (error: any) {
     console.error("Login error:", error);
@@ -342,6 +396,9 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
       roles = ["Employee"];
     }
 
+    // Check consent status
+    const consentStatus = await getUserConsent(profile.id);
+
     res.json({
       success: true,
       message: "Berhasil mengambil data profile",
@@ -356,6 +413,11 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
           activeRole: activeRole,
           isManagement: ["owner", "admin", "manager"].includes(activeRole),
           isDeveloper: profile.is_developer === true,
+          consent: {
+            hasConsented: consentStatus.hasConsented,
+            policyVersion: consentStatus.activePolicyVersion,
+            consentedAt: consentStatus.consentedAt,
+          },
         },
       },
     });
@@ -370,4 +432,99 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
   }
 });
 
+/**
+ * GET /api/auth/consent
+ * Mengambil status persetujuan pemrosesan data pengguna saat ini
+ */
+router.get("/consent", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = (req as any).user.id;
+    const consent = await getUserConsent(userId);
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil status persetujuan pengguna",
+      data: consent,
+    });
+  } catch (error: any) {
+    console.error("Get consent error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      errors: [error.message],
+    });
+  }
+});
+
+/**
+ * POST /api/auth/consent
+ * Mencatat persetujuan pemrosesan data pribadi secara sah
+ */
+router.post("/consent", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = (req as any).user.id;
+    const { consent_accepted, policy_version } = req.body;
+
+    if (consent_accepted !== true) {
+      return res.status(400).json({
+        success: false,
+        message: "Persetujuan pemrosesan data pribadi wajib disetujui (checkbox harus dicentang).",
+        errors: ["consent_accepted must be true"],
+      });
+    }
+
+    const versionToRecord = policy_version || CURRENT_PRIVACY_POLICY_VERSION;
+    const ip = (req.headers["x-forwarded-for"] as string) || req.ip || (req.socket?.remoteAddress as string);
+    const ua = (req.headers["user-agent"] as string) || null;
+
+    const record = await recordUserConsent({
+      profileId: userId,
+      policyVersion: versionToRecord,
+      isAccepted: true,
+      ipAddress: ip,
+      userAgent: ua,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Persetujuan pemrosesan data pribadi berhasil dicatat",
+      data: {
+        hasConsented: true,
+        policyVersion: record.policy_version,
+        consentedAt: record.consented_at,
+      },
+    });
+  } catch (error: any) {
+    console.error("Post consent error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      errors: [error.message],
+    });
+  }
+});
+
+/**
+ * GET /api/auth/consent/history
+ * Mengambil riwayat persetujuan kebijakan privasi pengguna (audit trail)
+ */
+router.get("/consent/history", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const userId = (req as any).user.id;
+    const history = await getUserConsentHistory(userId);
+    return res.status(200).json({
+      success: true,
+      message: "Berhasil mengambil riwayat persetujuan",
+      data: history,
+    });
+  } catch (error: any) {
+    console.error("Get consent history error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      errors: [error.message],
+    });
+  }
+});
+
 export default router;
+
