@@ -9,6 +9,7 @@ import { getPersonalModePreference, isTokenValid, getSafeInternalRedirect } from
 import { useDialog } from "@/context/DialogContext";
 import { clearAuthSession, getApiUrl, setAuthSession } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
+import { AbsenInLogo } from "@/components/AbsenInLogo";
 
 function GoogleIcon({ className = "w-[18px] h-[18px]" }: { className?: string }) {
   return (
@@ -209,7 +210,7 @@ function LoginForm() {
 
       {/* Top Section */}
       <div className="flex flex-col items-center pt-20 px-6 z-10">
-        <img src="/img/assets/Logo.png" alt="AbsenIn Logo" className="h-10 w-auto object-contain mb-8" />
+        <AbsenInLogo size="md" className="mb-8" />
 
         <h1 className="text-[20px] leading-[1.4] font-bold text-[#1E4738] text-center mb-10 max-w-[500px]">
           Mulai hari dengan langkah kecil,<br />untuk hasil yang lebih besar.

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Search, Check, ChevronRight, ListFilter, QrCode, Building2, Copy, Users, Clock, UserPlus, Calendar, User, X, Trash2, AlertTriangle, LogOut, MessageSquare, CheckCircle2, XCircle, UserMinus, Loader2 } from "lucide-react";
+import { ChevronLeft, Search, Check, ChevronRight, ListFilter, QrCode, Building2, Copy, Users, Clock, UserPlus, Calendar, User, X, Trash2, AlertTriangle, LogOut, MessageSquare, CheckCircle2, XCircle, UserMinus, Loader2, Shield, MoreVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -178,6 +178,15 @@ function AdminKaryawanView() {
   const [saveRoleError, setSaveRoleError] = useState("");
   const [roleFilter, setRoleFilter] = useState<"Semua" | "Karyawan" | "Manajemen" | "Admin">("Semua");
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const [activeMenuEmployeeId, setActiveMenuEmployeeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => setActiveMenuEmployeeId(null);
+    if (activeMenuEmployeeId) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [activeMenuEmployeeId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1268,7 +1277,7 @@ function AdminKaryawanView() {
             ) : filteredEmployees.length === 0 ? (
               <div className="text-center py-5 text-[#7d998c] text-[13px]">Karyawan tidak ditemukan</div>
             ) : (
-              filteredEmployees.map((item) => {
+              filteredEmployees.map((item, index) => {
                 let roleText = 'Karyawan';
                 let roleColorClass = 'bg-gray-100 text-gray-500';
                 const isOwner = (item.role || '').toLowerCase() === 'owner' || item.roles?.includes('Owner');
@@ -1284,11 +1293,17 @@ function AdminKaryawanView() {
                 }
 
                 const isSelf = item.id === currentUserId;
+                const canModifyRoleForEmp = (activeRole === "owner" || activeRole === "admin") && !isOwner && !isSelf;
+                const canRemove = canRemoveEmployee(item);
+                const hasAction = canModifyRoleForEmp || canRemove;
+                const isNearBottom = index >= filteredEmployees.length - 2 && filteredEmployees.length > 2;
 
                 return (
                  <div 
                    key={item.id} 
-                   className="flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] transition-colors bg-white cursor-pointer hover:border-[#dce9df] hover:bg-gray-50/50"
+                   className={`flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] transition-colors bg-white cursor-pointer hover:border-[#dce9df] hover:bg-gray-50/50 relative ${
+                     activeMenuEmployeeId === item.id ? "z-30" : "z-0"
+                   }`}
                    onClick={() => {
                      router.push(`/admin/karyawan/${item.id}`);
                    }}
@@ -1307,29 +1322,110 @@ function AdminKaryawanView() {
                      )}
                      <User className={`w-5 h-5 absolute ${item.avatar_url ? 'hidden' : ''}`} strokeWidth={2.5} />
                    </div>
-                   <div className="flex flex-col flex-1 gap-1 overflow-hidden">
-                     <div className="flex items-center gap-1.5 overflow-hidden">
-                       <span className="text-[#111827] text-[14px] font-bold leading-none truncate">{item.full_name}</span>
-                       {isSelf && (
-                         <span className="text-[10px] font-bold text-[#356E3B] bg-[#eef5f0] px-1.5 py-0.5 rounded-full shrink-0">
-                           (Anda)
-                         </span>
-                       )}
-                     </div>
-                     <span className="text-gray-400 text-[11px] leading-none mb-1 truncate">{item.email}</span>
-                     <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${roleColorClass}`}>
-                          {roleText}
-                        </span>
-                     </div>
-                   </div>
+                   <div className="flex flex-col flex-1 gap-1 min-w-0">
+                      {/* Baris Nama dan Titik Tiga (Sejajar Persis) */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 overflow-hidden min-w-0">
+                          <span className="text-[#111827] text-[14px] font-bold leading-none truncate">{item.full_name}</span>
+                          {isSelf && (
+                            <span className="text-[10px] font-bold text-[#356E3B] bg-[#eef5f0] px-1.5 py-0.5 rounded-full shrink-0">
+                              (Anda)
+                            </span>
+                          )}
+                        </div>
 
-                   {/* Action Indicator */}
-                   {!isOwner && (
-                     <div className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 group-hover:text-[#356E3B] shrink-0">
-                       <ChevronRight className="w-4 h-4" />
-                     </div>
-                   )}
+                        {/* Action Indicator / More Vertical Menu - Sejajar Persis dengan Nama */}
+                        {hasAction ? (
+                          <div 
+                            className="relative shrink-0 -mr-1" 
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuEmployeeId(activeMenuEmployeeId === item.id ? null : item.id);
+                              }}
+                              className="w-7 h-7 rounded-full hover:bg-gray-100 active:scale-95 text-gray-400 hover:text-[#1E4738] flex items-center justify-center transition-all cursor-pointer"
+                              aria-label="Menu Opsi Karyawan"
+                              title="Opsi Karyawan"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+
+                            {activeMenuEmployeeId === item.id && (
+                              <>
+                                <div 
+                                  className="fixed inset-0 z-40" 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenuEmployeeId(null);
+                                  }} 
+                                />
+                                <div 
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`absolute right-0 ${
+                                    isNearBottom ? "bottom-0" : "top-0"
+                                  } w-48 bg-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.18),0_8px_10px_-6px_rgba(0,0,0,0.1)] border border-gray-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150`}
+                                >
+                                  {canModifyRoleForEmp && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveMenuEmployeeId(null);
+                                        setSelectedEmployeeForRole(item);
+                                        let roleVal: "Admin" | "Manager" | "Employee" = "Employee";
+                                        if (item.roles?.includes("Admin")) roleVal = "Admin";
+                                        else if (item.roles?.includes("Manager")) roleVal = "Manager";
+                                        setSelectedRole(roleVal);
+                                        setSaveRoleError("");
+                                      }}
+                                      className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                                    >
+                                      <Shield className="w-4 h-4 text-[#356E3B]" />
+                                      <span>Kelola Hak Akses</span>
+                                    </button>
+                                  )}
+
+                                  {canModifyRoleForEmp && canRemove && (
+                                    <div className="h-[1px] bg-gray-100 mx-3 my-0.5" />
+                                  )}
+
+                                  {canRemove && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveMenuEmployeeId(null);
+                                        setSelectedEmployeeForRole(item);
+                                        setDeleteMemberError("");
+                                        setIsDeleteConfirmOpen(true);
+                                      }}
+                                      className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                    >
+                                      <UserMinus className="w-4 h-4 text-red-500" />
+                                      <span>Keluarkan Karyawan</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ) : !isOwner ? (
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 group-hover:text-[#356E3B] shrink-0 -mr-1">
+                            <ChevronRight className="w-4 h-4" />
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <span className="text-gray-400 text-[11px] leading-none mb-1 truncate">{item.email}</span>
+                      <div className="flex items-center gap-2">
+                         <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${roleColorClass}`}>
+                           {roleText}
+                         </span>
+                      </div>
+                    </div>
                  </div>
                 );
               })
@@ -1344,7 +1440,7 @@ function AdminKaryawanView() {
             onRetry={loadMoreEmployees}
             isEmpty={employees.length === 0}
             loadingMessage="Memuat data karyawan berikutnya..."
-            endMessage="Semua karyawan telah ditampilkan"
+            endMessage=""
             className="mt-2"
           />
         </div>

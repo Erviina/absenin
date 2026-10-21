@@ -26,7 +26,8 @@ import {
   Maximize2,
   ImageOff,
   CalendarDays,
-  Info
+  Info,
+  MoreVertical
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Badge } from "@/components/Badge";
@@ -191,6 +192,17 @@ export default function DetailKaryawanMonitoringPage() {
 
   // Current logged in user ID for self-action protection
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // More Action Menu (Titik Tiga)
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = () => setIsActionMenuOpen(false);
+    if (isActionMenuOpen) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [isActionMenuOpen]);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
@@ -516,90 +528,121 @@ export default function DetailKaryawanMonitoringPage() {
       <div className="flex-1 px-5 py-4 flex flex-col gap-4 z-10 relative">
         
         {/* EMPLOYEE HEADER CARD */}
-        <div className="bg-white rounded-[24px] p-5 border border-[#eef5f0] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col gap-4">
-          <div className="flex items-start gap-3.5">
-            {/* Avatar Photo */}
-            <div className="w-14 h-14 rounded-full border-2 border-[#eef5f0] bg-[#f4f9f6] text-[#356E3B] flex items-center justify-center shrink-0 overflow-hidden relative shadow-sm">
-              {employee?.avatar_url ? (
-                <img 
-                  src={employee.avatar_url} 
-                  alt={employee.full_name} 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
-                  }}
-                />
-              ) : null}
-              <User className={`w-6 h-6 ${employee?.avatar_url ? "hidden" : ""}`} strokeWidth={2.2} />
-            </div>
-
-            {/* Profile Info */}
-            <div className="flex flex-col flex-1 overflow-hidden">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h2 className="text-[#111827] text-[16px] font-bold truncate">
-                  {employee?.full_name || (isLoadingAttendance ? "Memuat..." : "Karyawan")}
-                </h2>
-                {employee?.id === currentUserId && (
-                  <span className="text-[10px] font-bold text-[#356E3B] bg-[#eef5f0] px-1.5 py-0.5 rounded-full shrink-0">
-                    (Anda)
-                  </span>
-                )}
+        <div className="bg-white rounded-[24px] p-5 border border-[#eef5f0] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col gap-4 relative">
+          <div className="flex items-start justify-between gap-3.5">
+            <div className="flex items-start gap-3.5 flex-1 min-w-0">
+              {/* Avatar Photo */}
+              <div className="w-14 h-14 rounded-full border-2 border-[#eef5f0] bg-[#f4f9f6] text-[#356E3B] flex items-center justify-center shrink-0 overflow-hidden relative shadow-sm">
+                {employee?.avatar_url ? (
+                  <img 
+                    src={employee.avatar_url} 
+                    alt={employee.full_name} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                      (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                    }}
+                  />
+                ) : null}
+                <User className={`w-6 h-6 ${employee?.avatar_url ? "hidden" : ""}`} strokeWidth={2.2} />
               </div>
-              <span className="text-gray-400 text-[12px] truncate">{employee?.email || "—"}</span>
 
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                {/* Role badge */}
-                {(() => {
-                  const b = getRoleBadge(employee?.role);
-                  return (
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${b.cls}`}>
-                      {b.text}
+              {/* Profile Info */}
+              <div className="flex flex-col flex-1 overflow-hidden pr-8">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h2 className="text-[#111827] text-[16px] font-bold truncate">
+                    {employee?.full_name || (isLoadingAttendance ? "Memuat..." : "Karyawan")}
+                  </h2>
+                  {employee?.id === currentUserId && (
+                    <span className="text-[10px] font-bold text-[#356E3B] bg-[#eef5f0] px-1.5 py-0.5 rounded-full shrink-0">
+                      (Anda)
                     </span>
-                  );
-                })()}
+                  )}
+                </div>
+                <span className="text-gray-400 text-[12px] truncate">{employee?.email || "—"}</span>
 
-                {employee?.joined_at && (
-                  <span className="text-[10px] text-gray-400">
-                    Bergabung {formatDate(employee.joined_at)}
-                  </span>
-                )}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {/* Role badge */}
+                  {(() => {
+                    const b = getRoleBadge(employee?.role);
+                    return (
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${b.cls}`}>
+                        {b.text}
+                      </span>
+                    );
+                  })()}
+
+                  {employee?.joined_at && (
+                    <span className="text-[10px] text-gray-400">
+                      Bergabung {formatDate(employee.joined_at)}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
+
+            {/* More Action Menu Button on Card - Selalu di Ujung Kanan Atas */}
+            {(canModifyRole || canRemoveMember) && (
+              <div className="absolute top-4 right-4 z-30" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => setIsActionMenuOpen((prev) => !prev)}
+                  className="w-8 h-8 rounded-full hover:bg-gray-100 active:scale-95 text-gray-500 hover:text-[#1E4738] flex items-center justify-center transition-all cursor-pointer"
+                  aria-label="Menu Opsi Karyawan"
+                  title="Opsi Karyawan"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+
+                {isActionMenuOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setIsActionMenuOpen(false)} 
+                    />
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-0 top-0 w-48 bg-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.18),0_8px_10px_-6px_rgba(0,0,0,0.1)] border border-gray-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150"
+                    >
+                      {canModifyRole && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsActionMenuOpen(false);
+                            setRoleError("");
+                            setIsRoleModalOpen(true);
+                          }}
+                          className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                          <Shield className="w-4 h-4 text-[#356E3B]" />
+                          <span>Kelola Hak Akses</span>
+                        </button>
+                      )}
+
+                      {canModifyRole && canRemoveMember && (
+                        <div className="h-[1px] bg-gray-100 mx-3 my-0.5" />
+                      )}
+
+                      {canRemoveMember && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsActionMenuOpen(false);
+                            setDeleteError("");
+                            setIsDeleteModalOpen(true);
+                          }}
+                          className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                        >
+                          <UserMinus className="w-4 h-4 text-red-500" />
+                          <span>Keluarkan Karyawan</span>
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
-
-          {/* DEDICATED ACTIONS: Keluarkan Karyawan & Kelola Hak Akses */}
-          {(canModifyRole || canRemoveMember) && (
-            <div className={`pt-3 border-t border-gray-100 grid gap-2 w-full ${canModifyRole && canRemoveMember ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-              {canRemoveMember && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeleteError("");
-                    setIsDeleteModalOpen(true);
-                  }}
-                  className="w-full px-4 py-2.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-full text-[13px] font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all shadow-sm cursor-pointer"
-                >
-                  <UserMinus className="w-4 h-4 text-red-600 shrink-0" />
-                  <span className="truncate">Keluarkan Karyawan</span>
-                </button>
-              )}
-
-              {canModifyRole && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRoleError("");
-                    setIsRoleModalOpen(true);
-                  }}
-                  className="w-full px-4 py-2.5 bg-[#E8F3EB] hover:bg-[#D5EAD9] border border-[#D1E5D5] text-[#356E3B] rounded-full text-[13px] font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all shadow-sm cursor-pointer"
-                >
-                  <Shield className="w-4 h-4 text-[#356E3B] shrink-0" />
-                  <span className="truncate">Kelola Hak Akses</span>
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {/* TABS NAVIGATION */}

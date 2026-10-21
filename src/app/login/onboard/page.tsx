@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { CheckCircle2, CalendarDays, Users, ChevronLeft } from "lucide-react";
+import { AbsenInLogo } from "@/components/AbsenInLogo";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -72,7 +73,7 @@ export default function OnboardingPage() {
 
       {/* Header */}
       <div className="flex justify-between items-center p-6 z-10">
-        <img src="/img/assets/Logo.png" alt="AbsenIn Logo" className="h-6 w-auto object-contain" />
+        <AbsenInLogo size="sm" />
         <Button variant="ghost" className="text-[#5C786C] font-medium" onClick={onSkip}>
           Lewati
         </Button>

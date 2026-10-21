@@ -6,6 +6,7 @@ import { useState, useEffect, Suspense, useCallback } from "react";
 import { setPersonalModePreference } from "@/lib/personalMode";
 import { clearAuthSession, setActiveCompanyId, getApiUrl } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
+import { AbsenInLogo } from "@/components/AbsenInLogo";
 
 function CekPerusahaanContent() {
   const router = useRouter();
@@ -230,11 +231,7 @@ function CekPerusahaanContent() {
 
         {/* Logo */}
         <div className="h-[30px] flex items-center">
-          <img 
-            src="/img/assets/Logo.png" 
-            alt="AbsenIN Logo" 
-            className="h-[30px] w-auto object-contain"
-          />
+          <AbsenInLogo size="sm" />
         </div>
       </div>
 

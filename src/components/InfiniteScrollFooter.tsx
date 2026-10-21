@@ -60,7 +60,7 @@ export function InfiniteScrollFooter({
     };
   }, [hasMore, isLoadingMore, error, isEmpty]);
 
-  if (isEmpty) return null;
+  if (isEmpty || (!hasMore && !isLoadingMore && !error && !endMessage)) return null;
 
   return (
     <div

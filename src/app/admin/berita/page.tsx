@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Plus, Edit2, Trash2, Image as ImageIcon, Search, Loader2, AlertCircle, RefreshCw, MoreVertical, Share2, Calendar } from "lucide-react";
+import { Plus, Edit2, Pencil, Trash2, Image as ImageIcon, Search, Loader2, AlertCircle, RefreshCw, MoreVertical, Share2, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { useCompany } from "@/context/CompanyContext";
@@ -455,19 +455,6 @@ export default function KelolaBeritaPage() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setActiveMenuId(null);
-                                handleOpenEdit(item);
-                              }}
-                              className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 text-gray-500" />
-                              <span>Edit Berita</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveMenuId(null);
                                 shareContent({
                                   title: item.title,
                                   text: item.title,
@@ -475,13 +462,28 @@ export default function KelolaBeritaPage() {
                                   onToast: showToast,
                                 });
                               }}
-                              className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
                             >
-                              <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                              <Share2 className="w-4 h-4 text-gray-500" />
                               <span>Bagikan</span>
                             </button>
 
-                            <div className="h-[1px] bg-gray-100 mx-2 my-1" />
+                            <div className="h-[1px] bg-gray-100 mx-3 my-0.5" />
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleOpenEdit(item);
+                              }}
+                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Pencil className="w-4 h-4 text-gray-500" />
+                              <span>Edit</span>
+                            </button>
+
+                            <div className="h-[1px] bg-gray-100 mx-3 my-0.5" />
 
                             <button
                               type="button"
@@ -491,10 +493,10 @@ export default function KelolaBeritaPage() {
                                 handleDelete(item.id);
                               }}
                               disabled={isDeletingId === item.id}
-                              className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer disabled:opacity-50"
+                              className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer disabled:opacity-50"
                             >
-                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                              <span>Hapus Berita</span>
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                              <span>Hapus</span>
                             </button>
                           </div>
                         </>

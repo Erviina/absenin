@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { AbsenInLogo } from "@/components/AbsenInLogo";
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -25,12 +26,8 @@ export default function SplashScreen() {
       <div className="absolute -top-16 -right-16 w-64 h-64 bg-[#7FAF8B]/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-[#7FAF8B]/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Logo di tengah layar */}
-      <img
-        src="/img/assets/Logo.png"
-        alt="AbsenIn Logo"
-        className="w-56 h-auto object-contain z-10 animate-in fade-in zoom-in-95 duration-1000"
-      />
+      {/* Logo di tengah layar (HD Vector) */}
+      <AbsenInLogo size="lg" className="z-10 animate-in fade-in zoom-in-95 duration-1000" />
     </div>
   );
 }
