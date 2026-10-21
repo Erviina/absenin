@@ -167,7 +167,7 @@ export default function AdminDashboardPage() {
   // Guard: If activeRole is member, redirect to /unauthorized immediately
   useEffect(() => {
     if (!isCompanyLoading && activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
-      router.replace("/unauthorized");
+      router.replace("/admin/no-authorized");
     }
   }, [activeRole, isCompanyLoading, router]);
 

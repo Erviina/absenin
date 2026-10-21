@@ -218,7 +218,7 @@ export default function DetailKaryawanMonitoringPage() {
   useEffect(() => {
     if (isCompanyLoading) return;
     if (activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
-      router.replace("/unauthorized");
+      router.replace("/admin/no-authorized");
     }
   }, [activeRole, isCompanyLoading, router]);
 

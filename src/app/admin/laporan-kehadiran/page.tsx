@@ -125,7 +125,7 @@ export default function LaporanKehadiranPage() {
       }
 
       if (res.status === 403) {
-        router.push("/unauthorized");
+        router.push("/admin/no-authorized");
         return;
       }
 

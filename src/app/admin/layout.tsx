@@ -66,7 +66,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     const handleUnauthorizedEvent = () => {
       refreshMemberships(true);
-      router.replace("/unauthorized");
+      router.replace("/admin/no-authorized");
     };
 
     window.addEventListener("focus", handleFocus);
@@ -94,7 +94,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       // 2. Jika hak akses manajemen dicabut (kembali jadi karyawan), langsung arahkan ke /unauthorized
       if (!isManagement) {
-        router.replace("/unauthorized");
+        router.replace("/admin/no-authorized");
         return;
       }
     }

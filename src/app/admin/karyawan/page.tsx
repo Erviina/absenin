@@ -27,7 +27,7 @@ export default function KelolaKaryawanPage() {
       if (["owner", "admin", "manager"].includes(activeRole)) {
         setIsAuthorized(true);
       } else {
-        router.replace("/unauthorized");
+        router.replace("/admin/no-authorized");
       }
       return;
     }
@@ -62,7 +62,7 @@ export default function KelolaKaryawanPage() {
         if (data.success && isMgmt) {
           setIsAuthorized(true);
         } else {
-          router.replace("/unauthorized");
+          router.replace("/admin/no-authorized");
         }
       } catch (err) {
         router.push("/login");
@@ -94,7 +94,7 @@ function AdminKaryawanView() {
   // If user switches to a company where they are just a member, redirect back to unauthorized
   useEffect(() => {
     if (activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
-      router.replace("/unauthorized");
+      router.replace("/admin/no-authorized");
     }
   }, [activeRole, router]);
 
