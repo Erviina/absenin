@@ -13,12 +13,19 @@ export interface MapMarkerPoint {
   type?: "check-in" | "check-out" | "default";
 }
 
+const customIconMap = new Map<string, L.DivIcon>();
+
 const getCustomIcon = (label: string, type: "check-in" | "check-out" | "default" = "default") => {
+  const cacheKey = `${label}_${type}`;
+  if (customIconMap.has(cacheKey)) {
+    return customIconMap.get(cacheKey)!;
+  }
+
   const isCheckOut = type === "check-out";
   const pinBg = isCheckOut ? "#EA580C" : "#356E3B";
   const badgeBg = isCheckOut ? "#9A3412" : "#1E4738";
 
-  return new L.DivIcon({
+  const icon = new L.DivIcon({
     className: "custom-leaflet-icon",
     html: `
       <div class="flex flex-col items-center justify-start w-[120px]">
@@ -44,6 +51,8 @@ const getCustomIcon = (label: string, type: "check-in" | "check-out" | "default"
     iconSize: [120, 75],
     iconAnchor: [60, 43],
   });
+  customIconMap.set(cacheKey, icon);
+  return icon;
 };
 
 function getOffsetCenter(
@@ -77,6 +86,7 @@ function MapViewUpdater({
 
   useEffect(() => {
     if (!map) return;
+    map.invalidateSize();
 
     if (markers.length === 0) {
       const center = getOffsetCenter(map, defaultCenter[0], defaultCenter[1], bottomOffset, 16);

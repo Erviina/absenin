@@ -17,32 +17,42 @@ import { useCompany } from "@/context/CompanyContext";
 import { getApiUrl } from "@/lib/api";
 import { CompanyProfileSkeleton } from "@/components/CardSkeleton";
 
-const getCustomIcon = (label: string) => new L.DivIcon({
-  className: "custom-leaflet-icon",
-  html: `
-    <div class="flex flex-col items-center justify-start w-[120px]">
-      <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.35));">
-        <path 
-          d="M17 1C8.163 1 1 8.163 1 17C1 27.5 14.5 41.2 16.3 42.9C16.7 43.3 17.3 43.3 17.7 42.9C19.5 41.2 33 27.5 33 17C33 8.163 25.837 1 17 1Z" 
-          fill="#356E3B" 
-          stroke="#FFFFFF" 
-          stroke-width="2.5" 
-          stroke-linejoin="round"
-        />
-        <circle cx="17" cy="17" r="6" fill="#FFFFFF" />
-        <circle cx="17" cy="17" r="3" fill="#356E3B" />
-      </svg>
-      <div class="w-3.5 h-1 bg-black/25 rounded-full blur-[1px] -mt-0.5"></div>
-      ${label ? `
-        <div class="bg-[#1E4738] text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md mt-1 whitespace-nowrap z-20 pointer-events-none">
-          ${label}
-        </div>
-      ` : ""}
-    </div>
-  `,
-  iconSize: [120, 75],
-  iconAnchor: [60, 43],
-});
+const customIconMap = new Map<string, L.DivIcon>();
+
+const getCustomIcon = (label: string) => {
+  const safeLabel = label || "Perusahaan";
+  if (customIconMap.has(safeLabel)) {
+    return customIconMap.get(safeLabel)!;
+  }
+  const icon = new L.DivIcon({
+    className: "custom-leaflet-icon",
+    html: `
+      <div class="flex flex-col items-center justify-start w-[120px]">
+        <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.35));">
+          <path 
+            d="M17 1C8.163 1 1 8.163 1 17C1 27.5 14.5 41.2 16.3 42.9C16.7 43.3 17.3 43.3 17.7 42.9C19.5 41.2 33 27.5 33 17C33 8.163 25.837 1 17 1Z" 
+            fill="#356E3B" 
+            stroke="#FFFFFF" 
+            stroke-width="2.5" 
+            stroke-linejoin="round"
+          />
+          <circle cx="17" cy="17" r="6" fill="#FFFFFF" />
+          <circle cx="17" cy="17" r="3" fill="#356E3B" />
+        </svg>
+        <div class="w-3.5 h-1 bg-black/25 rounded-full blur-[1px] -mt-0.5"></div>
+        ${safeLabel ? `
+          <div class="bg-[#1E4738] text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md mt-1 whitespace-nowrap z-20 pointer-events-none">
+            ${safeLabel}
+          </div>
+        ` : ""}
+      </div>
+    `,
+    iconSize: [120, 75],
+    iconAnchor: [60, 43],
+  });
+  customIconMap.set(safeLabel, icon);
+  return icon;
+};
 
 function MapControls({ 
   targetLat, 
@@ -151,11 +161,49 @@ function MapControls({
   );
 }
 
-function MapUpdater({ lat, lng }: { lat: number, lng: number }) {
+function MapResizer() {
   const map = useMap();
   useEffect(() => {
-    map.flyTo([lat, lng], map.getZoom(), { duration: 1.5 });
+    map.invalidateSize();
+    const t1 = setTimeout(() => map.invalidateSize(), 100);
+    const t2 = setTimeout(() => map.invalidateSize(), 300);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [map]);
+  return null;
+}
+
+function MapUpdater({ lat, lng }: { lat: number, lng: number }) {
+  const map = useMap();
+  const isFirstRender = useRef(true);
+  const lastTarget = useRef<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    // Saat inisialisasi awal, MapContainer sudah terpusat di [lat, lng].
+    // Hindari flyTo di render pertama yang menyebabkan getaran/glitch saat baru terbuka.
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      lastTarget.current = { lat, lng };
+      return;
+    }
+
+    // Jika perubahan koordinat sangat kecil, abaikan
+    if (
+      lastTarget.current &&
+      Math.abs(lastTarget.current.lat - lat) < 0.00005 &&
+      Math.abs(lastTarget.current.lng - lng) < 0.00005
+    ) {
+      return;
+    }
+
+    lastTarget.current = { lat, lng };
+    map.panTo([lat, lng], { animate: true, duration: 0.35 });
   }, [lat, lng, map]);
+
   return null;
 }
 
@@ -504,6 +552,24 @@ export default function KelolaPerusahaanPage() {
 
   // State for the modal and data
   const [isUbahLokasiOpen, setIsUbahLokasiOpen] = useState(false);
+  const [isModalMapMounted, setIsModalMapMounted] = useState(false);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isUbahLokasiOpen) {
+      // Tunggu hingga animasi slide-in bottom sheet selesai (280ms) sebelum me-mount MapContainer.
+      // Ini mencegah Leaflet menghitung ukuran viewport selama container sedang bergerak (transform translateY)
+      // yang merupakan akar masalah dari glitch peta bergetar.
+      timer = setTimeout(() => {
+        setIsModalMapMounted(true);
+      }, 280);
+    } else {
+      setIsModalMapMounted(false);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isUbahLokasiOpen]);
   
   // Image Upload State
   const [companyImage, setCompanyImage] = useState("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop");
@@ -1060,7 +1126,7 @@ export default function KelolaPerusahaanPage() {
               <div className="relative w-full h-[180px] bg-[#f4f6f5] rounded-[16px] overflow-hidden border border-gray-200 shadow-inner z-0">
                 {isMounted && (
                   <MapContainer
-                    key={`admin-company-map-${lat}-${lng}`}
+                    key="admin-company-preview-map"
                     center={[parseFloat(lat) || -6.9175, parseFloat(lng) || 107.6191]}
                     zoom={16}
                     scrollWheelZoom={false}
@@ -1069,6 +1135,7 @@ export default function KelolaPerusahaanPage() {
                     className="w-full h-full"
                     style={{ width: "100%", height: "100%", zIndex: 0 }}
                   >
+                    <MapResizer />
                     <TileLayer
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
@@ -1307,7 +1374,12 @@ export default function KelolaPerusahaanPage() {
 
               {/* Interactive Map */}
               <div className="relative w-full h-[220px] bg-[#f4f6f5] rounded-[24px] overflow-hidden border border-gray-100 flex-shrink-0 z-0">
-                {isMounted && (
+                {(!isMounted || !isModalMapMounted) ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-[#f4f6f5] text-gray-400 gap-2 select-none">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#356E3B]" />
+                    <span className="text-[12px] font-semibold text-gray-500">Menyiapkan peta...</span>
+                  </div>
+                ) : (
                   <MapContainer 
                     center={[parseFloat(tempLat) || -6.9175, parseFloat(tempLng) || 107.6191]} 
                     zoom={16} 
@@ -1315,6 +1387,7 @@ export default function KelolaPerusahaanPage() {
                     style={{ width: "100%", height: "100%", zIndex: 0 }}
                     zoomControl={false}
                   >
+                    <MapResizer />
                     <TileLayer
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
