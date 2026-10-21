@@ -577,7 +577,7 @@ export default function DashboardPage() {
       btnHelperText = `Hari ini (${scheduleEval.currentDayName}) bukan hari kerja. Buka ${nextSchedule.isTomorrow ? `Besok (${nextSchedule.dayName})` : nextSchedule.dayName} ${nextSchedule.openTimeFormatted} WIB`;
     } else if (!scheduleEval.isCheckInOpen) {
       isBtnDisabled = true;
-      btnLabel = `Buka ${scheduleEval.openTimeFormatted}`;
+      btnLabel = `Masuk ${scheduleEval.openTimeFormatted}`;
       btnColorClass = "bg-gray-400 text-white cursor-not-allowed";
       btnHelperText = `Presensi masuk dibuka pukul ${scheduleEval.openTimeFormatted} WIB (15 menit sebelum masuk ${scheduleEval.startTimeFormatted} WIB)`;
     } else {

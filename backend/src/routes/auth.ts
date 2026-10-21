@@ -243,6 +243,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       {
         sub: profile.id,
         email: profile.email,
+        isDeveloper: profile.is_developer === true,
         role: "authenticated", // Supabase compatibility claim
       },
       jwtSecret,
@@ -263,6 +264,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
           roles: roles,
           activeRole: activeRole,
           isManagement: ["owner", "admin", "manager"].includes(activeRole),
+          isDeveloper: profile.is_developer === true,
         },
       },
     });
@@ -353,6 +355,7 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
           roles: roles,
           activeRole: activeRole,
           isManagement: ["owner", "admin", "manager"].includes(activeRole),
+          isDeveloper: profile.is_developer === true,
         },
       },
     });

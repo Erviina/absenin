@@ -122,3 +122,10 @@ body::-webkit-scrollbar {
   height: 0px !important;
   background: transparent !important;
 }
+
+/* Custom Leaflet marker pin styles to prevent default white box artifacts */
+.custom-leaflet-icon {
+  background: transparent !important;
+  border: none !important;
+}
+

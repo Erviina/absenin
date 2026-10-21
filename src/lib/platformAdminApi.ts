@@ -12,6 +12,7 @@ export interface PlatformOwnerProfile {
   fullName: string;
   avatarUrl: string | null;
   role: "PLATFORM_OWNER";
+  isDeveloper?: boolean;
   verifiedAt: string;
 }
 

@@ -16,6 +16,7 @@ export const profiles = pgTable("profiles", {
   full_name: varchar("full_name"),
   email: varchar("email"),
   avatar_url: text("avatar_url"),
+  is_developer: boolean("is_developer").default(false).notNull(),
 });
 
 export const profileRoles = pgTable("profile_roles", {

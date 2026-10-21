@@ -131,32 +131,56 @@ function MapControls({
   );
 }
 
-const getCustomIcon = (label: string) => new L.DivIcon({
-  className: "custom-leaflet-icon",
-  iconSize: [120, 68],
-  iconAnchor: [60, 44],
-  html: `
-    <div class="flex flex-col items-center justify-start w-[120px]">
-      <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.35));">
-        <path 
-          d="M17 1C8.163 1 1 8.163 1 17C1 27.5 14.5 41.2 16.3 42.9C16.7 43.3 17.3 43.3 17.7 42.9C19.5 41.2 33 27.5 33 17C33 8.163 25.837 1 17 1Z" 
-          fill="#356E3B" 
-          stroke="#FFFFFF" 
-          stroke-width="2.5" 
-          stroke-linejoin="round"
-        />
-        <circle cx="17" cy="17" r="6" fill="#FFFFFF" />
-        <circle cx="17" cy="17" r="3" fill="#356E3B" />
-      </svg>
-      <div class="w-3.5 h-1 bg-black/25 rounded-full blur-[1px] -mt-0.5"></div>
-      ${label ? `
-        <div class="bg-[#1E4738] text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md mt-1 whitespace-nowrap z-20 pointer-events-none">
-          ${label}
-        </div>
-      ` : ""}
-    </div>
-  `,
-});
+const customIconMap = new Map<string, L.DivIcon>();
+
+const getCustomIcon = (label: string) => {
+  const safeLabel = label || "Perusahaan";
+  if (customIconMap.has(safeLabel)) {
+    return customIconMap.get(safeLabel)!;
+  }
+  const icon = new L.DivIcon({
+    className: "custom-leaflet-icon",
+    iconSize: [120, 68],
+    iconAnchor: [60, 44],
+    html: `
+      <div class="flex flex-col items-center justify-start w-[120px]">
+        <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.35));">
+          <path 
+            d="M17 1C8.163 1 1 8.163 1 17C1 27.5 14.5 41.2 16.3 42.9C16.7 43.3 17.3 43.3 17.7 42.9C19.5 41.2 33 27.5 33 17C33 8.163 25.837 1 17 1Z" 
+            fill="#356E3B" 
+            stroke="#FFFFFF" 
+            stroke-width="2.5" 
+            stroke-linejoin="round"
+          />
+          <circle cx="17" cy="17" r="6" fill="#FFFFFF" />
+          <circle cx="17" cy="17" r="3" fill="#356E3B" />
+        </svg>
+        <div class="w-3.5 h-1 bg-black/25 rounded-full blur-[1px] -mt-0.5"></div>
+        ${safeLabel ? `
+          <div class="bg-[#1E4738] text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-md mt-1 whitespace-nowrap z-20 pointer-events-none">
+            ${safeLabel}
+          </div>
+        ` : ""}
+      </div>
+    `,
+  });
+  customIconMap.set(safeLabel, icon);
+  return icon;
+};
+
+function MapResizer() {
+  const map = useMap();
+  useEffect(() => {
+    map.invalidateSize();
+    const t1 = setTimeout(() => map.invalidateSize(), 100);
+    const t2 = setTimeout(() => map.invalidateSize(), 300);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [map]);
+  return null;
+}
 
 const ALL_DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 
@@ -579,6 +603,7 @@ export default function ProfilPerusahaanContent() {
                 attributionControl={false}
                 className="w-full h-full"
               >
+                <MapResizer />
                 <TileLayer
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
