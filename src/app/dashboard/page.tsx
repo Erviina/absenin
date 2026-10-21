@@ -688,7 +688,7 @@ export default function DashboardPage() {
       <div className="px-6 pt-1.5 pb-4">
         <div 
           onClick={() => setIsContextDrawerOpen(true)}
-          className="w-full bg-white hover:bg-[#F9FCFA] border border-[#DEEAE0] rounded-[22px] py-3.5 px-4 flex items-center justify-between shadow-[0_4px_16px_rgba(30,71,56,0.04)] cursor-pointer transition-all active:scale-[0.99] group"
+          className="w-full bg-white hover:bg-[#F9FCFA] border border-[#D1D5DB] rounded-[22px] py-3.5 px-4 flex items-center justify-between shadow-[0_4px_16px_rgba(30,71,56,0.04)] cursor-pointer transition-all active:scale-[0.99] group"
           title="Kelola Perusahaan & Peran Akun"
         >
           {/* Active Company & Category */}
@@ -876,7 +876,7 @@ export default function DashboardPage() {
                           <div
                             key={`task-${task.id}`}
                             onClick={() => router.push(`/tugas/${task.id}`)}
-                            className="w-full bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
+                            className="w-full bg-white rounded-[20px] p-4 border border-[#D1D5DB] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/40 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
                           >
                             <div className="flex items-center gap-3.5 min-w-0 flex-1">
                               <button
@@ -950,7 +950,7 @@ export default function DashboardPage() {
                             <div
                               key={`agenda-${agenda.id}`}
                               onClick={() => router.push(`/agenda/${agenda.id}`)}
-                              className={`w-full bg-white rounded-[20px] p-4 pl-5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3.5`}
+                              className={`w-full bg-white rounded-[20px] p-4 pl-5 border border-[#D1D5DB] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3.5`}
                             >
                               <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
                               <div className="flex flex-col min-w-0 flex-1">
@@ -1002,7 +1002,7 @@ export default function DashboardPage() {
                     <div
                       key={`task-${task.id}`}
                       onClick={() => router.push(`/tugas/${task.id}`)}
-                      className="w-full bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
+                      className="w-full bg-white rounded-[20px] p-4 border border-[#D1D5DB] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5 hover:border-[#356E3B]/40 hover:shadow-md transition-all active:scale-[0.99] cursor-pointer group"
                     >
                       <div className="flex items-center gap-3.5 min-w-0 flex-1">
                         <button
@@ -1068,7 +1068,7 @@ export default function DashboardPage() {
                       <div
                         key={`agenda-${agenda.id}`}
                         onClick={() => router.push(`/agenda/${agenda.id}`)}
-                        className={`w-full bg-white rounded-[20px] p-4 pl-5 border border-[#eef5f0] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3.5`}
+                        className={`w-full bg-white rounded-[20px] p-4 pl-5 border border-[#D1D5DB] ${catColor.hoverBorder} shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden group flex items-center justify-between gap-3.5`}
                       >
                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-[20px] ${catColor.stripeBg}`} />
                         <div className="flex flex-col min-w-0 flex-1">
@@ -1136,7 +1136,7 @@ export default function DashboardPage() {
                 <div 
                   key={item.id ? `news-${item.id}` : `news-idx-${idx}`} 
                   onClick={() => router.push(`/berita/${item.id}?from=/dashboard`)}
-                  className="w-full bg-white rounded-[20px] p-4 flex items-center gap-3.5 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#356E3B]/30 hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
+                  className="w-full bg-white rounded-[20px] p-4 flex items-center gap-3.5 border border-[#D1D5DB] shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:border-[#356E3B]/40 hover:shadow-md transition-all active:scale-[0.99] group overflow-hidden"
                 >
                   {item.cover_image_url ? (
                     <img 

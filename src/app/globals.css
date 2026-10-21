@@ -54,10 +54,11 @@
     --accent-foreground: #527A5B;
     --destructive: #D96C6C;
     --destructive-foreground: #FFFFFF;
-    --border: #e5e7eb;
-    --input: #e5e7eb;
+    --border: #D1D5DB;
+    --input: #D1D5DB;
     --ring: #7FAF8B;
     --radius: 1rem;
+    --card-border: #D1D5DB;
   }
 }
 
@@ -128,4 +129,25 @@ body::-webkit-scrollbar {
   background: transparent !important;
   border: none !important;
 }
+
+/* ==========================================================================
+   Universal Card Border & Thickness Standardization
+   Menyelaraskan warna dan ketebalan border seluruh card agar seragam,
+   konsisten, dan lebih jelas terlihat di seluruh aplikasi AbsenIn.
+   ========================================================================== */
+.app-card,
+.bg-white[class*="rounded-[16px]"].border:not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-emerald"]):not([class*="border-dashed"]):not([class*="border-transparent"]):not([class*="border-t-"]):not([class*="border-b-"]):not([class*="border-l-"]):not([class*="border-r-"]):not([class*="border-2"]):not([class*="hover:border-"]:hover),
+.bg-white[class*="rounded-[18px]"].border:not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-emerald"]):not([class*="border-dashed"]):not([class*="border-transparent"]):not([class*="border-t-"]):not([class*="border-b-"]):not([class*="border-l-"]):not([class*="border-r-"]):not([class*="border-2"]):not([class*="hover:border-"]:hover),
+.bg-white[class*="rounded-[20px]"].border:not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-emerald"]):not([class*="border-dashed"]):not([class*="border-transparent"]):not([class*="border-t-"]):not([class*="border-b-"]):not([class*="border-l-"]):not([class*="border-r-"]):not([class*="border-2"]):not([class*="hover:border-"]:hover),
+.bg-white[class*="rounded-[22px]"].border:not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-emerald"]):not([class*="border-dashed"]):not([class*="border-transparent"]):not([class*="border-t-"]):not([class*="border-b-"]):not([class*="border-l-"]):not([class*="border-r-"]):not([class*="border-2"]):not([class*="hover:border-"]:hover),
+.bg-white[class*="rounded-[24px]"].border:not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-emerald"]):not([class*="border-dashed"]):not([class*="border-transparent"]):not([class*="border-t-"]):not([class*="border-b-"]):not([class*="border-l-"]):not([class*="border-r-"]):not([class*="border-2"]):not([class*="hover:border-"]:hover),
+.bg-white[class*="rounded-[26px]"].border:not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-emerald"]):not([class*="border-dashed"]):not([class*="border-transparent"]):not([class*="border-t-"]):not([class*="border-b-"]):not([class*="border-l-"]):not([class*="border-r-"]):not([class*="border-2"]):not([class*="hover:border-"]:hover),
+.bg-white[class*="rounded-[28px]"].border:not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-emerald"]):not([class*="border-dashed"]):not([class*="border-transparent"]):not([class*="border-t-"]):not([class*="border-b-"]):not([class*="border-l-"]):not([class*="border-r-"]):not([class*="border-2"]):not([class*="hover:border-"]:hover),
+.bg-white.rounded-2xl.border:not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-emerald"]):not([class*="border-dashed"]):not([class*="border-transparent"]):not([class*="border-t-"]):not([class*="border-b-"]):not([class*="border-l-"]):not([class*="border-r-"]):not([class*="border-2"]):not([class*="hover:border-"]:hover),
+.bg-white.rounded-3xl.border:not([class*="border-red"]):not([class*="border-amber"]):not([class*="border-emerald"]):not([class*="border-dashed"]):not([class*="border-transparent"]):not([class*="border-t-"]):not([class*="border-b-"]):not([class*="border-l-"]):not([class*="border-r-"]):not([class*="border-2"]):not([class*="hover:border-"]:hover) {
+  border-color: #D1D5DB;
+  border-width: 1px;
+  border-style: solid;
+}
+
 

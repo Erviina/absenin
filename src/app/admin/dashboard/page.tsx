@@ -503,7 +503,7 @@ export default function AdminDashboardPage() {
               router.push("/perusahaan");
             }
           }}
-          className="bg-white rounded-[20px] p-4 flex gap-4 items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] cursor-pointer active:scale-[0.98] transition-transform"
+          className="bg-white rounded-[20px] p-4 flex gap-4 items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB] cursor-pointer active:scale-[0.98] transition-transform"
         >
           <div className="w-[52px] h-[52px] bg-[#F3F4F6] rounded-full flex items-center justify-center shrink-0 border-[2.5px] border-[#356E3B]/20 ring-2 ring-[#356E3B]/10 shadow-sm overflow-hidden">
             {(displayCompany?.avatar_company_url || activeCompany?.avatar_company_url) ? (
@@ -573,7 +573,7 @@ export default function AdminDashboardPage() {
         )}
 
         {/* Kehadiran Karyawan Hari Ini (100% = total karyawan) */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col gap-4">
+        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB] flex flex-col gap-4">
           {/* Header Row */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -653,7 +653,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex justify-between items-start mt-1">
+        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB] flex justify-between items-start mt-1">
           {[
             { icon: Calendar, label: "Agenda", path: "/admin/agenda" },
             { icon: FileCheck, label: "Perizinan", path: "/admin/izin", badge: pendingLeavesCount },
@@ -666,7 +666,7 @@ export default function AdminDashboardPage() {
               onClick={() => router.push(item.path)}
               className="flex flex-col items-center gap-2 text-center w-[55px] active:scale-95 transition-transform group"
             >
-              <div className="relative w-[48px] h-[48px] bg-[#f4f9f6] border border-[#eef5f0] rounded-[16px] flex items-center justify-center group-hover:bg-[#e6f0ea] transition-colors">
+              <div className="relative w-[48px] h-[48px] bg-[#f4f9f6] border border-[#D1D5DB] rounded-[16px] flex items-center justify-center group-hover:bg-[#e6f0ea] transition-colors">
                 <item.icon className="w-[20px] h-[20px] text-[#356E3B]" strokeWidth={1.5} />
                 {typeof item.badge === "number" && item.badge > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1 bg-[#EF4444] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-[0_2px_5px_rgba(239,68,68,0.35)] leading-none z-10 animate-in fade-in zoom-in-75 duration-200">
@@ -707,7 +707,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Activity List */}
-          <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col overflow-hidden min-h-[120px]">
+          <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB] flex flex-col overflow-hidden min-h-[120px]">
             
             {(() => {
               const filteredActivities = safeActivities.filter(act => {

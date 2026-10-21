@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { ChevronLeft, ShieldCheck, MapPin, ExternalLink, Info, RefreshCcw } from "lucide-react";
+import { ChevronLeft, ShieldCheck, MapPin, ExternalLink, Info, RefreshCcw, Maximize2 } from "lucide-react";
+import ImagePreviewModal, { PreviewPhotoData } from "@/components/ImagePreviewModal";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { TopBar } from "@/components/TopBar";
@@ -28,6 +29,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<PreviewPhotoData | null>(null);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -195,7 +197,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
         </div>
 
         {/* Status Card */}
-        <div className="bg-[#F8FAF9] border border-[#E8F1EA] rounded-[24px] p-5 shadow-xs">
+        <div className="bg-[#F8FAF9] border border-[#D1D5DB] rounded-[24px] p-5 shadow-xs">
           {/* Header Row */}
           <div className="flex justify-between items-center mb-5">
             <div className="flex items-center gap-3 min-w-0">
@@ -302,8 +304,8 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
         </div>
 
         {/* Peta Lokasi Presensi */}
-        <div className="border border-[#E5E7EB] rounded-[24px] overflow-hidden flex flex-col">
-          <div className="px-5 py-4 flex items-center bg-white border-b border-[#E5E7EB]">
+        <div className="border border-[#D1D5DB] rounded-[24px] overflow-hidden flex flex-col">
+          <div className="px-5 py-4 flex items-center bg-white border-b border-[#D1D5DB]">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[#4B5563]" strokeWidth={2.5} />
               <span className="text-[#111827] text-[14px] font-bold">Peta Lokasi Presensi</span>
@@ -381,7 +383,7 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
         </div>
 
         {/* Foto Bukti */}
-        <div className="border border-[#E5E7EB] rounded-[24px] overflow-hidden flex flex-col bg-white p-5">
+        <div className="border border-[#D1D5DB] rounded-[24px] overflow-hidden flex flex-col bg-white p-5">
           <div className="flex items-center gap-2 mb-4 border-b border-gray-100 pb-4">
             <span className="text-[#111827] text-[14px] font-bold">Foto Bukti Kehadiran</span>
           </div>
@@ -389,7 +391,25 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
             <div className="flex-1 flex flex-col gap-2">
               <span className="text-[12px] font-bold text-[#4B5563]">Masuk</span>
               {data.check_in_photo_url ? (
-                <img src={data.check_in_photo_url} alt="Foto Masuk" className="w-full aspect-[3/4] object-cover rounded-[16px] bg-gray-100" />
+                <button
+                  type="button"
+                  onClick={() => setPreviewPhoto({
+                    url: data.check_in_photo_url,
+                    title: "Foto Bukti Masuk",
+                    subtitle: `${formatDateWithDay(data.check_in_time)} • ${extractTime(data.check_in_time)} WIB`,
+                    location: data.check_in_address || undefined,
+                    coords: hasValidCheckInCoords ? `${data.check_in_latitude}, ${data.check_in_longitude}` : undefined
+                  })}
+                  className="group relative w-full aspect-[3/4] rounded-[16px] overflow-hidden bg-gray-100 border border-gray-200 active:scale-98 transition-all cursor-pointer text-left block"
+                  title="Klik untuk melihat foto bukti masuk"
+                >
+                  <img src={data.check_in_photo_url} alt="Foto Masuk" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <span className="bg-black/60 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 backdrop-blur-xs">
+                      <Maximize2 className="w-3 h-3" /> Lihat Foto
+                    </span>
+                  </div>
+                </button>
               ) : (
                 <div className="w-full aspect-[3/4] bg-gray-100 rounded-[16px] flex items-center justify-center text-gray-400 text-[12px]">Tidak ada foto</div>
               )}
@@ -399,7 +419,25 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
               <span className="text-[12px] font-bold text-[#4B5563]">Keluar</span>
               {data.check_out_time ? (
                 data.check_out_photo_url ? (
-                  <img src={data.check_out_photo_url} alt="Foto Keluar" className="w-full aspect-[3/4] object-cover rounded-[16px] bg-gray-100" />
+                  <button
+                    type="button"
+                    onClick={() => setPreviewPhoto({
+                      url: data.check_out_photo_url,
+                      title: "Foto Bukti Keluar",
+                      subtitle: `${formatDateWithDay(data.check_out_time)} • ${extractTime(data.check_out_time)} WIB`,
+                      location: data.check_out_address || undefined,
+                      coords: hasValidCheckOutCoords ? `${data.check_out_latitude}, ${data.check_out_longitude}` : undefined
+                    })}
+                    className="group relative w-full aspect-[3/4] rounded-[16px] overflow-hidden bg-gray-100 border border-gray-200 active:scale-98 transition-all cursor-pointer text-left block"
+                    title="Klik untuk melihat foto bukti keluar"
+                  >
+                    <img src={data.check_out_photo_url} alt="Foto Keluar" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <span className="bg-black/60 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1 backdrop-blur-xs">
+                        <Maximize2 className="w-3 h-3" /> Lihat Foto
+                      </span>
+                    </div>
+                  </button>
                 ) : (
                   <div className="w-full aspect-[3/4] bg-gray-100 rounded-[16px] flex items-center justify-center text-gray-400 text-[12px]">Tidak ada foto</div>
                 )
@@ -417,6 +455,12 @@ export default function DetailKehadiranPage({ params }: { params: Promise<{ id: 
           <button onClick={() => router.push("/kehadiran")} className="mt-2 px-5 py-2.5 rounded-full bg-[#356E3B] text-white text-[13px] font-bold active:scale-95 transition-all shadow-sm">Kembali ke Riwayat Kehadiran</button>
         </div>
       )}
+
+      {/* Modal Preview Foto Kehadiran */}
+      <ImagePreviewModal
+        photo={previewPhoto}
+        onClose={() => setPreviewPhoto(null)}
+      />
     </div>
   );
 }

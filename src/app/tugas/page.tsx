@@ -431,7 +431,7 @@ export default function TugasPage() {
         
         {/* Tabs */}
         {!isAddingTask && !isViewingUpcoming && (
-          <div className="bg-white border border-[#E8F3EB] rounded-full p-1.5 flex shadow-sm">
+          <div className="bg-white border border-[#D1D5DB] rounded-full p-1.5 flex shadow-sm">
             <div 
               onClick={() => setActiveTab("personal")}
               className={`flex-1 rounded-full py-2.5 flex items-center justify-center gap-2 cursor-pointer transition-colors ${activeTab === "personal" ? "bg-[#356E3B] shadow-sm" : "hover:bg-gray-50"}`}
@@ -459,7 +459,7 @@ export default function TugasPage() {
         {isAddingTask ? (
           /* ADD / EDIT TASK FORM */
           <div className="flex flex-col gap-8">
-            <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-5">
+            <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-5">
               
               {/* Nama Tugas */}
               <div className="flex flex-col gap-2">

@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { TopBar } from "@/components/TopBar";
 import { formatDateRange } from "@/lib/dateUtils";
 import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
+import ImagePreviewModal, { PreviewPhotoData } from "@/components/ImagePreviewModal";
 
 import { useCompany } from "@/context/CompanyContext";
 import { getActiveCompanyId, getApiUrl } from "@/lib/api";
@@ -38,6 +39,7 @@ export default function KelolaIzinPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]); 
   const [activeFilter, setFilter] = useState<string>("Semua");
   const [searchQuery, setSearchQuery] = useState("");
+  const [previewAttachment, setPreviewAttachment] = useState<PreviewPhotoData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     const compId = getActiveCompanyId();
@@ -456,11 +458,11 @@ export default function KelolaIzinPage() {
 
         {/* Loading / Error / Data States */}
         {isLoading && data.length === 0 ? (
-          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-5">
+          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#D1D5DB] p-5">
             <CardListSkeleton count={3} type="leave" />
           </div>
         ) : fetchError && data.length === 0 ? (
-          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-8 flex flex-col items-center justify-center text-center gap-3">
+          <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#D1D5DB] p-8 flex flex-col items-center justify-center text-center gap-3">
             <span className="text-[13px] text-red-500 font-medium">{fetchError}</span>
             <button
               onClick={fetchLeaves}
@@ -473,7 +475,7 @@ export default function KelolaIzinPage() {
           <>
             {/* Section: Permintaan Persetujuan */}
             {pendingLeaves.length > 0 && (
-              <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-5 flex flex-col gap-4 mt-2">
+              <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#D1D5DB] p-5 flex flex-col gap-4 mt-2">
             
             {/* Header */}
             <div className="flex flex-col gap-3">
@@ -505,7 +507,7 @@ export default function KelolaIzinPage() {
             {/* List */}
             <div className="flex flex-col gap-3">
               {pendingLeaves.map((item) => (
-                <div key={item.id} className="border border-gray-100 p-3.5 rounded-[16px] flex flex-col gap-3 transition-colors hover:border-[#dce9df]">
+                <div key={item.id} className="border border-[#D1D5DB] p-3.5 rounded-[16px] flex flex-col gap-3 transition-colors hover:border-[#356E3B]">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                       <div 
@@ -542,10 +544,18 @@ export default function KelolaIzinPage() {
                     </div>
                     {item.attachment_url && (
                       <div className="mt-1 pt-2 border-t border-[#dce9df]">
-                        <a href={item.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#356E3B] hover:underline">
+                        <button 
+                          type="button" 
+                          onClick={() => setPreviewAttachment({
+                            url: item.attachment_url!,
+                            title: `Lampiran Izin - ${item.name}`,
+                            subtitle: `${item.type} • ${formatDateRange(item.start_date, item.end_date)}`
+                          })}
+                          className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#356E3B] hover:underline cursor-pointer bg-transparent border-0"
+                        >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                           Lihat Lampiran Dokumen
-                        </a>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -573,7 +583,7 @@ export default function KelolaIzinPage() {
         )}
 
         {/* Section: Riwayat Izin & Cuti */}
-        <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-5 flex flex-col gap-4">
+        <div className="bg-white rounded-[24px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-[#D1D5DB] p-5 flex flex-col gap-4">
           <div className="flex items-center gap-2.5 mb-1">
              <div className="w-7 h-7 bg-[#f4f9f6] rounded-lg flex items-center justify-center shrink-0">
                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#356E3B]"><path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
@@ -583,7 +593,7 @@ export default function KelolaIzinPage() {
 
           <div className="flex flex-col gap-3">
             {historyLeaves.map((item) => (
-              <div key={item.id} className="border border-gray-100 p-3.5 rounded-[16px] flex flex-col gap-3 transition-colors hover:border-[#dce9df]">
+              <div key={item.id} className="border border-[#D1D5DB] p-3.5 rounded-[16px] flex flex-col gap-3 transition-colors hover:border-[#356E3B]">
                 <div className="flex justify-between items-center">
                   <h3 className="text-[#1E4738] text-[15px] font-bold leading-tight">{item.name}</h3>
                   <div className="flex items-center gap-2 shrink-0">
@@ -618,10 +628,18 @@ export default function KelolaIzinPage() {
                   </div>
                   {item.attachment_url && (
                     <div className="mt-1 pt-2 border-t border-[#dce9df]">
-                      <a href={item.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#356E3B] hover:underline">
+                      <button 
+                        type="button" 
+                        onClick={() => setPreviewAttachment({
+                          url: item.attachment_url!,
+                          title: `Lampiran Izin - ${item.name}`,
+                          subtitle: `${item.type} • ${formatDateRange(item.start_date, item.end_date)}`
+                        })}
+                        className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#356E3B] hover:underline cursor-pointer bg-transparent border-0"
+                      >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                         Lihat Lampiran Dokumen
-                      </a>
+                      </button>
                     </div>
                   )}
 
@@ -847,6 +865,12 @@ export default function KelolaIzinPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Preview Lampiran Dokumen / Foto */}
+      <ImagePreviewModal
+        photo={previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
+      />
     </div>
   );
 }

@@ -7,7 +7,7 @@ import React from "react";
 
 export function NewsCardSkeleton() {
   return (
-    <div className="w-full bg-white rounded-[20px] p-4 flex gap-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden">
+    <div className="w-full bg-white rounded-[20px] p-4 flex gap-4 border border-[#D1D5DB] shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden">
       {/* Image Thumbnail Skeleton */}
       <div className="w-[80px] h-[80px] sm:w-[84px] sm:h-[84px] rounded-[16px] bg-gray-100 animate-pulse shrink-0" />
       {/* Content Skeleton */}
@@ -22,7 +22,7 @@ export function NewsCardSkeleton() {
 
 export function TaskCardSkeleton() {
   return (
-    <div className="w-full bg-white rounded-[20px] p-4 border border-[#eef5f0] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5">
+    <div className="w-full bg-white rounded-[20px] p-4 border border-[#D1D5DB] shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between gap-3.5">
       <div className="flex items-center gap-3.5 min-w-0 flex-1">
         {/* Checkbox Placeholder */}
         <div className="w-6 h-6 rounded-lg bg-gray-100 animate-pulse shrink-0" />
@@ -42,7 +42,7 @@ export function TaskCardSkeleton() {
 
 export function AgendaCardSkeleton() {
   return (
-    <div className="w-full bg-white rounded-[20px] shadow-sm border border-[#E5E7EB] p-5 flex flex-col gap-3 relative overflow-hidden">
+    <div className="w-full bg-white rounded-[20px] shadow-sm border border-[#D1D5DB] p-5 flex flex-col gap-3 relative overflow-hidden">
       {/* Left accent stripe */}
       <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gray-200" />
       {/* Badges */}
@@ -63,7 +63,7 @@ export function AgendaCardSkeleton() {
 
 export function AttendanceCardSkeleton() {
   return (
-    <div className="bg-white rounded-[20px] p-5 border border-[#E5E7EB] shadow-sm flex flex-col">
+    <div className="bg-white rounded-[20px] p-5 border border-[#D1D5DB] shadow-sm flex flex-col">
       {/* Header Row */}
       <div className="flex justify-between items-center mb-4">
         <div className="w-32 h-4 rounded-md bg-gray-100 animate-pulse" />
@@ -98,7 +98,7 @@ export function AttendanceCardSkeleton() {
 
 export function LeaveCardSkeleton() {
   return (
-    <div className="bg-white rounded-[20px] shadow-sm border border-[#F3F4F6] p-5 flex flex-col gap-3">
+    <div className="bg-white rounded-[20px] shadow-sm border border-[#D1D5DB] p-5 flex flex-col gap-3">
       <div className="flex justify-between items-start">
         <div className="flex flex-col gap-1.5 flex-1">
           <div className="w-28 h-4 rounded-md bg-gray-100 animate-pulse" />
@@ -119,7 +119,7 @@ export function LeaveCardSkeleton() {
 
 export function EmployeeCardSkeleton() {
   return (
-    <div className="flex items-center gap-3 border border-gray-100 p-3 rounded-[16px] bg-white">
+    <div className="flex items-center gap-3 border border-[#D1D5DB] p-3 rounded-[16px] bg-white">
       <div className="w-[46px] h-[46px] rounded-full bg-gray-100 animate-pulse shrink-0" />
       <div className="flex flex-col flex-1 gap-1.5 overflow-hidden">
         <div className="w-32 h-4 rounded-md bg-gray-100 animate-pulse" />
@@ -132,7 +132,7 @@ export function EmployeeCardSkeleton() {
 
 export function NotificationCardSkeleton() {
   return (
-    <div className="border border-[#E5E7EB] bg-white rounded-[20px] p-4 flex gap-4 items-start shadow-sm">
+    <div className="border border-[#D1D5DB] bg-white rounded-[20px] p-4 flex gap-4 items-start shadow-sm">
       <div className="w-[46px] h-[46px] rounded-full bg-gray-100 animate-pulse shrink-0" />
       <div className="flex-1 flex flex-col justify-center gap-2">
         <div className="flex justify-between items-start gap-2">
@@ -293,7 +293,7 @@ export function AdminDashboardSkeleton() {
 
       <div className="flex-1 px-5 py-5 flex flex-col gap-4">
         {/* Company Card Skeleton */}
-        <div className="bg-white rounded-[20px] p-4 flex gap-4 items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0]">
+        <div className="bg-white rounded-[20px] p-4 flex gap-4 items-center shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB]">
           <div className="w-[52px] h-[52px] rounded-full bg-gray-100 animate-pulse shrink-0" />
           <div className="flex flex-col flex-1 gap-2">
             <div className="w-40 h-4 rounded bg-gray-100 animate-pulse" />
@@ -303,7 +303,7 @@ export function AdminDashboardSkeleton() {
         </div>
 
         {/* Kehadiran Hari Ini Skeleton */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex flex-col gap-4">
+        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB] flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="w-48 h-4 rounded bg-gray-100 animate-pulse" />
             <div className="w-16 h-4 rounded bg-gray-100 animate-pulse" />
@@ -318,7 +318,7 @@ export function AdminDashboardSkeleton() {
         </div>
 
         {/* Action Buttons Skeleton */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] flex justify-between items-start">
+        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB] flex justify-between items-start">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={`admin-btn-${i}`} className="flex flex-col items-center gap-2">
               <div className="w-[48px] h-[48px] rounded-[16px] bg-gray-100 animate-pulse" />
@@ -338,7 +338,7 @@ export function AdminDashboardSkeleton() {
             <div className="w-20 h-7 rounded-full bg-gray-100 animate-pulse" />
             <div className="w-20 h-7 rounded-full bg-gray-100 animate-pulse" />
           </div>
-          <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#eef5f0] p-4 flex flex-col gap-3">
+          <div className="bg-white rounded-[24px] shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB] p-4 flex flex-col gap-3">
             <CardListSkeleton count={3} type="notification" />
           </div>
         </div>
@@ -366,7 +366,7 @@ export function ProfileSkeleton() {
         {/* Section: Informasi Pribadi */}
         <div className="flex flex-col gap-3">
           <div className="w-36 h-4 rounded bg-gray-100 animate-pulse" />
-          <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
+          <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={`prof-field-${i}`} className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-gray-100 animate-pulse shrink-0" />
@@ -382,7 +382,7 @@ export function ProfileSkeleton() {
         {/* Section: Pengaturan Akun */}
         <div className="flex flex-col gap-3">
           <div className="w-32 h-4 rounded bg-gray-100 animate-pulse" />
-          <div className="bg-white rounded-[20px] p-4 shadow-sm border border-[#E8F3EB] flex flex-col gap-3">
+          <div className="bg-white rounded-[20px] p-4 shadow-sm border border-[#D1D5DB] flex flex-col gap-3">
             <div className="h-12 rounded-xl bg-gray-100 animate-pulse w-full" />
             <div className="h-12 rounded-xl bg-gray-100 animate-pulse w-full" />
           </div>
@@ -410,13 +410,13 @@ export function CompanyProfileSkeleton() {
         </div>
 
         {/* Card 1: Informasi */}
-        <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
+        <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-4">
           <div className="w-36 h-4 rounded bg-gray-100 animate-pulse" />
           <div className="h-16 rounded-xl bg-gray-100 animate-pulse w-full" />
         </div>
 
         {/* Card 2: Jadwal */}
-        <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
+        <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-4">
           <div className="w-36 h-4 rounded bg-gray-100 animate-pulse" />
           <div className="flex gap-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -427,7 +427,7 @@ export function CompanyProfileSkeleton() {
         </div>
 
         {/* Card 3: Lokasi Map */}
-        <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
+        <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-4">
           <div className="w-36 h-4 rounded bg-gray-100 animate-pulse" />
           <div className="h-44 rounded-xl bg-gray-100 animate-pulse w-full" />
         </div>
@@ -444,7 +444,7 @@ export function DetailPageSkeleton() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] animate-in fade-in duration-200">
       <div className="px-6 pt-6 flex flex-col gap-5">
         {/* Top Header Card */}
-        <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#E5E7EB] flex items-center gap-4">
+        <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#D1D5DB] flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-gray-100 animate-pulse shrink-0" />
           <div className="flex flex-col gap-2 flex-1">
             <div className="w-44 h-4 rounded bg-gray-100 animate-pulse" />
@@ -453,7 +453,7 @@ export function DetailPageSkeleton() {
         </div>
 
         {/* Body Card */}
-        <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#E5E7EB] flex flex-col gap-4">
+        <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-4">
           <div className="w-32 h-4 rounded bg-gray-100 animate-pulse" />
           <div className="w-full h-12 rounded-xl bg-gray-100 animate-pulse" />
           <div className="w-full h-24 rounded-xl bg-gray-100 animate-pulse" />

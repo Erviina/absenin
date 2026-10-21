@@ -160,7 +160,7 @@ export default function TugasDetailPage() {
       <div className="px-6 pt-6 pb-28 flex flex-col gap-6">
         
         {/* Title Card */}
-        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
+        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#D1D5DB] flex flex-col gap-4">
           <div className="flex justify-between items-start gap-4">
             <h1 className={`text-[18px] font-bold leading-snug ${task.completed ? "text-[#6B7280] line-through" : "text-[#111827]"}`}>
               {task.title}
@@ -176,7 +176,7 @@ export default function TugasDetailPage() {
         </div>
 
         {/* Schedule & Notes */}
-        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-6">
+        <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#D1D5DB] flex flex-col gap-6">
           
           <div className="flex flex-col gap-4">
             <h3 className="text-[13px] font-bold text-[#374151] uppercase tracking-wide">Jadwal</h3>
@@ -212,7 +212,7 @@ export default function TugasDetailPage() {
               Keterangan
             </h3>
             
-            <div className="bg-[#F9FAFB] rounded-[16px] p-4 border border-[#E5E7EB]">
+            <div className="bg-[#F9FAFB] rounded-[16px] p-4 border border-[#D1D5DB]">
               <p className="text-[14px] text-[#4B5563] whitespace-pre-wrap leading-relaxed">
                 {task.note ? task.note : <span className="italic text-gray-400">Tidak ada keterangan / catatan.</span>}
               </p>
@@ -223,7 +223,7 @@ export default function TugasDetailPage() {
 
         {/* Group Task Assignees Section */}
         {task.type === 'group' && (
-          <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
+          <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#D1D5DB] flex flex-col gap-4">
             <h3 className="text-[13px] font-bold text-[#374151] uppercase tracking-wide flex items-center gap-2">
               <Users className="w-4 h-4 text-[#356E3B]" />
               Anggota Ditugaskan ({task.assignees?.length || 0})
