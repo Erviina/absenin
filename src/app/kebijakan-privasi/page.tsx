@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { useRouter } from "next/navigation";
+import React, { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { 
   ShieldCheck, 
@@ -12,22 +12,160 @@ import {
   Lock, 
   AlertCircle, 
   Clock, 
-  CheckCircle2
+  CheckCircle2,
+  ChevronRight,
+  Loader2
 } from "lucide-react";
+import { useDialog } from "@/context/DialogContext";
+import { useCompany } from "@/context/CompanyContext";
+import { getApiUrl, clearAuthSession } from "@/lib/api";
+import { getSafeInternalRedirect, getPersonalModePreference } from "@/lib/personalMode";
 
-
-export default function KebijakanPrivasiPage() {
+function KebijakanPrivasiContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { showToast } = useDialog();
+  const { refreshMemberships } = useCompany();
+
+  const consentParam = searchParams.get("consent");
+  const redirectParam = searchParams.get("redirect");
+
+  const [isAgreed, setIsAgreed] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConsentRequired, setIsConsentRequired] = useState(false);
+
+  useEffect(() => {
+    // Cek apakah halaman dibuka dalam alur persetujuan wajib
+    if (consentParam === "required") {
+      setIsConsentRequired(true);
+      return;
+    }
+
+    // Jika pengguna login tetapi belum pernah menyetujui kebijakan privasi
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const userStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+      if (token && userStr) {
+        const user = JSON.parse(userStr);
+        if (user && user.consent && user.consent.hasConsented === false) {
+          setIsConsentRequired(true);
+        }
+      }
+    } catch {}
+  }, [consentParam]);
+
+  const handleBack = () => {
+    if (isConsentRequired) {
+      // Jika pengguna menolak menyetujui pada saat login pertama kali, batalkan sesi login
+      clearAuthSession();
+      router.replace("/login");
+    } else {
+      router.back();
+    }
+  };
+
+  const handleConsentAndContinue = async () => {
+    if (!isAgreed || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      if (!token) {
+        showToast("Sesi tidak ditemukan. Silakan login kembali.", "error");
+        router.replace("/login");
+        return;
+      }
+
+      const res = await fetch(getApiUrl("/auth/consent"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          consent_accepted: true,
+          policy_version: "v1.0",
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        showToast(json?.message || "Gagal mencatat persetujuan kebijakan privasi", "error");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Perbarui metadata user di localStorage
+      try {
+        const userStr = localStorage.getItem("user");
+        if (userStr) {
+          const userObj = JSON.parse(userStr);
+          userObj.consent = {
+            hasConsented: true,
+            policyVersion: "v1.0",
+            consentedAt: new Date().toISOString(),
+          };
+          localStorage.setItem("user", JSON.stringify(userObj));
+        }
+      } catch {}
+
+      showToast("Persetujuan berhasil dikonfirmasi. Selamat datang di AbsenIN!", "success");
+
+      // Muat data membership pengguna
+      await refreshMemberships();
+
+      // Alur direct setelah login seperti biasa
+      const safeRedirect = getSafeInternalRedirect(redirectParam);
+      if (safeRedirect) {
+        router.replace(safeRedirect);
+        return;
+      }
+
+      let effectiveUser: any = null;
+      try {
+        const userStr = localStorage.getItem("user");
+        if (userStr) {
+          effectiveUser = JSON.parse(userStr);
+        }
+      } catch {}
+
+      const effectiveCompany = effectiveUser?.company || null;
+      const skipCompany = getPersonalModePreference(effectiveUser?.id);
+      if (!effectiveCompany && !skipCompany) {
+        router.replace("/cek-perusahaan");
+      } else {
+        router.replace("/dashboard");
+      }
+    } catch (err) {
+      console.error("Error submitting consent:", err);
+      showToast("Terjadi kesalahan jaringan saat menyimpan persetujuan", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#fbfdfc] pb-12">
+    <div className={`min-h-screen bg-[#fbfdfc] ${isConsentRequired ? "pb-36" : "pb-12"}`}>
       {/* TopBar */}
       <TopBar 
-        title="Kebijakan Privasi" 
-        onBack={() => router.back()} 
+        title={isConsentRequired ? "Persetujuan Privasi" : "Kebijakan Privasi"} 
+        onBack={handleBack} 
       />
 
       <main className="max-w-2xl mx-auto px-5 pt-6 flex flex-col gap-6">
+        {/* Banner Khusus Saat Wajib Persetujuan */}
+        {isConsentRequired && (
+          <div className="bg-[#E8F3EB] border border-[#C1DFCD] rounded-[20px] p-4 flex gap-3.5 items-start animate-in fade-in duration-200">
+            <div className="w-8 h-8 rounded-full bg-[#1E4738] text-white flex items-center justify-center shrink-0 mt-0.5">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div className="text-[13px] text-[#1E4738] leading-relaxed">
+              <strong className="font-bold block mb-0.5">Konfirmasi Persetujuan Pengguna:</strong>
+              Sebagai langkah akhir pendaftaran akun AbsenIN, mohon pelajari ringkasan kebijakan privasi berikut dan centang persetujuan di bagian bawah untuk melanjutkan masuk.
+            </div>
+          </div>
+        )}
+
         {/* Header Hero Banner */}
         <div className="bg-gradient-to-br from-[#1E4738] to-[#2D5A3F] rounded-[24px] p-6 text-white shadow-sm relative overflow-hidden">
           <div className="absolute -right-8 -bottom-8 w-36 h-36 bg-white/10 rounded-full blur-2xl pointer-events-none" />
@@ -186,7 +324,70 @@ export default function KebijakanPrivasiPage() {
           </ul>
         </div>
       </main>
+
+      {/* Floating Action Card untuk Checklist & Tombol Lanjutkan (Hanya saat isConsentRequired) */}
+      {isConsentRequired && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 p-4 sm:p-5 bg-white/95 backdrop-blur-md border-t border-[#E5E7EB] shadow-[0_-8px_30px_rgba(0,0,0,0.08)]">
+          <div className="max-w-md mx-auto flex flex-col gap-3">
+            {/* Checklist Persetujuan Wajib */}
+            <label 
+              htmlFor="mandatory-consent-checkbox"
+              className={`flex items-start gap-3 p-3.5 rounded-[18px] border transition-all cursor-pointer select-none ${
+                isAgreed 
+                  ? "bg-[#EEF5F0] border-[#356E3B]/40 ring-1 ring-[#356E3B]/20" 
+                  : "bg-[#F9FAFB] border-[#E5E7EB] hover:bg-[#F3F4F6]"
+              }`}
+            >
+              <input
+                id="mandatory-consent-checkbox"
+                type="checkbox"
+                checked={isAgreed}
+                onChange={(e) => setIsAgreed(e.target.checked)}
+                className="mt-0.5 w-5 h-5 rounded border-gray-300 text-[#356E3B] focus:ring-[#356E3B] cursor-pointer accent-[#356E3B] shrink-0"
+              />
+              <span className="text-[12.5px] text-[#1E4738] font-medium leading-[1.5]">
+                Saya telah membaca, memahami, dan menyetujui seluruh isi <strong>Kebijakan Privasi</strong> serta pemrosesan data pribadi saya di AbsenIN.
+              </span>
+            </label>
+
+            {/* Tombol Lanjutkan - Muncul ketika dicentang */}
+            {isAgreed && (
+              <button
+                type="button"
+                onClick={handleConsentAndContinue}
+                disabled={isSubmitting}
+                className="w-full py-3.5 px-6 rounded-full bg-[#1E4738] hover:bg-[#153428] active:scale-[0.99] text-white font-bold text-[14px] shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer animate-in fade-in slide-in-from-bottom-2 duration-200"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Menyimpan Persetujuan...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Lanjutkan</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+export default function KebijakanPrivasiPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#fbfdfc] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+        </div>
+      }
+    >
+      <KebijakanPrivasiContent />
+    </Suspense>
+  );
+}

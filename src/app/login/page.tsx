@@ -44,8 +44,6 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isVerifyingSession, setIsVerifyingSession] = useState(false);
   const [sessionVerifyError, setSessionVerifyError] = useState<string | null>(null);
-  const [isConsentAccepted, setIsConsentAccepted] = useState(false);
-  const [consentErrorHighlight, setConsentErrorHighlight] = useState(false);
 
 
   // Verifikasi ke backend jika terdapat token lokal sebelum melakukan redirect
@@ -93,6 +91,13 @@ function LoginForm() {
               localStorage.setItem("user", JSON.stringify(verifiedUser));
             } catch {}
 
+            // Jika belum pernah menyetujui kebijakan privasi, arahkan ke halaman kebijakan privasi
+            if (!verifiedUser?.consent?.hasConsented) {
+              const q = redirectParam ? `?consent=required&redirect=${encodeURIComponent(redirectParam)}` : `?consent=required`;
+              router.replace(`/kebijakan-privasi${q}`);
+              return;
+            }
+
             // Arahkan ke target internal yang aman jika valid, atau fallback ke rute default
             const safeRedirect = getSafeInternalRedirect(redirectParam);
             if (safeRedirect) {
@@ -132,22 +137,12 @@ function LoginForm() {
   const handleGoogleSuccess = async (authPayload: { idToken?: string; accessToken?: string }) => {
     if (isLoading || isVerifyingSession || (!authPayload.idToken && !authPayload.accessToken)) return;
 
-    if (!isConsentAccepted) {
-      setConsentErrorHighlight(true);
-      showToast("Persetujuan pemrosesan data pribadi wajib disetujui terlebih dahulu.", "warning");
-      return;
-    }
-
     setIsLoading(true);
     try {
       const res = await fetch(getApiUrl("/auth/google"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...authPayload,
-          consent_accepted: isConsentAccepted,
-          policy_version: "v1.0",
-        }),
+        body: JSON.stringify(authPayload),
       });
 
       const contentType = res.headers.get("content-type");
@@ -169,7 +164,14 @@ function LoginForm() {
         // 1. Simpan sesi secara terpusat dan beritahu seluruh aplikasi (membersihkan cache akun lama)
         setAuthSession(token, user, user?.company?.id);
 
-        // 2. Muat membership pengguna dan tunggu hingga role & activeCompany terkonfirmasi
+        // 2. Cek apakah pengguna baru / belum pernah menyetujui kebijakan privasi
+        if (!user?.consent?.hasConsented) {
+          const q = redirectParam ? `?consent=required&redirect=${encodeURIComponent(redirectParam)}` : `?consent=required`;
+          router.replace(`/kebijakan-privasi${q}`);
+          return;
+        }
+
+        // 3. Pengguna yang sudah pernah menyetujui: langsung ke alur setelah login biasa
         await refreshMemberships();
 
         // Cek jika terdapat target redirect yang aman dari tautan yang dibagikan
@@ -220,12 +222,6 @@ function LoginForm() {
   });
 
   const handleInitiateGoogleLogin = () => {
-    if (!isConsentAccepted) {
-      setConsentErrorHighlight(true);
-      showToast("Persetujuan pemrosesan data pribadi wajib dicentang untuk melanjutkan.", "warning");
-      return;
-    }
-    setConsentErrorHighlight(false);
     loginWithGoogle();
   };
 
@@ -289,57 +285,12 @@ function LoginForm() {
             </div>
           )}
 
-          {/* Checkbox Persetujuan Pengguna (PII & Kebijakan Privasi) */}
-          <div 
-            className={`rounded-2xl p-3.5 transition-all duration-200 border text-left ${
-              consentErrorHighlight 
-                ? "bg-red-50/80 border-red-300 ring-2 ring-red-100" 
-                : "bg-[#F9FAFB] border-[#E5E7EB]"
-            }`}
-          >
-            <label 
-              htmlFor="privacy-consent-checkbox" 
-              className="flex items-start gap-3 cursor-pointer select-none"
-            >
-              <input
-                id="privacy-consent-checkbox"
-                type="checkbox"
-                checked={isConsentAccepted}
-                onChange={(e) => {
-                  setIsConsentAccepted(e.target.checked);
-                  if (e.target.checked) setConsentErrorHighlight(false);
-                }}
-                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#356E3B] focus:ring-[#356E3B] focus:ring-offset-0 cursor-pointer accent-[#356E3B] shrink-0"
-              />
-              <span className="text-[12px] text-[#4B5563] leading-[1.5]">
-                Saya menyetujui pemrosesan data pribadi sesuai dengan{" "}
-                <Link
-                  href="/kebijakan-privasi"
-                  className="text-[#1E4738] font-bold underline hover:text-[#356E3B] transition-colors inline-block"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Kebijakan Privasi
-                </Link>
-                .
-              </span>
-
-            </label>
-            {consentErrorHighlight && (
-              <p className="text-[11px] font-semibold text-red-600 mt-2 pl-7 animate-in fade-in duration-150">
-                * Wajib dicentang untuk melanjutkan ke AbsenIN
-              </p>
-            )}
-          </div>
-
-          <div className="flex justify-center w-full mt-1">
+          <div className="flex flex-col items-center w-full mt-1">
             <button
               type="button"
               onClick={handleInitiateGoogleLogin}
               disabled={isLoading || isVerifyingSession}
-              title={!isConsentAccepted ? "Centang persetujuan di atas terlebih dahulu" : "Lanjutkan login dengan Google"}
-              className={`relative w-full max-w-[300px] h-11 bg-white border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#c6c8cc] active:bg-[#f1f3f4] text-[#3c4043] font-medium text-[14px] rounded-full shadow-[0_1px_2px_rgba(60,64,67,0.08)] flex items-center justify-center transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none cursor-pointer ${
-                !isConsentAccepted ? "opacity-75 hover:opacity-100" : ""
-              }`}
+              className="relative w-full max-w-[300px] h-11 bg-white border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#c6c8cc] active:bg-[#f1f3f4] text-[#3c4043] font-medium text-[14px] rounded-full shadow-[0_1px_2px_rgba(60,64,67,0.08)] flex items-center justify-center transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
             >
               <div className="absolute left-4 w-5 h-5 flex items-center justify-center">
                 {isLoading ? (
@@ -352,6 +303,17 @@ function LoginForm() {
                 {isLoading ? "Menghubungkan..." : "Sign in with Google"}
               </span>
             </button>
+
+            {/* Disclaimer Kebijakan Privasi di Bawah Tombol Login */}
+            <p className="text-[12px] text-[#6B7280] text-center mt-3.5 leading-relaxed max-w-[280px]">
+              Dengan melanjutkan, Anda menyetujui{" "}
+              <Link
+                href="/kebijakan-privasi"
+                className="text-[#1E4738] font-bold underline hover:text-[#356E3B] transition-colors inline-block"
+              >
+                Kebijakan Privasi
+              </Link>
+            </p>
           </div>
         </div>
       </div>

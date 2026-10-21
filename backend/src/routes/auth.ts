@@ -91,15 +91,6 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
     // I will insert it if it doesn't exist, using a new UUID.
     
     if (!profile) {
-      // Validasi server: Pengguna baru WAJIB menyetujui pemrosesan data pribadi sebelum akun dibuat
-      if (consent_accepted !== true) {
-        return res.status(400).json({
-          success: false,
-          message: "Persetujuan pemrosesan data pribadi wajib disetujui untuk melanjutkan pendaftaran akun.",
-          errors: ["Consent required for new user registration"],
-        });
-      }
-
       let userId = "";
 
       // 1. Try to create user via Supabase Admin API
@@ -150,17 +141,19 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       
       profile = profileResultRaw.rows[0] as any;
 
-      // Catat persetujuan pengguna baru secara resmi di database
-      try {
-        await recordUserConsent({
-          profileId: profile.id,
-          policyVersion: policy_version || CURRENT_PRIVACY_POLICY_VERSION,
-          isAccepted: true,
-          ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip || (req.socket?.remoteAddress as string),
-          userAgent: req.headers["user-agent"] as string,
-        });
-      } catch (consentErr) {
-        console.error("Gagal mencatat consent pengguna baru:", consentErr);
+      // Catat persetujuan pengguna baru hanya jika consent_accepted bernilai true
+      if (consent_accepted === true) {
+        try {
+          await recordUserConsent({
+            profileId: profile.id,
+            policyVersion: policy_version || CURRENT_PRIVACY_POLICY_VERSION,
+            isAccepted: true,
+            ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip || (req.socket?.remoteAddress as string),
+            userAgent: req.headers["user-agent"] as string,
+          });
+        } catch (consentErr) {
+          console.error("Gagal mencatat consent pengguna baru:", consentErr);
+        }
       }
     } else {
       // Pengguna lama: jika mencentang persetujuan pada login, catat/perbarui persetujuannya
