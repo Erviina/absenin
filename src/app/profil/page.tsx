@@ -11,7 +11,8 @@ import {
   ChevronRight,
   ArrowLeftRight,
   Loader2,
-  ShieldCheck 
+  ShieldCheck, 
+  Code2
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -366,9 +367,6 @@ export default function ProfilPage() {
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
                     <span className="text-[#111827] text-[14px] font-bold">Kebijakan Privasi</span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      v1.0 Aktif
-                    </span>
                   </div>
                   <span className="text-[#6B7280] text-[12px]">Pelajari transparansi pemrosesan PII dan hak privasi Anda</span>
                 </div>
@@ -386,14 +384,11 @@ export default function ProfilPage() {
           >
             <div className="flex items-center gap-4">
               <div className="w-9 flex justify-center">
-                <ShieldCheck className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
+                <Code2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <span className="text-[#111827] text-[14px] font-bold">Platform Admin</span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#EEF5F0] text-[#1E4738] border border-[#DCE9DF]">
-                    Developer
-                  </span>
                 </div>
                 <span className="text-[#6B7280] text-[12px]">Kelola seluruh perusahaan, pengguna & platform</span>
               </div>
