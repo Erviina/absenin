@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Badge } from "@/components/Badge";
+import ImagePreviewModal from "@/components/ImagePreviewModal";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { formatDate, formatDateWithDay, formatTime } from "@/lib/dateUtils";
@@ -217,7 +218,7 @@ export default function DetailKaryawanMonitoringPage() {
   useEffect(() => {
     if (isCompanyLoading) return;
     if (activeRole && !["owner", "admin", "manager"].includes(activeRole)) {
-      router.replace("/unauthorized");
+      router.replace("/admin/no-authorized");
     }
   }, [activeRole, isCompanyLoading, router]);
 
@@ -1344,82 +1345,11 @@ export default function DetailKaryawanMonitoringPage() {
 
       </div>
 
-      {/* ======================================================== */}
       {/* PHOTO PREVIEW MODAL */}
-      {/* ======================================================== */}
-      {previewPhoto && (
-        <div 
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4 animate-in fade-in duration-200"
-          onClick={() => setPreviewPhoto(null)}
-        >
-          <div 
-            className="w-full max-w-sm bg-white rounded-[24px] overflow-hidden flex flex-col shadow-2xl relative animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-[#fbfdfc]">
-              <div className="flex flex-col min-w-0 pr-2">
-                <span className="text-[#111827] text-[14px] font-bold truncate">
-                  {previewPhoto.title}
-                </span>
-                <span className="text-gray-500 text-[11px] truncate">
-                  {previewPhoto.date ? `${previewPhoto.date}` : ""} {previewPhoto.time ? `• ${previewPhoto.time}` : ""}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewPhoto(null)}
-                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors shrink-0"
-                aria-label="Tutup Preview"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Image Body */}
-            <div className="p-3 bg-black/5 flex items-center justify-center max-h-[65vh] overflow-hidden">
-              <img 
-                src={previewPhoto.url} 
-                alt="Foto Bukti Kehadiran" 
-                className="w-full max-h-[60vh] object-contain rounded-[14px]"
-              />
-            </div>
-
-            {/* Modal Footer / Location details */}
-            <div className="p-4 bg-white border-t border-gray-100 flex flex-col gap-3">
-              {previewPhoto.location && (
-                <div className="flex items-start gap-1.5 text-[12px] text-gray-600">
-                  <MapPin className="w-3.5 h-3.5 text-[#356E3B] shrink-0 mt-0.5" />
-                  <span className="font-medium break-words leading-relaxed">{previewPhoto.location}</span>
-                </div>
-              )}
-
-              {previewPhoto.coords && (
-                <div className="flex items-center justify-between gap-2 text-[11px]">
-                  <span className="text-gray-400 font-mono">Koordinat: {previewPhoto.coords}</span>
-                  <a
-                    href={`https://www.google.com/maps?q=${previewPhoto.coords}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#356E3B] font-bold hover:underline inline-flex items-center gap-0.5"
-                  >
-                    <span>Buka Maps</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setPreviewPhoto(null)}
-                className="w-full py-2.5 px-4 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-[13px] font-bold active:scale-95 transition-all text-center mt-1"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ImagePreviewModal
+        photo={previewPhoto}
+        onClose={() => setPreviewPhoto(null)}
+      />
 
       {/* ======================================================== */}
       {/* ROLE MANAGEMENT MODAL (KELOLA HAK AKSES) */}

@@ -11,7 +11,8 @@ import {
   ChevronRight,
   ArrowLeftRight,
   Loader2,
-  ShieldCheck 
+  ShieldCheck, 
+  Code2
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -180,19 +181,6 @@ export default function ProfilPage() {
       <TopBar
         title="Profil"
         onBack={() => router.push("/dashboard")}
-        rightAction={
-          (user?.isDeveloper || currentUser?.isDeveloper) ? (
-            <button
-              type="button"
-              onClick={() => router.push("/platform-admin/overview")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[12px] font-bold border border-white/30 transition-all active:scale-95 shadow-sm backdrop-blur-sm cursor-pointer"
-              title="Akses Platform Admin (Khusus Developer)"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-white" />
-              <span>Platform Admin</span>
-            </button>
-          ) : undefined
-        }
       />
 
       <div className="px-6 pt-6 flex flex-col gap-6">
@@ -249,12 +237,6 @@ export default function ProfilPage() {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-[#111827] text-[20px] font-bold leading-tight">{user.fullName || "User"}</h1>
-              {(user?.isDeveloper || currentUser?.isDeveloper) && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10.5px] font-bold shadow-2xs">
-                  <ShieldCheck className="w-3 h-3 text-amber-600" />
-                  Developer
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-1.5 text-[#6B7280]">
               <User className="w-3.5 h-3.5" />
@@ -357,6 +339,57 @@ export default function ProfilPage() {
             </div>
           </div>
         </div>
+
+        {/* Privasi & Persetujuan Data Card */}
+        <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
+          <div className="p-5 flex items-center gap-3 border-b border-[#F3F4F6]">
+            <div className="w-[34px] h-[34px] rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
+            </div>
+            <h2 className="text-[#111827] text-[15px] font-bold">Privasi & Perlindungan Data</h2>
+          </div>
+
+          <div className="flex flex-col">
+            <div 
+              onClick={() => router.push("/kebijakan-privasi")}
+              className="p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-9 flex justify-center">
+                  <ShieldCheck className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.75} />
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#111827] text-[14px] font-bold">Kebijakan Privasi</span>
+                  </div>
+                  <span className="text-[#6B7280] text-[12px]">Pelajari transparansi pemrosesan PII dan hak privasi Anda</span>
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+            </div>
+          </div>
+        </div>
+
+        {/* Platform Admin Card (Khusus Developer / Platform Owner) */}
+        {(user?.isDeveloper || currentUser?.isDeveloper) && (
+          <div 
+            onClick={() => router.push("/platform-admin/overview")}
+            className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-9 flex justify-center">
+                <Code2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#111827] text-[14px] font-bold">Platform Admin</span>
+                </div>
+                <span className="text-[#6B7280] text-[12px]">Kelola seluruh perusahaan, pengguna & platform</span>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+          </div>
+        )}
 
         {/* Keluar dari Akun Card */}
         <div 

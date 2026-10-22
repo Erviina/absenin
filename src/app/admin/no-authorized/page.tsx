@@ -2,10 +2,11 @@ import { Metadata } from "next";
 import { UnauthorizedView } from "@/components/UnauthorizedView";
 
 export const metadata: Metadata = {
-  title: "Tidak Memiliki Hak Akses - AbsenIn",
-  description: "Halaman ini memerlukan hak akses manajemen atau pemilik.",
+  title: "Akses Ditolak - AbsenIn",
+  description: "Anda tidak memiliki izin untuk membuka halaman ini.",
 };
 
 export default function AdminNoAuthorizedPage() {
-  return <UnauthorizedView />;
+  return <UnauthorizedView type="403" />;
 }
+

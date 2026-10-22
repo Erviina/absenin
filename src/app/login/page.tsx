@@ -2,8 +2,9 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useGoogleLogin } from "@react-oauth/google";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 
 import { getPersonalModePreference, isTokenValid, getSafeInternalRedirect } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
@@ -43,6 +44,7 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isVerifyingSession, setIsVerifyingSession] = useState(false);
   const [sessionVerifyError, setSessionVerifyError] = useState<string | null>(null);
+
 
   // Verifikasi ke backend jika terdapat token lokal sebelum melakukan redirect
   useEffect(() => {
@@ -88,6 +90,13 @@ function LoginForm() {
             try {
               localStorage.setItem("user", JSON.stringify(verifiedUser));
             } catch {}
+
+            // Jika belum pernah menyetujui kebijakan privasi, arahkan ke halaman kebijakan privasi
+            if (!verifiedUser?.consent?.hasConsented) {
+              const q = redirectParam ? `?consent=required&redirect=${encodeURIComponent(redirectParam)}` : `?consent=required`;
+              router.replace(`/kebijakan-privasi${q}`);
+              return;
+            }
 
             // Arahkan ke target internal yang aman jika valid, atau fallback ke rute default
             const safeRedirect = getSafeInternalRedirect(redirectParam);
@@ -155,7 +164,14 @@ function LoginForm() {
         // 1. Simpan sesi secara terpusat dan beritahu seluruh aplikasi (membersihkan cache akun lama)
         setAuthSession(token, user, user?.company?.id);
 
-        // 2. Muat membership pengguna dan tunggu hingga role & activeCompany terkonfirmasi
+        // 2. Cek apakah pengguna baru / belum pernah menyetujui kebijakan privasi
+        if (!user?.consent?.hasConsented) {
+          const q = redirectParam ? `?consent=required&redirect=${encodeURIComponent(redirectParam)}` : `?consent=required`;
+          router.replace(`/kebijakan-privasi${q}`);
+          return;
+        }
+
+        // 3. Pengguna yang sudah pernah menyetujui: langsung ke alur setelah login biasa
         await refreshMemberships();
 
         // Cek jika terdapat target redirect yang aman dari tautan yang dibagikan
@@ -204,6 +220,11 @@ function LoginForm() {
     },
     prompt: "select_account",
   });
+
+  const handleInitiateGoogleLogin = () => {
+    loginWithGoogle();
+  };
+
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
@@ -264,10 +285,10 @@ function LoginForm() {
             </div>
           )}
 
-          <div className="flex justify-center w-full mt-2">
+          <div className="flex flex-col items-center w-full mt-1">
             <button
               type="button"
-              onClick={() => loginWithGoogle()}
+              onClick={handleInitiateGoogleLogin}
               disabled={isLoading || isVerifyingSession}
               className="relative w-full max-w-[300px] h-11 bg-white border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#c6c8cc] active:bg-[#f1f3f4] text-[#3c4043] font-medium text-[14px] rounded-full shadow-[0_1px_2px_rgba(60,64,67,0.08)] flex items-center justify-center transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
             >
@@ -282,9 +303,21 @@ function LoginForm() {
                 {isLoading ? "Menghubungkan..." : "Sign in with Google"}
               </span>
             </button>
+
+            {/* Disclaimer Kebijakan Privasi di Bawah Tombol Login */}
+            <p className="text-[12px] text-[#6B7280] text-center mt-3.5 leading-relaxed max-w-[280px]">
+              Dengan melanjutkan, Anda menyetujui{" "}
+              <Link
+                href="/kebijakan-privasi"
+                className="text-[#1E4738] font-bold underline hover:text-[#356E3B] transition-colors inline-block"
+              >
+                Kebijakan Privasi
+              </Link>
+            </p>
           </div>
         </div>
       </div>
+
 
       {/* Bottom Illustration */}
       <div className="absolute bottom-0 left-0 w-full h-[60vh] pointer-events-none z-0">

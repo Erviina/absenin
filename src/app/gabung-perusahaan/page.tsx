@@ -506,7 +506,7 @@ function GabungPerusahaanContent() {
         <button
           onClick={handleBack}
           aria-label="Kembali"
-          className="absolute top-6 left-6 w-10 h-10 bg-[#f7fbf8] rounded-full flex items-center justify-center text-[#1E4738] shadow-sm border border-gray-100 hover:bg-gray-100 active:scale-95 transition-all"
+          className="absolute top-6 left-6 w-10 h-10 flex items-center justify-center text-[#1E4738] shadow-sm border border-gray-100 hover:bg-gray-100 active:scale-95 transition-all"
         >
           <ChevronLeft className="w-5 h-5 text-[#1E4738]" strokeWidth={2.5} />
         </button>

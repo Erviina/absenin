@@ -25,6 +25,7 @@ export const viewport: Viewport = {
 import { GoogleAuthProvider } from "@/components/GoogleAuthProvider";
 import { CompanyProvider } from "@/context/CompanyContext";
 import { DialogProvider } from "@/context/DialogContext";
+import { AuthGuard } from "@/components/AuthGuard";
 
 export default function RootLayout({
   children,
@@ -44,7 +45,9 @@ export default function RootLayout({
         <GoogleAuthProvider>
           <CompanyProvider>
             <DialogProvider>
-              {children}
+              <AuthGuard>
+                {children}
+              </AuthGuard>
             </DialogProvider>
           </CompanyProvider>
         </GoogleAuthProvider>

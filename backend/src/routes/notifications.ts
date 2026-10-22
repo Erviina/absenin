@@ -204,4 +204,49 @@ router.patch("/:id/read", authenticate, async (req: Request, res: Response): Pro
   }
 });
 
+// GET /api/notifications/:id - IDOR Protected Detail Endpoint
+router.get("/:id", authenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : (req.params.id as string);
+
+    // Format UUID guard
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ success: false, message: "Format ID notifikasi tidak valid" });
+    }
+
+    const notifRes = await db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.id, id),
+          eq(notifications.recipient_id, user.id)
+        )
+      )
+      .limit(1);
+
+    if (notifRes.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Notifikasi tidak ditemukan atau Anda tidak memiliki hak akses",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: notifRes[0],
+    });
+  } catch (error: any) {
+    console.error("Get notification detail error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      errors: [error.message],
+    });
+  }
+});
+
 export default router;
+

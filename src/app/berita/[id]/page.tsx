@@ -10,7 +10,8 @@ import { sanitizeText } from "@/lib/sanitize";
 import { shareContent } from "@/lib/shareUtils";
 import { Badge } from "@/components/Badge";
 import { getApiUrl } from "@/lib/api";
-import { Calendar, User, Newspaper, Tag, Share2 } from "lucide-react";
+import { Calendar, User, Newspaper, Tag, Share2, Maximize2 } from "lucide-react";
+import ImagePreviewModal, { PreviewPhotoData } from "@/components/ImagePreviewModal";
 
 interface NewsDetail {
   id: string;
@@ -40,6 +41,7 @@ export default function BeritaDetailPage() {
   const [news, setNews] = useState<NewsDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<PreviewPhotoData | null>(null);
 
   const fromParam = searchParams.get("from");
 
@@ -237,12 +239,26 @@ export default function BeritaDetailPage() {
 
             {/* Cover Image - Auto cropping berdasarkan width dengan height fix */}
             {news.cover_image_url && (
-              <div className="w-full h-[210px] sm:h-[260px] rounded-[20px] overflow-hidden bg-gray-50/70 border border-[#eef5f0] shadow-2xs">
+              <div 
+                onClick={() => setPreviewPhoto({
+                  url: news.cover_image_url!,
+                  title: news.title,
+                  subtitle: news.author?.name ? `Oleh ${news.author.name}` : undefined,
+                  date: formatDateWithDay(news.created_at)
+                })}
+                className="w-full h-[210px] sm:h-[260px] rounded-[20px] overflow-hidden bg-gray-50/70 border border-[#eef5f0] shadow-2xs group relative cursor-pointer active:scale-98 transition-all"
+                title="Klik untuk melihat foto"
+              >
                 <img
                   src={news.cover_image_url}
                   alt={sanitizeText(news.title)}
-                  className="w-full h-full object-cover rounded-[20px]"
+                  className="w-full h-full object-cover rounded-[20px] group-hover:scale-105 transition-transform duration-200"
                 />
+                <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  <span className="bg-black/60 text-white text-[11px] font-semibold px-3 py-1 rounded-full flex items-center gap-1.5 backdrop-blur-xs">
+                    <Maximize2 className="w-3.5 h-3.5" /> Lihat Foto
+                  </span>
+                </div>
               </div>
             )}
 
@@ -257,6 +273,12 @@ export default function BeritaDetailPage() {
           </article>
         )}
       </main>
+
+      {/* Modal Preview Foto Berita */}
+      <ImagePreviewModal
+        photo={previewPhoto}
+        onClose={() => setPreviewPhoto(null)}
+      />
     </div>
   );
 }

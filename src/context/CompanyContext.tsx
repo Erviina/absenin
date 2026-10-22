@@ -541,15 +541,15 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
           // Pengecualian endpoint autentikasi dan halaman publik untuk mencegah redirect loop
           const isAuthEndpoint = rawUrl.includes("/auth/google") || rawUrl.includes("/auth/login");
-          const isPublicPage = ["/login", "/login/onboard", "/unauthorized", "/"].includes(currentPath);
+          const isPublicPage = ["/login", "/login/onboard", "/unauthorized", "/admin/no-authorized", "/"].includes(currentPath);
 
           if (hasToken && !isAuthEndpoint && !isPublicPage && !isRedirectingToLogin) {
             isRedirectingToLogin = true;
             clearAuthSession();
 
             const redirectTarget = currentPath + (window.location.search || "");
-            const loginUrl = `/login?redirect=${encodeURIComponent(redirectTarget)}`;
-            window.location.href = loginUrl;
+            const unauthorizedUrl = `/unauthorized?type=401&redirect=${encodeURIComponent(redirectTarget)}`;
+            window.location.href = unauthorizedUrl;
           }
         }
 

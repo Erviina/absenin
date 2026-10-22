@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronLeft, Plus, Calendar, ChevronDown, Clock, Trash2, FileText, Send, UploadCloud, Paperclip, ExternalLink, XCircle, CheckCircle2, CircleDot, Circle, AlertCircle } from "lucide-react";
+import { ChevronLeft, Plus, Calendar, ChevronDown, Clock, Trash2, FileText, Send, UploadCloud, Paperclip, ExternalLink, XCircle, CheckCircle2, CircleDot, Circle, AlertCircle, Maximize2 } from "lucide-react";
+import ImagePreviewModal, { PreviewPhotoData } from "@/components/ImagePreviewModal";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/bottom-nav";
@@ -61,6 +62,7 @@ export default function IzinPage() {
   const [fileObj, setFileObj] = useState<File | null>(null);
   const [filterDate, setFilterDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("Semua Kategori");
+  const [previewAttachment, setPreviewAttachment] = useState<PreviewPhotoData | null>(null);
 
   // Infinite scroll & Pagination states
   const [totalLeaves, setTotalLeaves] = useState(0);
@@ -528,7 +530,7 @@ export default function IzinPage() {
           <div className="flex flex-col gap-4">
             
             {/* Card 1: Kategori */}
-            <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-2">
+            <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-2">
               <label className="text-[13px] font-bold text-[#374151]">
                 Kategori Izin <span className="text-[#EF4444]">*</span>
               </label>
@@ -542,7 +544,7 @@ export default function IzinPage() {
             </div>
 
             {/* Card 2: Tanggal */}
-            <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
+            <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-4">
               <div className="flex gap-2.5 sm:gap-3">
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
                   <label className="text-[13px] font-bold text-[#374151]">
@@ -577,7 +579,7 @@ export default function IzinPage() {
             </div>
 
             {/* Card 3: Keterangan */}
-            <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-2">
+            <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-2">
               <div className="flex justify-between items-center mb-1">
                 <label className="text-[13px] font-bold text-[#374151]">
                   Keterangan <span className="text-[#EF4444]">*</span>
@@ -597,7 +599,7 @@ export default function IzinPage() {
             </div>
 
             {/* Card 4: Lampiran */}
-            <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-3">
+            <div className="bg-white rounded-[20px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
                 <label className="text-[13px] font-bold text-[#374151]">
                   Lampiran Bukti
@@ -671,7 +673,7 @@ export default function IzinPage() {
             return (
           <div className="flex flex-col gap-5">
             {/* Top Card */}
-            <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#E8F3EB] flex flex-col gap-4">
+            <div className="bg-white rounded-[24px] p-5 shadow-sm border border-[#D1D5DB] flex flex-col gap-4">
               <div className="flex justify-between items-start">
                 <div className="flex flex-col gap-1">
                   <span className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">Jenis Pengajuan</span>
@@ -720,20 +722,24 @@ export default function IzinPage() {
                       <span className="text-[11px] font-medium text-[#6B7280]">Telah dilampirkan</span>
                     </div>
                   </div>
-                  <a 
-                    href={selectedIzin.attachment_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[#356E3B] font-bold text-[12px] hover:underline pr-1 cursor-pointer"
+                  <button 
+                    type="button"
+                    onClick={() => setPreviewAttachment({
+                      url: selectedIzin.attachment_url,
+                      title: "Lampiran Dokumen Izin",
+                      subtitle: `${selectedIzin.title} • ${selectedIzin.dates}`
+                    })}
+                    className="flex items-center gap-1.5 text-[#356E3B] font-bold text-[12px] hover:underline pr-1 cursor-pointer bg-[#E8F3EB] hover:bg-[#d8ebd9] px-3 py-1.5 rounded-full active:scale-95 transition-all border border-[#cbe4d0]"
                   >
-                    Lihat <ExternalLink className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  </a>
+                    <span>Lihat Foto / Dokumen</span>
+                    <Maximize2 className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  </button>
                 </div>
               )}
             </div>
 
             {/* Tracking Status Card */}
-            <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#E8F3EB]">
+            <div className="bg-white rounded-[24px] p-6 shadow-sm border border-[#D1D5DB]">
               <h3 className="text-[#111827] text-[16px] font-bold mb-6">Tracking Status</h3>
               
               <div className="flex flex-col gap-6 relative ml-1 pb-2">
@@ -984,7 +990,7 @@ export default function IzinPage() {
                       <div 
                         key={req.id} 
                         onClick={() => setSelectedIzinId(req.id)}
-                        className="bg-white rounded-[20px] shadow-sm border border-[#F3F4F6] p-5 flex flex-col gap-3 cursor-pointer hover:border-[#356E3B] transition-colors"
+                        className="bg-white rounded-[20px] shadow-sm border border-[#D1D5DB] p-5 flex flex-col gap-3 cursor-pointer hover:border-[#356E3B] transition-colors"
                       >
                         <div className="flex justify-between items-start">
                           <div className="flex flex-col gap-1">
@@ -1051,6 +1057,12 @@ export default function IzinPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Preview Foto / Dokumen Lampiran Izin */}
+      <ImagePreviewModal
+        photo={previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
+      />
     </div>
   );
 }

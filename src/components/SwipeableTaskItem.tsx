@@ -136,7 +136,7 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }:
 
       {/* Foreground Task Card */}
       <div 
-        className={`absolute inset-0 bg-white border border-[#E8F3EB] rounded-[20px] shadow-sm flex justify-between items-center px-4 ${isDragging ? "" : "transition-transform ease-out duration-300"} ${onClick && translateX === 0 ? "cursor-pointer" : ""}`}
+        className={`absolute inset-0 bg-white border border-[#D1D5DB] rounded-[20px] shadow-sm flex justify-between items-center px-4 ${isDragging ? "" : "transition-transform ease-out duration-300"} ${onClick && translateX === 0 ? "cursor-pointer" : ""}`}
         style={{ transform: `translateX(${translateX}px)`, zIndex: 10 }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -209,7 +209,7 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }:
           className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
             task.completed 
               ? "bg-[#2D5A3F] border-[#2D5A3F]" 
-              : "bg-white border-[#E8F3EB] hover:border-[#356E3B]"
+              : "bg-white border-[#D1D5DB] hover:border-[#356E3B]"
           }`}
           title={task.completed ? "Tandai belum selesai" : "Tandai selesai"}
           aria-label={task.completed ? "Tandai belum selesai" : "Tandai selesai"}

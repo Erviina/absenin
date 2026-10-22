@@ -261,7 +261,7 @@ export default function BuatPerusahaanPage() {
           <button 
             type="button"
             onClick={() => router.push("/admin/dashboard")}
-            className="w-full bg-[#111827] hover:bg-[#1E293B] text-white py-3.5 rounded-full text-[14px] font-bold transition-all shadow-sm active:scale-[0.98]"
+            className="w-full bg-[#2D5A3F] hover:bg-[#234731] text-white py-3.5 rounded-full text-[14px] font-bold transition-all shadow-sm active:scale-[0.98]"
           >
             Mulai ke Beranda
           </button>

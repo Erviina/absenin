@@ -472,7 +472,7 @@ export default function KehadiranPage() {
               <div 
                 key={item.id} 
                 onClick={() => router.push(`/kehadiran/${item.id}`)}
-                className="bg-white rounded-[20px] p-5 border border-[#E5E7EB] shadow-sm flex flex-col cursor-pointer hover:border-[#356E3B] transition-colors"
+                className="bg-white rounded-[20px] p-5 border border-[#D1D5DB] shadow-sm flex flex-col cursor-pointer hover:border-[#356E3B] transition-colors"
               >
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-[#374151] font-medium text-[15px]">

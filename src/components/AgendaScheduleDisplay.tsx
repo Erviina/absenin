@@ -37,11 +37,6 @@ export function AgendaCardSchedule({
         <Clock className="w-[14px] h-[14px] text-[#6B7280] shrink-0" strokeWidth={2.2} />
         <span className="text-[#4B5563] text-[12px] font-medium leading-tight flex items-center gap-1.5 flex-wrap">
           <span>{sched.timeDisplay}</span>
-          {sched.isAllDay && (
-            <span className="bg-[#E8F3EB] text-[#2D5A3F] text-[10px] font-bold px-1.5 py-0.5 rounded-md border border-[#C5DEC9]">
-              Seharian
-            </span>
-          )}
         </span>
       </div>
     </div>
@@ -91,11 +86,6 @@ export function AgendaDetailSchedule({
             <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
               Waktu Pelaksanaan
             </span>
-            {sched.isAllDay && (
-              <span className="bg-[#E8F3EB] text-[#2D5A3F] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#C5DEC9]">
-                Seharian
-              </span>
-            )}
           </div>
           <span className="text-[14px] font-bold text-[#111827] leading-snug">
             {sched.timeRangeDetail}

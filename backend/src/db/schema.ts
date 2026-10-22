@@ -188,3 +188,22 @@ export const notifications = pgTable("notifications", {
     index("notifications_created_idx").on(table.created_at),
   ];
 });
+
+export const userConsents = pgTable("user_consents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  profile_id: uuid("profile_id").references(() => profiles.id, { onDelete: "cascade" }).notNull(),
+  policy_version: varchar("policy_version", { length: 50 }).notNull(),
+  consent_type: varchar("consent_type", { length: 100 }).default("data_processing_and_privacy").notNull(),
+  is_accepted: boolean("is_accepted").default(true).notNull(),
+  ip_address: varchar("ip_address", { length: 100 }),
+  user_agent: text("user_agent"),
+  consented_at: timestamp("consented_at", { withTimezone: true }).defaultNow().notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => {
+  return [
+    index("user_consents_profile_idx").on(table.profile_id),
+    index("user_consents_profile_version_idx").on(table.profile_id, table.policy_version),
+    index("user_consents_created_idx").on(table.created_at),
+  ];
+});
+
