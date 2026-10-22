@@ -237,12 +237,6 @@ export default function ProfilPage() {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-[#111827] text-[20px] font-bold leading-tight">{user.fullName || "User"}</h1>
-              {(user?.isDeveloper || currentUser?.isDeveloper) && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10.5px] font-bold shadow-2xs">
-                  <ShieldCheck className="w-3 h-3 text-amber-600" />
-                  Developer
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-1.5 text-[#6B7280]">
               <User className="w-3.5 h-3.5" />
