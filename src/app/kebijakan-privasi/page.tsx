@@ -133,14 +133,14 @@ function KebijakanPrivasiContent() {
   };
 
   return (
-    <div className={`min-h-screen bg-[#F6F8F7] ${isConsentRequired ? "pb-36" : "pb-12"}`}>
+    <div className={`min-h-screen bg-[#F6F8F7] ${isConsentRequired ? "pb-44" : "pb-12"}`}>
       {/* TopBar */}
       <TopBar 
         title={isConsentRequired ? "Persetujuan Privasi" : "Kebijakan Privasi"} 
         onBack={handleBack} 
       />
 
-      <main className="max-w-2xl mx-auto px-4 pt-4 sm:pt-6">
+      <main className="w-full px-4 pt-4 sm:pt-6">
         {/* Document Paper Container */}
         <div className="bg-white rounded-[24px] border border-[#E5E7EB] p-6 sm:p-8 shadow-xs text-gray-700 text-[13.5px] leading-relaxed">
           
@@ -244,8 +244,8 @@ function KebijakanPrivasiContent() {
 
       {/* Floating Action Card untuk Checklist & Tombol Lanjutkan (Hanya saat isConsentRequired) */}
       {isConsentRequired && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-4 sm:p-5 bg-white/95 backdrop-blur-md border-t border-[#E5E7EB] shadow-[0_-4px_25px_rgba(0,0,0,0.06)]">
-          <div className="max-w-2xl mx-auto flex flex-col gap-3">
+        <div className="fixed bottom-0 left-0 right-0 mx-auto w-full sm:max-w-md z-40 p-4 sm:p-5 bg-white/95 backdrop-blur-md border-t border-[#E5E7EB] sm:border-x sm:border-border/40 shadow-[0_-4px_25px_rgba(0,0,0,0.06)]">
+          <div className="w-full flex flex-col gap-3">
             {/* Checklist Persetujuan Wajib */}
             <label 
               htmlFor="mandatory-consent-checkbox"
@@ -273,7 +273,7 @@ function KebijakanPrivasiContent() {
                 type="button"
                 onClick={handleConsentAndContinue}
                 disabled={isSubmitting}
-                className="w-full py-3.5 px-6 rounded-full bg-[#1E4738] hover:bg-[#153428] active:scale-[0.99] text-white font-bold text-[14px] shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer animate-in fade-in slide-in-from-bottom-2 duration-200"
+                className="w-full py-3.5 px-6 rounded-full bg-[#2D5A3F] hover:bg-[#153428] active:scale-[0.99] text-white font-bold text-[14px] shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer animate-in fade-in slide-in-from-bottom-2 duration-200"
               >
                 {isSubmitting ? (
                   <>
