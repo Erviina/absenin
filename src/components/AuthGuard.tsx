@@ -4,23 +4,30 @@ import React, { useEffect, useState, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { isTokenValid } from "@/lib/personalMode";
 import { UnauthorizedView } from "@/components/UnauthorizedView";
-import { 
-  isPublicPath, 
-  isPlatformAdminPath, 
-  isInvalidRoute 
-} from "@/lib/routeUtils";
+
+const PUBLIC_PATHS = [
+  "/",
+  "/login",
+  "/login/onboard",
+  "/unauthorized",
+  "/admin/no-authorized",
+  "/kebijakan-privasi",
+  "/platform-admin/login",
+];
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
   const [is403Revoked, setIs403Revoked] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Klasifikasi tipe rute
-  const isPublic = useMemo(() => isPublicPath(pathname), [pathname]);
-  const isPlatformAdmin = useMemo(() => isPlatformAdminPath(pathname), [pathname]);
-  const isInvalid = useMemo(() => isInvalidRoute(pathname), [pathname]);
+  const isPublicRoute = useMemo(() => {
+    if (!pathname) return true;
+    if (PUBLIC_PATHS.includes(pathname)) return true;
+    if (pathname.startsWith("/login/")) return true;
+    if (pathname.startsWith("/kebijakan-privasi/")) return true;
+    return false;
+  }, [pathname]);
 
   // Periksa token lokal setelah hydration client
   useEffect(() => {

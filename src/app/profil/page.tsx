@@ -12,8 +12,7 @@ import {
   ArrowLeftRight,
   Loader2,
   ShieldCheck, 
-  Code2,
-  HelpCircle
+  Code2
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -340,36 +339,16 @@ export default function ProfilPage() {
           </div>
         </div>
 
-        {/* Bantuan & Informasi Card */}
+        {/* Privasi & Persetujuan Data Card */}
         <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
           <div className="p-5 flex items-center gap-3 border-b border-[#F3F4F6]">
             <div className="w-[34px] h-[34px] rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
               <HelpCircle className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
             </div>
-            <h2 className="text-[#111827] text-[15px] font-bold">Bantuan & Informasi</h2>
+            <h2 className="text-[#111827] text-[15px] font-bold">Privasi & Perlindungan Data</h2>
           </div>
 
           <div className="flex flex-col">
-            {/* Pusat Bantuan */}
-            <div 
-              onClick={() => router.push("/bantuan")}
-              className="p-5 flex items-center justify-between border-b border-[#F3F4F6] active:bg-gray-50 cursor-pointer transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-9 flex justify-center">
-                  <HelpCircle className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.75} />
-                </div>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#111827] text-[14px] font-bold">Pusat Bantuan</span>
-                  </div>
-                  <span className="text-[#6B7280] text-[12px]">FAQ dan panduan penggunaan aplikasi</span>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
-            </div>
-
-            {/* Kebijakan Aplikasi */}
             <div 
               onClick={() => router.push("/kebijakan-privasi")}
               className="p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"

@@ -304,12 +304,19 @@ function LoginForm() {
               </span>
             </button>
 
-            {/* Disclaimer Kebijakan Privasi di Bawah Tombol Login */}
-            <p className="text-[12px] text-[#6B7280] text-center mt-3.5 leading-relaxed max-w-[280px]">
+            {/* Disclaimer Syarat dan Ketentuan serta Kebijakan Privasi di Bawah Tombol Login */}
+            <p className="text-[12px] text-[#6B7280] text-center mt-3.5 leading-relaxed max-w-[300px]">
               Dengan melanjutkan, Anda menyetujui{" "}
               <Link
+                href="/syarat-ketentuan"
+                className="text-[#1E4738] font-bold underline hover:text-[#356E3B] transition-colors whitespace-nowrap"
+              >
+                Syarat dan Ketentuan
+              </Link>{" "}
+              serta{" "}
+              <Link
                 href="/kebijakan-privasi"
-                className="text-[#1E4738] font-bold underline hover:text-[#356E3B] transition-colors inline-block"
+                className="text-[#1E4738] font-bold underline hover:text-[#356E3B] transition-colors whitespace-nowrap"
               >
                 Kebijakan Privasi
               </Link>
