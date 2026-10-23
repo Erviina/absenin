@@ -126,22 +126,4 @@ if (typeof window !== "undefined") {
   window.addEventListener("authSessionCleared", clearAll);
   window.addEventListener("authSessionUpdated", clearAll);
   window.addEventListener("companyChanged", clearAll);
-
-  const clearRoleCaches = () => {
-    // Invalidate dashboard and role-specific caches so fresh role data loads immediately
-    invalidateCache("dashboard_stats");
-    invalidateCache("dashboard_leave");
-    invalidateCache("dashboard_act");
-    invalidateCache("admin_dashboard_comp");
-    invalidateCache("admin_dashboard_stats");
-    invalidateCache("admin_dashboard_leave");
-    invalidateCache("admin_dashboard_act");
-    invalidateCache("dashboard_news");
-    invalidateCache("dashboard_tasks");
-    invalidateCache("dashboard_agendas");
-    invalidateCache("dashboard_attendance");
-    invalidateCache("dashboard_notif");
-    invalidateCache("notifications");
-  };
-  window.addEventListener("roleChanged", clearRoleCaches);
 }

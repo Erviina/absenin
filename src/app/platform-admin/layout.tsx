@@ -11,6 +11,7 @@ import {
 } from "@/lib/platformAdminApi";
 import { PlatformAdminSidebar } from "@/components/platform-admin/PlatformAdminSidebar";
 import { PlatformAdminHeader } from "@/components/platform-admin/PlatformAdminHeader";
+import { PlatformAdminErrorView } from "@/components/platform-admin/PlatformAdminErrorView";
 
 interface PlatformAdminContextType {
   profile: PlatformOwnerProfile | null;
@@ -107,64 +108,28 @@ export default function PlatformAdminLayout({
     return (
       <div
         id="platform-admin-root"
-        className="w-full min-h-screen bg-[#F4F9F6] flex flex-col items-center justify-center p-6 text-center"
+        className="w-full min-h-screen bg-[#F8FAF9] flex flex-col items-center justify-center p-6 text-center"
       >
-        <div className="w-16 h-16 rounded-[22px] bg-[#1E3F2B] text-white flex items-center justify-center shadow-lg mb-4 animate-in zoom-in-90 duration-300">
-          <Loader2 className="w-8 h-8 animate-spin text-[#86EFAC]" />
+        <div className="w-14 h-14 rounded-[20px] bg-[#1E3F2B] text-white flex items-center justify-center shadow-lg mb-4 animate-in zoom-in-95 duration-200">
+          <Loader2 className="w-7 h-7 animate-spin text-[#86EFAC]" />
         </div>
-        <h2 className="text-[17px] font-bold text-[#1E3F2B] mb-1">
+        <h2 className="text-[16px] font-bold text-[#1E3F2B] mb-1">
           Memverifikasi Otorisasi Platform Admin...
         </h2>
         <p className="text-[12.5px] text-[#5C786C] max-w-sm">
-          Memeriksa izin akun dan enkripsi daftar izin server untuk Pemilik Platform.
+          Memeriksa hak akses administratif Pemilik Platform.
         </p>
       </div>
     );
   }
 
-  // 3. Access Denied State: Pengguna login tetapi email tidak ada di allowlist
+  // 3. Access Denied State (403): Pengguna login tetapi email tidak ada di allowlist
   if (accessDeniedMessage) {
     return (
-      <div
-        id="platform-admin-root"
-        className="w-full min-h-screen bg-[#FFFBFB] flex flex-col items-center justify-center p-6 text-center"
-      >
-        <div className="w-full max-w-md bg-white border border-red-200/80 rounded-[28px] p-7 shadow-xl shadow-red-500/5 flex flex-col items-center">
-          <div className="w-16 h-16 rounded-full bg-red-50 border border-red-100 flex items-center justify-center text-red-600 mb-4 shadow-xs">
-            <ShieldAlert className="w-8 h-8" />
-          </div>
-
-          <span className="text-[11px] font-black tracking-widest text-red-600 bg-red-50 border border-red-200/60 px-3 py-1 rounded-full uppercase mb-3">
-            Akses Ditolak
-          </span>
-
-          <h1 className="text-[20px] font-extrabold text-gray-900 mb-2 tracking-tight">
-            Tidak Memiliki Wewenang
-          </h1>
-
-          <p className="text-[13px] text-gray-600 mb-6 leading-relaxed">
-            {accessDeniedMessage}
-          </p>
-
-          <div className="w-full space-y-2.5">
-            <button
-              onClick={logoutPlatformAdmin}
-              className="w-full py-3 px-4 rounded-[16px] bg-[#1E3F2B] text-white font-bold text-[13.5px] hover:bg-[#163021] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Ganti Akun Google</span>
-            </button>
-
-            <button
-              onClick={() => router.replace("/dashboard")}
-              className="w-full py-3 px-4 rounded-[16px] border border-gray-200 text-gray-700 font-semibold text-[13px] hover:bg-gray-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Kembali ke Aplikasi Utama</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      <PlatformAdminErrorView
+        type="403"
+        description={accessDeniedMessage}
+      />
     );
   }
 

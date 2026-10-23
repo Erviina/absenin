@@ -375,29 +375,15 @@ router.get("/me", authenticate, async (req: Request, res: Response): Promise<any
 
     if (tenant) {
       activeRole = tenant.role;
-      // Ambil permanent membership role untuk mengetahui seluruh opsi role yang berhak diakses user
-      const memCheck = await db.execute(sql`
-        SELECT role FROM company_members
-        WHERE profile_id = ${userId} AND company_id = ${tenant.companyId} AND status = 'active' AND deleted_at IS NULL
-        LIMIT 1
-      `);
-      const baseRole = (memCheck.rows.length > 0 ? (memCheck.rows[0].role as string || "member") : tenant.role).toLowerCase();
-
-      const prRes = await db.execute(sql`SELECT role FROM profile_roles WHERE profile_id = ${userId}`);
-      const prRoles = prRes.rows.map((r: any) => (r.role as string || "").toLowerCase());
-
-      const availableRolesSet = new Set<string>(["Employee"]);
-      if (baseRole === "owner") {
-        availableRolesSet.add("Owner");
-        availableRolesSet.add("Admin");
-        availableRolesSet.add("Manager");
-      } else if (baseRole === "admin" || prRoles.includes("admin")) {
-        availableRolesSet.add("Admin");
+      if (tenant.role === "owner") {
+        roles = ["Owner", "Admin", "Employee"];
+      } else if (tenant.role === "admin") {
+        roles = ["Admin", "Employee"];
+      } else if (tenant.role === "manager") {
+        roles = ["Manager", "Employee"];
+      } else {
+        roles = ["Employee"];
       }
-      if (baseRole === "manager" || prRoles.includes("manager")) {
-        availableRolesSet.add("Manager");
-      }
-      roles = Array.from(availableRolesSet);
     } else {
       activeRole = "member";
       roles = ["Employee"];

@@ -18,7 +18,7 @@ import { useCompany } from "@/context/CompanyContext";
 interface AccountContextDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  currentMode?: "personal" | "management";
+  currentMode: "personal" | "management";
 }
 
 export function AccountContextDrawer({
@@ -31,78 +31,13 @@ export function AccountContextDrawer({
     activeCompanyId, 
     activeCompany, 
     activeRole, 
-    availableRoles,
-    switchRole,
     memberships, 
     switchCompany,
     currentUser,
-    isManagement,
-    activeMembership
+    isManagement
   } = useCompany();
 
   if (!isOpen) return null;
-
-  const canSwitchRole = Boolean(
-    (availableRoles && availableRoles.length > 1) ||
-    (activeMembership && ["owner", "admin", "manager"].includes(activeMembership.role?.toLowerCase() || ""))
-  );
-
-  // Kumpulkan role unik yang valid untuk dipilih
-  const selectableRoles = (() => {
-    const roles = new Set<string>(["member"]);
-    if (activeMembership?.role) {
-      roles.add(activeMembership.role.toLowerCase());
-    }
-    if (availableRoles && Array.isArray(availableRoles)) {
-      availableRoles.forEach((r) => roles.add(r.toLowerCase()));
-    }
-    return Array.from(roles);
-  })();
-
-  const getRoleDetails = (role: string) => {
-    const r = role.toLowerCase();
-    switch (r) {
-      case "owner":
-        return {
-          title: "Mode Pemilik (Owner)",
-          desc: "Akses penuh & pengaturan organisasi",
-          icon: Building2,
-        };
-      case "admin":
-        return {
-          title: "Mode Administrator",
-          desc: "Kelola perusahaan, karyawan & absensi",
-          icon: Building2,
-        };
-      case "manager":
-        return {
-          title: "Mode Manajer",
-          desc: "Kelola tim & operasional",
-          icon: Briefcase,
-        };
-      case "member":
-      default:
-        return {
-          title: "Mode Personal",
-          desc: "Absensi harian & data pribadi",
-          icon: User,
-        };
-    }
-  };
-
-  const handleSwitchRole = (newRole: string) => {
-    if (newRole.toLowerCase() === activeRole?.toLowerCase()) {
-      onClose();
-      return;
-    }
-    switchRole(newRole as any);
-    onClose();
-    if (newRole.toLowerCase() === "member") {
-      router.push("/dashboard");
-    } else {
-      router.push("/admin/dashboard");
-    }
-  };
 
   const formatRoleLabel = (role?: string | null) => {
     if (!role) return "Karyawan";
@@ -157,7 +92,7 @@ export function AccountContextDrawer({
               Akses & Perusahaan
             </h3>
             <p className="text-[12.5px] sm:text-[13px] text-[#6B7280] font-medium mt-1">
-              {canSwitchRole 
+              {isManagement 
                 ? "Kelola mode tampilan dan organisasi aktif." 
                 : "Kelola organisasi aktif."}
             </p>
@@ -172,8 +107,8 @@ export function AccountContextDrawer({
         </div>
 
         <div className="overflow-y-auto flex flex-col gap-5 pr-0.5">
-          {/* SECTION 1: MODE TAMPILAN (ROLE SWITCH) - Ditampilkan jika akun memiliki akses multi-role */}
-          {canSwitchRole && (
+          {/* SECTION 1: MODE TAMPILAN (ROLE SWITCH) - Hanya ditampilkan jika role memiliki akses manajemen */}
+          {isManagement && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[11px] font-bold text-[#8C9AA8] uppercase tracking-wider">
@@ -185,68 +120,109 @@ export function AccountContextDrawer({
               </div>
 
               <div className="flex flex-col gap-2.5">
-                {selectableRoles.map((role) => {
-                  const isActive = activeRole?.toLowerCase() === role.toLowerCase();
-                  const details = getRoleDetails(role);
-                  const Icon = details.icon;
-                  const isManagementRole = role !== "member";
+                {/* Mode Personal Card */}
+                {currentMode === "personal" ? (
+                  <div className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F4F9F6] border-[1.5px] border-[#356E3B] rounded-[20px] shadow-[0_2px_8px_rgba(53,110,59,0.06)]">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-12 h-12 rounded-[16px] bg-[#183B2B] flex items-center justify-center text-white shrink-0">
+                        <User className="w-5 h-5" strokeWidth={2} />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[#111827] text-[15px] font-bold leading-tight">
+                          Mode Personal
+                        </span>
+                        <span className="text-[#5C786C] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
+                          Absensi harian
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-7 h-7 rounded-full bg-[#183B2B] text-white flex items-center justify-center shrink-0 ml-3">
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => {
+                      onClose();
+                      router.push("/dashboard");
+                    }}
+                    className="flex items-center justify-between p-3.5 sm:p-4 bg-white hover:bg-gray-50/80 border border-[#E5E7EB] rounded-[20px] cursor-pointer transition-all active:scale-[0.99] group"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-12 h-12 rounded-[16px] bg-[#F8FAFC] border border-[#E2E8F0]/80 group-hover:bg-[#EAF3ED] flex items-center justify-center text-[#334155] group-hover:text-[#183B2B] shrink-0 transition-colors">
+                        <User className="w-5 h-5" strokeWidth={1.8} />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[#111827] text-[15px] font-bold leading-tight group-hover:text-[#183B2B] transition-colors">
+                          Mode Personal
+                        </span>
+                        <span className="text-[#6B7280] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
+                          Absensi harian
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-[12px] font-bold text-[#183B2B] bg-[#EDF4F0] px-3.5 py-1.5 rounded-full group-hover:bg-[#183B2B] group-hover:text-white transition-all shrink-0 ml-3">
+                      <span>Beralih</span>
+                      <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                    </div>
+                  </div>
+                )}
 
-                  return isActive ? (
-                    <div 
-                      key={role}
-                      className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F4F9F6] border-[1.5px] border-[#356E3B] rounded-[20px] shadow-[0_2px_8px_rgba(53,110,59,0.06)]"
-                    >
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="w-12 h-12 rounded-[16px] bg-[#183B2B] flex items-center justify-center text-white shrink-0 overflow-hidden border-2 border-[#1E4738]/20 ring-1 ring-[#1E4738]/10">
-                          {isManagementRole && activeCompany?.avatar_company_url ? (
-                            <img src={activeCompany.avatar_company_url} alt={activeCompany.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <Icon className="w-5 h-5" strokeWidth={2} />
-                          )}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[#111827] text-[15px] font-bold leading-tight">
-                            {details.title}
-                          </span>
-                          <span className="text-[#5C786C] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
-                            {details.desc}
-                          </span>
-                        </div>
+                {/* Mode Manajemen Card */}
+                {currentMode === "management" ? (
+                  <div className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F4F9F6] border-[1.5px] border-[#356E3B] rounded-[20px] shadow-[0_2px_8px_rgba(53,110,59,0.06)]">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-12 h-12 rounded-[16px] bg-[#183B2B] flex items-center justify-center text-white shrink-0 overflow-hidden border-2 border-[#1E4738]/20 ring-1 ring-[#1E4738]/10">
+                        {activeCompany?.avatar_company_url ? (
+                          <img src={activeCompany.avatar_company_url} alt={activeCompany.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Building2 className="w-5 h-5" strokeWidth={2} />
+                        )}
                       </div>
-                      <div className="w-7 h-7 rounded-full bg-[#183B2B] text-white flex items-center justify-center shrink-0 ml-3">
-                        <Check className="w-4 h-4 stroke-[2.5]" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[#111827] text-[15px] font-bold leading-tight">
+                          Mode Manajemen
+                        </span>
+                        <span className="text-[#5C786C] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
+                          Kelola Perusahaan & karyawan 
+                        </span>
                       </div>
                     </div>
-                  ) : (
-                    <div 
-                      key={role}
-                      onClick={() => handleSwitchRole(role)}
-                      className="flex items-center justify-between p-3.5 sm:p-4 bg-white hover:bg-gray-50/80 border border-[#E5E7EB] rounded-[20px] cursor-pointer transition-all active:scale-[0.99] group"
-                    >
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="w-12 h-12 rounded-[16px] bg-[#F8FAFC] border border-[#E2E8F0]/80 group-hover:bg-[#EAF3ED] flex items-center justify-center text-[#334155] group-hover:text-[#183B2B] shrink-0 transition-colors overflow-hidden">
-                          {isManagementRole && activeCompany?.avatar_company_url ? (
-                            <img src={activeCompany.avatar_company_url} alt={activeCompany.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <Icon className="w-5 h-5" strokeWidth={1.8} />
-                          )}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[#111827] text-[15px] font-bold leading-tight group-hover:text-[#183B2B] transition-colors">
-                            {details.title}
-                          </span>
-                          <span className="text-[#6B7280] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
-                            {details.desc}
-                          </span>
-                        </div>
+                    <div className="w-7 h-7 rounded-full bg-[#183B2B] text-white flex items-center justify-center shrink-0 ml-3">
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => {
+                      onClose();
+                      router.push("/admin/dashboard");
+                    }}
+                    className="flex items-center justify-between p-3.5 sm:p-4 bg-white hover:bg-gray-50/80 border border-[#E5E7EB] rounded-[20px] cursor-pointer transition-all active:scale-[0.99] group"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-12 h-12 rounded-[16px] bg-[#F8FAFC] border border-[#E2E8F0]/80 group-hover:bg-[#EAF3ED] flex items-center justify-center text-[#334155] group-hover:text-[#183B2B] shrink-0 transition-colors overflow-hidden border-2 border-[#1E4738]/20 ring-1 ring-[#1E4738]/10">
+                        {activeCompany?.avatar_company_url ? (
+                          <img src={activeCompany.avatar_company_url} alt={activeCompany.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Building2 className="w-5 h-5" strokeWidth={1.8} />
+                        )}
                       </div>
-                      <div className="flex items-center gap-1 text-[12px] font-bold text-[#183B2B] bg-[#EDF4F0] px-3.5 py-1.5 rounded-full group-hover:bg-[#183B2B] group-hover:text-white transition-all shrink-0 ml-3">
-                        <span>Beralih</span>
-                        <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[#111827] text-[15px] font-bold leading-tight group-hover:text-[#183B2B] transition-colors">
+                          Mode Manajemen
+                        </span>
+                        <span className="text-[#6B7280] text-[12px] sm:text-[12.5px] font-normal mt-0.5 leading-normal">
+                          Kelola Perusahaan & karyawan 
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
+                    <div className="flex items-center gap-1 text-[12px] font-bold text-[#183B2B] bg-[#EDF4F0] px-3.5 py-1.5 rounded-full group-hover:bg-[#183B2B] group-hover:text-white transition-all shrink-0 ml-3">
+                      <span>Beralih</span>
+                      <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

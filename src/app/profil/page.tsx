@@ -12,15 +12,14 @@ import {
   ArrowLeftRight,
   Loader2,
   ShieldCheck, 
-  Code2,
-  FileText
+  Code2
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
-import { getActiveCompanyId, setActiveCompanyId, clearAuthSession, getApiUrl } from "@/lib/api";
+import { getActiveCompanyId, setActiveCompanyId, clearAuthSession, logoutUser, getApiUrl } from "@/lib/api";
 import { ProfileSkeleton } from "@/components/CardSkeleton";
 
 export default function ProfilPage() {
@@ -126,8 +125,7 @@ export default function ProfilPage() {
     });
     if (!confirmed) return;
 
-    clearAuthSession();
-    router.replace("/login");
+    logoutUser("/login");
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -341,34 +339,16 @@ export default function ProfilPage() {
           </div>
         </div>
 
-        {/* Privasi & Ketentuan Layanan Card */}
+        {/* Privasi & Persetujuan Data Card */}
         <div className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm overflow-hidden flex flex-col">
           <div className="p-5 flex items-center gap-3 border-b border-[#F3F4F6]">
             <div className="w-[34px] h-[34px] rounded-full bg-[#E8F3EB] flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
+              <HelpCircle className="w-4 h-4 text-[#2D5A3F]" strokeWidth={2.5} />
             </div>
-            <h2 className="text-[#111827] text-[15px] font-bold">Privasi &amp; Ketentuan Layanan</h2>
+            <h2 className="text-[#111827] text-[15px] font-bold">Privasi & Perlindungan Data</h2>
           </div>
 
-          <div className="flex flex-col divide-y divide-[#F3F4F6]">
-            <div 
-              onClick={() => router.push("/syarat-ketentuan")}
-              className="p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-9 flex justify-center">
-                  <FileText className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={1.75} />
-                </div>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#111827] text-[14px] font-bold">Syarat dan Ketentuan</span>
-                  </div>
-                  <span className="text-[#6B7280] text-[12px]">Ketentuan layanan, akun, dan aturan presensi kerja</span>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
-            </div>
-
+          <div className="flex flex-col">
             <div 
               onClick={() => router.push("/kebijakan-privasi")}
               className="p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
@@ -379,7 +359,7 @@ export default function ProfilPage() {
                 </div>
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
-                    <span className="text-[#111827] text-[14px] font-bold">Kebijakan Privasi</span>
+                    <span className="text-[#111827] text-[14px] font-bold">Kebijakan Aplikasi</span>
                   </div>
                   <span className="text-[#6B7280] text-[12px]">Pelajari transparansi pemrosesan PII dan hak privasi Anda</span>
                 </div>
@@ -389,26 +369,24 @@ export default function ProfilPage() {
           </div>
         </div>
 
-        {/* Platform Admin Card (Khusus Developer / Platform Owner) */}
-        {(user?.isDeveloper || currentUser?.isDeveloper) && (
-          <div 
-            onClick={() => router.push("/platform-admin/overview")}
-            className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-9 flex justify-center">
-                <Code2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <span className="text-[#111827] text-[14px] font-bold">Platform Admin</span>
-                </div>
-                <span className="text-[#6B7280] text-[12px]">Kelola seluruh perusahaan, pengguna & platform</span>
-              </div>
+        {/* Platform Admin Card */}
+        <div 
+          onClick={() => router.push("/platform-admin/overview")}
+          className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-sm p-5 flex items-center justify-between active:bg-gray-50 cursor-pointer transition-colors"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-9 flex justify-center">
+              <Code2 className="w-[22px] h-[22px] text-[#356E3B]" strokeWidth={2} />
             </div>
-            <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="text-[#111827] text-[14px] font-bold">Platform Admin</span>
+              </div>
+              <span className="text-[#6B7280] text-[12px]">Kelola seluruh perusahaan, pengguna & platform</span>
+            </div>
           </div>
-        )}
+          <ChevronRight className="w-5 h-5 text-[#9CA3AF]" strokeWidth={2} />
+        </div>
 
         {/* Keluar dari Akun Card */}
         <div 

@@ -38,57 +38,6 @@ export function setActiveCompanyId(companyId: string | null): void {
   } catch {}
 }
 
-function getRoleStorageKey(companyId?: string | null): string {
-  let userId = "guest";
-  if (typeof window !== "undefined") {
-    try {
-      const uStr = localStorage.getItem("user");
-      if (uStr) {
-        const u = JSON.parse(uStr);
-        if (u?.id) userId = u.id;
-      }
-    } catch {}
-  }
-  const cleanComp = (companyId || getActiveCompanyId() || "default").trim();
-  return `activeRole_${userId}_${cleanComp}`;
-}
-
-export function getActiveRole(companyId?: string | null): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const key = getRoleStorageKey(companyId);
-    // 1. Check tab-scoped sessionStorage first
-    const sessionVal = sessionStorage.getItem(key);
-    if (sessionVal && sessionVal.trim() !== "" && sessionVal !== "undefined" && sessionVal !== "null") {
-      return sessionVal.trim().toLowerCase();
-    }
-    // 2. Fallback to localStorage
-    const localVal = localStorage.getItem(key);
-    if (localVal && localVal.trim() !== "" && localVal !== "undefined" && localVal !== "null") {
-      try {
-        sessionStorage.setItem(key, localVal.trim().toLowerCase());
-      } catch {}
-      return localVal.trim().toLowerCase();
-    }
-  } catch {}
-  return null;
-}
-
-export function setActiveRole(companyId: string | null, role: string | null): void {
-  if (typeof window === "undefined") return;
-  try {
-    const key = getRoleStorageKey(companyId);
-    if (role && role.trim() !== "" && role !== "undefined" && role !== "null") {
-      const cleanRole = role.trim().toLowerCase();
-      sessionStorage.setItem(key, cleanRole);
-      localStorage.setItem(key, cleanRole);
-    } else {
-      sessionStorage.removeItem(key);
-      localStorage.removeItem(key);
-    }
-  } catch {}
-}
-
 export function setAuthSession(token: string, user: any, companyId?: string | null): void {
   if (typeof window === "undefined") return;
   try {
@@ -127,23 +76,11 @@ export function clearAuthSession(): void {
       const keysToRemove: string[] = [];
       for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
-        if (key && (key.startsWith("ack_seen_") || key.startsWith("activeRole_") || key === "activeCompanyId")) {
+        if (key && (key.startsWith("ack_seen_") || key === "activeCompanyId")) {
           keysToRemove.push(key);
         }
       }
       keysToRemove.forEach((k) => sessionStorage.removeItem(k));
-    } catch {}
-
-    // Bersihkan juga activeRole_* dari localStorage
-    try {
-      const localRoleKeys: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith("activeRole_")) {
-          localRoleKeys.push(key);
-        }
-      }
-      localRoleKeys.forEach((k) => localStorage.removeItem(k));
     } catch {}
 
     setActiveCompanyId(null);
@@ -159,6 +96,24 @@ export function clearAuthSession(): void {
   }
 }
 
+/**
+ * Melakukan logout pengguna secara menyeluruh tanpa memicu flash error page 401.
+ * Mengaktifkan status transisi logout, membersihkan state/cache, dan mengarahkan
+ * langsung ke targetUrl (default: /login) secara bersih.
+ */
+export function logoutUser(targetUrl: string = "/login"): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem("isLoggingOut", "true");
+    window.dispatchEvent(new CustomEvent("authLoggingOut"));
+    clearAuthSession();
+    window.location.replace(targetUrl);
+  } catch (e) {
+    console.error("Failed during logout:", e);
+    window.location.href = targetUrl;
+  }
+}
+
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("accessToken") || null;
@@ -167,16 +122,12 @@ export function getAuthToken(): string | null {
 export function getAuthHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
   const token = getAuthToken();
   const companyId = getActiveCompanyId();
-  const role = getActiveRole(companyId);
   const headers: Record<string, string> = { ...customHeaders };
   if (token && !headers["Authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
   }
   if (token && companyId && !headers["x-company-id"]) {
     headers["x-company-id"] = companyId;
-  }
-  if (token && role && !headers["x-role"]) {
-    headers["x-role"] = role;
   }
   return headers;
 }

@@ -70,11 +70,18 @@ export async function verifyPlatformAdmin(): Promise<PlatformApiResponse<Platfor
 }
 
 /**
- * Logout dari sesi Platform Admin
+ * Logout dari sesi Platform Admin tanpa flash error page
  */
 export function logoutPlatformAdmin(): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("user");
-  window.location.href = "/platform-admin/login";
+  try {
+    sessionStorage.setItem("isLoggingOut", "true");
+    window.dispatchEvent(new CustomEvent("authLoggingOut"));
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
+    window.location.replace("/platform-admin/login");
+  } catch (e) {
+    window.location.href = "/platform-admin/login";
+  }
 }
+
