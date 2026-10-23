@@ -531,52 +531,6 @@ function BantuanContent() {
           })}
         </div>
 
-        {/* GPS Diagnostic Widget Card (Interaktif untuk diagnosa mandiri pengguna) */}
-        <div className="bg-white rounded-[22px] border border-[#D1D5DB]/80 p-4.5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col gap-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
-                <Compass className="w-5 h-5" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[#111827] text-[13.5px] font-bold">Diagnosa Akurasi GPS Anda</span>
-                <span className="text-[#6B7280] text-[11.5px]">Uji kekuatan sinyal & izin lokasi perangkat saat ini</span>
-              </div>
-            </div>
-            {gpsDiagnostic.status === "success" && (
-              <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#E8F3EB] text-[#2D5A3F] shrink-0">
-                Aktif
-              </span>
-            )}
-          </div>
-
-          <div className={`text-[12px] p-3 rounded-xl leading-relaxed ${
-            gpsDiagnostic.status === "success"
-              ? "bg-[#F0FDF4] text-[#166534] border border-[#BBF7D0]"
-              : gpsDiagnostic.status === "error"
-              ? "bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA]"
-              : "bg-[#F9FAFB] text-[#4B5563] border border-[#F3F4F6]"
-          }`}>
-            <p>{gpsDiagnostic.message}</p>
-            {gpsDiagnostic.status === "success" && gpsDiagnostic.accuracy && (
-              <div className="mt-2 pt-2 border-t border-[#BBF7D0]/60 flex items-center justify-between text-[11px] font-medium text-[#166534]">
-                <span>Tingkat Akurasi: ±{gpsDiagnostic.accuracy} meter</span>
-                <span>Waktu Uji: {gpsDiagnostic.timestamp}</span>
-              </div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={handleTestGPS}
-            disabled={isCheckingGPS}
-            className="w-full py-2.5 px-4 rounded-xl bg-[#356E3B] hover:bg-[#2A582F] active:scale-[0.99] text-white text-[12.5px] font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-60 cursor-pointer shadow-xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isCheckingGPS ? "animate-spin" : ""}`} />
-            <span>{isCheckingGPS ? "Sedang Menguji Lokasi..." : "Uji Akurasi GPS Sekarang"}</span>
-          </button>
-        </div>
-
         {/* Counter Info */}
         <div className="flex items-center justify-between text-[12px] text-[#5C786C] px-1 font-medium mt-1">
           <span>Menampilkan {filteredFAQs.length} pertanyaan</span>
