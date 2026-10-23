@@ -15,11 +15,13 @@ export const PUBLIC_EXACT_ROUTES = new Set([
   "/unauthorized",
   "/admin/no-authorized",
   "/kebijakan-privasi",
+  "/syarat-ketentuan",
 ]);
 
 export const PUBLIC_PREFIXES = [
   "/login/",
   "/kebijakan-privasi/",
+  "/syarat-ketentuan/",
 ];
 
 /**
@@ -40,6 +42,9 @@ export const KNOWN_APP_PREFIXES = [
   "/buat-perusahaan",
   "/gabung-perusahaan",
   "/admin",
+  "/bantuan",
+  "/faq",
+  "/syarat-ketentuan",
 ];
 
 export function isPlatformAdminPath(pathname: string | null | undefined): boolean {

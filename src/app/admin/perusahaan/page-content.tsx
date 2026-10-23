@@ -1224,23 +1224,6 @@ export default function KelolaPerusahaanPage() {
           </div>
         </div>
 
-        {/* Banner Pusat Bantuan Admin */}
-        <div 
-          onClick={() => router.push("/bantuan?from=admin")}
-          className="bg-white rounded-[24px] border border-[#356E3B]/20 p-4.5 flex items-center justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:bg-gray-50/70 transition-colors active:scale-[0.99]"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
-              <HelpCircle className="w-5 h-5" strokeWidth={2.2} />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[#111827] text-[13.5px] font-bold">Pusat Bantuan & Panduan</span>
-              <span className="text-[#6B7280] text-[11.5px]">Pelajari panduan geofencing radius, jam kerja & QR Code</span>
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
-        </div>
-
       </div>
 
       {/* Modal Ubah Informasi Perusahaan */}
