@@ -16,12 +16,16 @@ export const PUBLIC_EXACT_ROUTES = new Set([
   "/admin/no-authorized",
   "/kebijakan-privasi",
   "/syarat-ketentuan",
+  "/bantuan",
+  "/faq",
 ]);
 
 export const PUBLIC_PREFIXES = [
   "/login/",
   "/kebijakan-privasi/",
   "/syarat-ketentuan/",
+  "/bantuan/",
+  "/faq/",
 ];
 
 /**

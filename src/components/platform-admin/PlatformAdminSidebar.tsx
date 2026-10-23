@@ -15,6 +15,7 @@ import {
   Shield,
   X,
   ExternalLink,
+  HelpCircle,
 } from "lucide-react";
 import { PlatformOwnerProfile, logoutPlatformAdmin } from "@/lib/platformAdminApi";
 import { useDialog } from "@/context/DialogContext";
@@ -167,6 +168,19 @@ export function PlatformAdminSidebar({
             title="Buka Aplikasi Absenin Utama"
           >
             <span className="truncate">Ke Aplikasi Utama</span>
+            <ExternalLink className="w-3.5 h-3.5 text-white/50" />
+          </Link>
+
+          <Link
+            href="/bantuan?from=admin"
+            target="_blank"
+            className="flex items-center justify-between px-3.5 py-2 rounded-[14px] text-[12.5px] text-white/70 hover:bg-white/10 hover:text-white transition-all font-medium mt-1"
+            title="Pusat Bantuan & Panduan Sistem"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <HelpCircle className="w-3.5 h-3.5 text-[#7FAF8B]" />
+              <span className="truncate">Pusat Bantuan</span>
+            </div>
             <ExternalLink className="w-3.5 h-3.5 text-white/50" />
           </Link>
         </div>

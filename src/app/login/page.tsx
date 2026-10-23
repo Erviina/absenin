@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useGoogleLogin } from "@react-oauth/google";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck, HelpCircle } from "lucide-react";
 
 import { getPersonalModePreference, isTokenValid, getSafeInternalRedirect } from "@/lib/personalMode";
 import { useDialog } from "@/context/DialogContext";
@@ -218,6 +218,18 @@ function LoginForm() {
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
 
+      {/* Top Help Button */}
+      <div className="absolute top-5 right-5 z-30">
+        <Link
+          href="/bantuan"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 hover:bg-white text-[#1E4738] text-[12px] font-semibold shadow-xs border border-white/60 backdrop-blur-xs transition-all hover:scale-105 active:scale-95"
+          title="Buka Pusat Bantuan & FAQ"
+        >
+          <HelpCircle className="w-3.5 h-3.5 text-[#356E3B]" />
+          <span>Bantuan</span>
+        </Link>
+      </div>
+
       {/* Top Section */}
       <div className="flex flex-col items-center pt-20 px-6 z-10">
         <AbsenInLogo size="md" className="mb-8" />
@@ -310,6 +322,17 @@ function LoginForm() {
                 Kebijakan Privasi
               </Link>
             </p>
+
+            {/* Navigasi ke Pusat Bantuan & FAQ */}
+            <div className="mt-3 pt-3 border-t border-gray-100 w-full flex items-center justify-center">
+              <Link
+                href="/bantuan"
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#5C786C] hover:text-[#1E4738] transition-colors"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-[#356E3B]" />
+                <span>Butuh Bantuan? Pusat Bantuan &amp; FAQ</span>
+              </Link>
+            </div>
           </div>
         </div>
       </div>

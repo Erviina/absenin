@@ -18,7 +18,8 @@ import {
   Plus,
   CheckCircle2,
   AlertCircle,
-  Loader2 
+  Loader2,
+  HelpCircle 
 } from "lucide-react";
 import { sanitizeText, truncateText } from "@/lib/sanitize";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -675,17 +676,27 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Notifikasi Button */}
-        <button 
-          className="w-10 h-10 rounded-full bg-white border border-[#E5E7EB] shadow-xs flex items-center justify-center relative hover:bg-[#F9FAFB] active:scale-95 transition-transform shrink-0 cursor-pointer"
-          onClick={() => router.push("/notifikasi")}
-          title="Notifikasi"
-        >
-          <Bell className="w-5 h-5 text-[#1E4738]" strokeWidth={1.8} />
-          {unreadCount > 0 && (
-            <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#EF4444] border-2 border-white rounded-full"></div>
-          )}
-        </button>
+        {/* Action Buttons: Pusat Bantuan & Notifikasi */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button 
+            className="w-10 h-10 rounded-full bg-white border border-[#E5E7EB] shadow-xs flex items-center justify-center relative hover:bg-[#F9FAFB] active:scale-95 transition-transform shrink-0 cursor-pointer"
+            onClick={() => router.push("/bantuan")}
+            title="Pusat Bantuan & Panduan"
+          >
+            <HelpCircle className="w-5 h-5 text-[#1E4738]" strokeWidth={1.8} />
+          </button>
+
+          <button 
+            className="w-10 h-10 rounded-full bg-white border border-[#E5E7EB] shadow-xs flex items-center justify-center relative hover:bg-[#F9FAFB] active:scale-95 transition-transform shrink-0 cursor-pointer"
+            onClick={() => router.push("/notifikasi")}
+            title="Notifikasi"
+          >
+            <Bell className="w-5 h-5 text-[#1E4738]" strokeWidth={1.8} />
+            {unreadCount > 0 && (
+              <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#EF4444] border-2 border-white rounded-full"></div>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Workspace Context Bar (Tenant & Mode Akses Minimalis) */}
