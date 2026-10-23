@@ -162,7 +162,11 @@ export default function DashboardPage() {
 
   // Listener event pergantian perusahaan untuk mereset data lama seketika tanpa jeda
   useEffect(() => {
-    const handleCompanyChanged = () => {
+    const handleCompanyChanged = (e: any) => {
+      const newCompId = e?.detail?.companyId;
+      if (newCompId) {
+        activeFetchCompanyIdRef.current = newCompId;
+      }
       setNews([]);
       setTasks([]);
       setAgendas([]);
@@ -195,7 +199,7 @@ export default function DashboardPage() {
     const handleNotificationsUpdated = (e: any) => {
       const newCount = typeof e.detail?.unreadCount === "number" ? e.detail.unreadCount : 0;
       setUnreadCount(newCount);
-      const compId = activeCompanyId || getActiveCompanyId();
+      const compId = getActiveCompanyId() || activeCompanyId;
       setCachedData(buildCacheKey("dashboard_notif", compId), newCount);
     };
 
@@ -216,7 +220,7 @@ export default function DashboardPage() {
     if (isCompanyLoading) return;
 
     let isSubscribed = true;
-    const compId = activeCompanyId || getActiveCompanyId();
+    const compId = getActiveCompanyId() || activeCompanyId;
     activeFetchCompanyIdRef.current = compId;
 
     // Reset data kartu HANYA saat perusahaan benar-benar berganti ke ID lain

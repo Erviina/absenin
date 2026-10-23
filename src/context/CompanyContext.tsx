@@ -61,12 +61,17 @@ const MEMBERSHIPS_CACHE_KEY = "companyMemberships";
 export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [memberships, setMemberships] = useState<CompanyMembership[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(getActiveCompanyId);
+  const activeCompanyIdRef = useRef<string | null>(getActiveCompanyId());
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [companyError, setCompanyError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const inFlightPromiseRef = useRef<Promise<void> | null>(null);
   const inFlightTokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    activeCompanyIdRef.current = activeCompanyId;
+  }, [activeCompanyId]);
 
   const updateCurrentUser = useCallback((user: any) => {
     setCurrentUser(user);
@@ -118,6 +123,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       }
       if (storedActiveId) {
+        activeCompanyIdRef.current = storedActiveId;
         setActiveCompanyId(storedActiveId);
       }
     } catch (e) {
@@ -343,8 +349,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
         setMemberships(activeList);
 
-        // Validasi activeCompanyId terhadap membership yang benar-benar aktif
-        const storedId = activeCompanyId || getActiveCompanyId();
+        // Validasi activeCompanyId terhadap membership yang benar-benar aktif.
+        // Utamakan getActiveCompanyId() dan activeCompanyIdRef agar state atau respons lama tidak menimpa switch terbaru.
+        const storedId = getActiveCompanyId() || activeCompanyIdRef.current || activeCompanyId;
         let matched = storedId ? activeList.find((m) => m.company_id === storedId) : null;
 
         // Jika storedId tidak cocok dengan membership user saat ini (misal sisa sesi akun lain),
@@ -373,6 +380,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         if (matched) {
           // Perusahaan aktif valid dan dikonfirmasi oleh server
           const matchedId = matched.company_id;
+          activeCompanyIdRef.current = matchedId;
           setActiveCompanyId(matchedId);
           setActiveCompanyIdStorage(matchedId);
           try {
@@ -392,6 +400,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         } else if (storedId && !matched) {
           // Perusahaan yang tersimpan sudah TIDAK AKTIF dan user memiliki multi-perusahaan tanpa pilihan pasti
           console.warn(`Perusahaan tersimpan ${storedId} tidak lagi aktif untuk user.`);
+          activeCompanyIdRef.current = null;
           setActiveCompanyId(null);
           setActiveCompanyIdStorage(null);
           try {
@@ -422,6 +431,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
           } catch {}
 
           const defaultId = defaultChoice.company_id;
+          activeCompanyIdRef.current = defaultId;
           setActiveCompanyId(defaultId);
           setActiveCompanyIdStorage(defaultId);
           try {
@@ -439,6 +449,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
             }
           } catch {}
         } else {
+          activeCompanyIdRef.current = null;
           setActiveCompanyId(null);
           setActiveCompanyIdStorage(null);
         }
@@ -477,6 +488,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       inFlightPromiseRef.current = null;
       inFlightTokenRef.current = null;
       setMemberships([]);
+      activeCompanyIdRef.current = null;
       setActiveCompanyId(null);
       setCurrentUser(null);
       setIsLoading(false);
@@ -496,6 +508,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         setCurrentUser(newUser);
       }
       const newCompanyId = newUser?.company?.id || e?.detail?.companyId || null;
+      activeCompanyIdRef.current = newCompanyId;
       setActiveCompanyId(newCompanyId);
       setCompanyError(null);
 
@@ -570,6 +583,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (typeof window !== "undefined") {
+      activeCompanyIdRef.current = companyId;
       setActiveCompanyIdStorage(companyId);
       setActiveCompanyId(companyId);
 

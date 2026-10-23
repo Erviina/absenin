@@ -4,29 +4,29 @@ import React, { useEffect, useState, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { isTokenValid } from "@/lib/personalMode";
 import { UnauthorizedView } from "@/components/UnauthorizedView";
-
-const PUBLIC_PATHS = [
-  "/",
-  "/login",
-  "/login/onboard",
-  "/unauthorized",
-  "/admin/no-authorized",
-  "/kebijakan-privasi",
-  "/platform-admin/login",
-];
+import { 
+  isPublicPath, 
+  isPlatformAdminPath, 
+  isInvalidRoute 
+} from "@/lib/routeUtils";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [hasToken, setHasToken] = useState<boolean | null>(null);
   const [is403Revoked, setIs403Revoked] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const isPublicRoute = useMemo(() => {
+  // Klasifikasi tipe rute
+  const isPublic = useMemo(() => {
     if (!pathname) return true;
-    if (PUBLIC_PATHS.includes(pathname)) return true;
-    if (pathname.startsWith("/login/")) return true;
-    if (pathname.startsWith("/kebijakan-privasi/")) return true;
-    return false;
+    if (pathname === "/syarat-ketentuan" || pathname.startsWith("/syarat-ketentuan/")) return true;
+    return isPublicPath(pathname);
+  }, [pathname]);
+  const isPlatformAdmin = useMemo(() => isPlatformAdminPath(pathname), [pathname]);
+  const isInvalid = useMemo(() => {
+    if (pathname === "/syarat-ketentuan" || pathname?.startsWith("/syarat-ketentuan/")) return false;
+    return isInvalidRoute(pathname);
   }, [pathname]);
 
   // Periksa token lokal setelah hydration client

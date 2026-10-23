@@ -12,7 +12,8 @@ import {
   ArrowLeftRight,
   Loader2,
   ShieldCheck, 
-  Code2
+  Code2,
+  HelpCircle
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";

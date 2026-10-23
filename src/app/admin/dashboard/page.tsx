@@ -53,7 +53,11 @@ export default function AdminDashboardPage() {
 
   // Listener event pergantian perusahaan untuk mereset dashboard admin seketika
   useEffect(() => {
-    const handleCompanyChanged = () => {
+    const handleCompanyChanged = (e: any) => {
+      const newCompId = e?.detail?.companyId;
+      if (newCompId) {
+        activeFetchCompanyIdRef.current = newCompId;
+      }
       setCompany(null);
       setAttendanceStats(null);
       setLeaveStats(null);
@@ -241,7 +245,7 @@ export default function AdminDashboardPage() {
   };
 
   const fetchDashboardData = async () => {
-    const compId = activeCompanyId || getActiveCompanyId();
+    const compId = getActiveCompanyId() || activeCompanyId;
     activeFetchCompanyIdRef.current = compId;
 
     try {
