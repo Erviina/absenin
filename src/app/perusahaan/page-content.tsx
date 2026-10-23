@@ -24,8 +24,10 @@ import {
   Navigation,
   Plus,
   Minus,
-  Target
-, Loader2 } from "lucide-react";
+  Target,
+  Loader2,
+  HelpCircle
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { TopBar } from "@/components/TopBar";

@@ -19,7 +19,8 @@ import {
   Bell,
   AlertCircle,
   RefreshCw,
-  Loader2
+  Loader2,
+  HelpCircle
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { ViewAllButton } from "@/components/ViewAllButton";
