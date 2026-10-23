@@ -29,7 +29,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 import { getPersonalModePreference } from "@/lib/personalMode";
-import { getActiveCompanyId, getApiUrl } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl, getAuthHeaders } from "@/lib/api";
 import { 
   evaluateSchedule, 
   getNextCheckInSchedule, 
@@ -177,6 +177,23 @@ export default function DashboardPage() {
     return () => window.removeEventListener("companyChanged", handleCompanyChanged);
   }, []);
 
+  // Listener event pergantian role untuk mereset data lama seketika tanpa jeda
+  useEffect(() => {
+    const handleRoleChanged = () => {
+      setNews([]);
+      setTasks([]);
+      setAgendas([]);
+      setAttendanceStatus(null);
+      setCompanySchedule(null);
+      setAttendanceError(false);
+      setIsLoading(true);
+      setIsAttendanceLoading(true);
+      setIsTasksAgendasLoading(true);
+    };
+    window.addEventListener("roleChanged", handleRoleChanged);
+    return () => window.removeEventListener("roleChanged", handleRoleChanged);
+  }, []);
+
   // Listener event pembersihan atau pembaruan sesi autentikasi dan notifikasi untuk mereset dashboard seketika
   useEffect(() => {
     const handleAuthChange = () => {
@@ -242,10 +259,7 @@ export default function DashboardPage() {
         }
 
         const requestToken = token;
-        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-        if (compId) {
-          headers["x-company-id"] = compId;
-        }
+        const headers = getAuthHeaders(compId ? { "x-company-id": compId } : {});
 
         const newsCacheKey = buildCacheKey("dashboard_news", compId);
         const tasksCacheKey = buildCacheKey("dashboard_tasks", compId);
@@ -456,12 +470,10 @@ export default function DashboardPage() {
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, completed: nextCompleted } : t)));
 
     try {
-      const token = localStorage.getItem("accessToken");
-      const headers: Record<string, string> = {
+      const headers = getAuthHeaders({
         "Content-Type": "application/json",
-        Authorization: "Bearer " + token,
-      };
-      if (activeCompanyId) headers["x-company-id"] = activeCompanyId;
+        ...(activeCompanyId ? { "x-company-id": activeCompanyId } : {})
+      });
 
       await fetch(getApiUrl(`/tasks/${taskId}`), {
         method: "PATCH",

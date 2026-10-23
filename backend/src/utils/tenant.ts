@@ -8,11 +8,62 @@ export interface TenantContext {
   isManagement: boolean;
 }
 
+export async function determineEffectiveRole(
+  userId: string,
+  baseRole: TenantContext["role"],
+  requestedRoleHeader?: string
+): Promise<{ role: TenantContext["role"]; isManagement: boolean }> {
+  // Base allowed roles
+  const allowed = new Set<string>(["member"]);
+  if (baseRole === "owner") {
+    allowed.add("owner");
+    allowed.add("admin");
+    allowed.add("manager");
+  } else if (baseRole === "admin") {
+    allowed.add("admin");
+    allowed.add("manager");
+  } else if (baseRole === "manager") {
+    allowed.add("manager");
+  }
+
+  // Cross-check profile_roles in database
+  try {
+    const prRes = await db.execute(sql`
+      SELECT role FROM profile_roles WHERE profile_id = ${userId}
+    `);
+    for (const r of prRes.rows) {
+      const prRole = (r.role as string || "").toLowerCase();
+      if (prRole === "admin") allowed.add("admin");
+      if (prRole === "manager") allowed.add("manager");
+    }
+  } catch {}
+
+  if (requestedRoleHeader && typeof requestedRoleHeader === "string") {
+    let norm = requestedRoleHeader.toLowerCase().trim();
+    if (norm === "employee") norm = "member";
+    if (allowed.has(norm)) {
+      const chosenRole = norm as TenantContext["role"];
+      return {
+        role: chosenRole,
+        isManagement: ["owner", "admin", "manager"].includes(chosenRole),
+      };
+    }
+    // If client requested an unauthorized role, reject privilege escalation.
+    // Fall back strictly to baseRole
+  }
+
+  return {
+    role: baseRole,
+    isManagement: ["owner", "admin", "manager"].includes(baseRole),
+  };
+}
+
 export async function resolveTenant(
   req: Request,
   userId: string
 ): Promise<TenantContext | null> {
   const headerCompanyId = req.headers ? (req.headers["x-company-id"] as string | undefined) : undefined;
+  const headerRole = req.headers ? ((req.headers["x-role"] || req.headers["x-active-role"]) as string | undefined) : undefined;
   const queryCompanyId = req.query?.company_id as string | undefined;
   const bodyCompanyId = req.body?.company_id as string | undefined;
   const rawRequested = headerCompanyId || queryCompanyId || bodyCompanyId;
@@ -34,10 +85,12 @@ export async function resolveTenant(
 
     if (memRes.rows.length > 0) {
       const rawRole = (memRes.rows[0].role as string || "member").toLowerCase();
-      let role: TenantContext["role"] = "member";
-      if (rawRole === "owner") role = "owner";
-      else if (rawRole === "admin") role = "admin";
-      else if (rawRole === "manager") role = "manager";
+      let baseRole: TenantContext["role"] = "member";
+      if (rawRole === "owner") baseRole = "owner";
+      else if (rawRole === "admin") baseRole = "admin";
+      else if (rawRole === "manager") baseRole = "manager";
+
+      const roleResult = await determineEffectiveRole(userId, baseRole, headerRole);
 
       // Keep profiles.company_id in sync with currently active verified company
       db.execute(sql`
@@ -46,8 +99,8 @@ export async function resolveTenant(
 
       return {
         companyId: requestedCompanyId,
-        role,
-        isManagement: ["owner", "admin", "manager"].includes(role),
+        role: roleResult.role,
+        isManagement: roleResult.isManagement,
       };
     }
 
@@ -56,14 +109,16 @@ export async function resolveTenant(
       SELECT id FROM companies WHERE id = ${requestedCompanyId} AND created_by = ${userId} AND deleted_at IS NULL LIMIT 1
     `);
     if (ownerCheck.rows.length > 0) {
+      const roleResult = await determineEffectiveRole(userId, "owner", headerRole);
+
       db.execute(sql`
         UPDATE profiles SET company_id = ${requestedCompanyId} WHERE id = ${userId} AND (company_id IS NULL OR company_id != ${requestedCompanyId})
       `).catch(console.error);
 
       return {
         companyId: requestedCompanyId,
-        role: "owner",
-        isManagement: true,
+        role: roleResult.role,
+        isManagement: roleResult.isManagement,
       };
     }
 
@@ -88,15 +143,17 @@ export async function resolveTenant(
   if (profileMemRes.rows.length > 0 && profileMemRes.rows[0].company_id) {
     const cid = profileMemRes.rows[0].company_id as string;
     const rawRole = (profileMemRes.rows[0].role as string || "member").toLowerCase();
-    let role: TenantContext["role"] = "member";
-    if (rawRole === "owner") role = "owner";
-    else if (rawRole === "admin") role = "admin";
-    else if (rawRole === "manager") role = "manager";
+    let baseRole: TenantContext["role"] = "member";
+    if (rawRole === "owner") baseRole = "owner";
+    else if (rawRole === "admin") baseRole = "admin";
+    else if (rawRole === "manager") baseRole = "manager";
+
+    const roleResult = await determineEffectiveRole(userId, baseRole, headerRole);
 
     return {
       companyId: cid,
-      role,
-      isManagement: ["owner", "admin", "manager"].includes(role),
+      role: roleResult.role,
+      isManagement: roleResult.isManagement,
     };
   }
 
@@ -115,10 +172,12 @@ export async function resolveTenant(
     const row = activeMemRes.rows[0];
     const cid = row.company_id as string;
     const rawRole = (row.role as string || "member").toLowerCase();
-    let role: TenantContext["role"] = "member";
-    if (rawRole === "owner") role = "owner";
-    else if (rawRole === "admin") role = "admin";
-    else if (rawRole === "manager") role = "manager";
+    let baseRole: TenantContext["role"] = "member";
+    if (rawRole === "owner") baseRole = "owner";
+    else if (rawRole === "admin") baseRole = "admin";
+    else if (rawRole === "manager") baseRole = "manager";
+
+    const roleResult = await determineEffectiveRole(userId, baseRole, headerRole);
 
     // Keep profiles.company_id in sync if empty or different
     db.execute(sql`
@@ -127,8 +186,8 @@ export async function resolveTenant(
 
     return {
       companyId: cid,
-      role,
-      isManagement: ["owner", "admin", "manager"].includes(role),
+      role: roleResult.role,
+      isManagement: roleResult.isManagement,
     };
   }
 

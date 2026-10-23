@@ -3,7 +3,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { clearPersonalModePreference } from "@/lib/personalMode";
-import { getActiveCompanyId, setActiveCompanyId as setActiveCompanyIdStorage, clearAuthSession, getApiUrl } from "@/lib/api";
+import { 
+  getActiveCompanyId, 
+  setActiveCompanyId as setActiveCompanyIdStorage, 
+  getActiveRole, 
+  setActiveRole as setActiveRoleStorage, 
+  clearAuthSession, 
+  getApiUrl 
+} from "@/lib/api";
 
 export type CompanyCategoryCode = "community" | "organization" | "business";
 
@@ -15,6 +22,34 @@ export interface CompanyCategory {
 }
 
 export type CompanyRole = "owner" | "admin" | "manager" | "member";
+
+export function getAllowedRoles(membership?: CompanyMembership | null, currentUser?: any): CompanyRole[] {
+  if (!membership) return [];
+  const rolesSet = new Set<CompanyRole>(["member"]);
+  const base = (membership.role || "member").toLowerCase() as CompanyRole;
+  if (base === "owner") {
+    rolesSet.add("owner");
+    rolesSet.add("admin");
+    rolesSet.add("manager");
+  } else if (base === "admin") {
+    rolesSet.add("admin");
+    rolesSet.add("manager");
+  } else if (base === "manager") {
+    rolesSet.add("manager");
+  }
+
+  // Cross-check currentUser.roles if available
+  if (currentUser?.roles && Array.isArray(currentUser.roles)) {
+    for (const r of currentUser.roles) {
+      const lower = String(r).toLowerCase();
+      if (lower === "owner" && base === "owner") rolesSet.add("owner");
+      if (lower === "admin") rolesSet.add("admin");
+      if (lower === "manager") rolesSet.add("manager");
+    }
+  }
+
+  return Array.from(rolesSet);
+}
 
 export interface CompanyDetails {
   id: string;
@@ -41,11 +76,13 @@ interface CompanyContextType {
   activeMembership: CompanyMembership | null;
   activeCompany: CompanyDetails | null;
   activeRole: CompanyRole | null;
+  availableRoles: CompanyRole[];
   isManagement: boolean;
   isLoading: boolean;
   isCompanyLoading: boolean;
   companyError: string | null;
   switchCompany: (companyId: string) => void;
+  switchRole: (role: CompanyRole) => void;
   refreshMemberships: (silent?: boolean) => Promise<void>;
   canCreate: (feature: "agendas" | "news") => boolean;
   clearCacheAndRefresh: () => void;
@@ -60,6 +97,11 @@ const MEMBERSHIPS_CACHE_KEY = "companyMemberships";
 export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [memberships, setMemberships] = useState<CompanyMembership[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(getActiveCompanyId);
+  const [activeRoleState, setActiveRoleState] = useState<CompanyRole | null>(() => {
+    if (typeof window === "undefined") return null;
+    const initialComp = getActiveCompanyId();
+    return (getActiveRole(initialComp) as CompanyRole) || null;
+  });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [companyError, setCompanyError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
@@ -89,6 +131,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         setCurrentUser(null);
         setMemberships([]);
         setActiveCompanyId(null);
+        setActiveRoleState(null);
         setIsLoading(false);
         return;
       }
@@ -99,6 +142,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         try {
           parsedUser = JSON.parse(userStr);
           setCurrentUser(parsedUser);
+          if (parsedUser.activeRole) {
+            setActiveRoleState(parsedUser.activeRole as CompanyRole);
+          }
         } catch {}
       }
 
@@ -118,6 +164,10 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       }
       if (storedActiveId) {
         setActiveCompanyId(storedActiveId);
+        const storedRole = getActiveRole(storedActiveId) as CompanyRole;
+        if (storedRole) {
+          setActiveRoleState(storedRole);
+        }
       }
     } catch (e) {
       console.error("Failed to load company cache:", e);
@@ -374,16 +424,22 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
           const matchedId = matched.company_id;
           setActiveCompanyId(matchedId);
           setActiveCompanyIdStorage(matchedId);
+
+          const allowed = getAllowedRoles(matched, currentUser);
+          const savedRole = getActiveRole(matchedId) as CompanyRole;
+          const effectiveRole = (savedRole && allowed.includes(savedRole)) ? savedRole : matched.role;
+
+          setActiveRoleStorage(matchedId, effectiveRole);
+          setActiveRoleState(effectiveRole);
+
           try {
             const userStr = localStorage.getItem("user");
             if (userStr) {
               const u = JSON.parse(userStr);
               u.company = matched.company;
-              u.activeRole = matched.role;
-              u.isManagement = ["owner", "admin", "manager"].includes((matched.role || "").toLowerCase());
-              u.roles = u.isManagement
-                ? [matched.role.charAt(0).toUpperCase() + matched.role.slice(1), "Employee"]
-                : ["Employee"];
+              u.activeRole = effectiveRole;
+              u.isManagement = ["owner", "admin", "manager"].includes((effectiveRole || "").toLowerCase());
+              u.roles = allowed.map(r => r === "member" ? "Employee" : r.charAt(0).toUpperCase() + r.slice(1));
               localStorage.setItem("user", JSON.stringify(u));
               setCurrentUser(u);
             }
@@ -393,6 +449,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
           console.warn(`Perusahaan tersimpan ${storedId} tidak lagi aktif untuk user.`);
           setActiveCompanyId(null);
           setActiveCompanyIdStorage(null);
+          setActiveRoleState(null);
           try {
             const userStr = localStorage.getItem("user");
             if (userStr) {
@@ -423,16 +480,22 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
           const defaultId = defaultChoice.company_id;
           setActiveCompanyId(defaultId);
           setActiveCompanyIdStorage(defaultId);
+
+          const allowed = getAllowedRoles(defaultChoice, currentUser);
+          const savedRole = getActiveRole(defaultId) as CompanyRole;
+          const effectiveRole = (savedRole && allowed.includes(savedRole)) ? savedRole : defaultChoice.role;
+
+          setActiveRoleStorage(defaultId, effectiveRole);
+          setActiveRoleState(effectiveRole);
+
           try {
             const userStr = localStorage.getItem("user");
             if (userStr) {
               const u = JSON.parse(userStr);
               u.company = defaultChoice.company;
-              u.activeRole = defaultChoice.role;
-              u.isManagement = ["owner", "admin", "manager"].includes((defaultChoice.role || "").toLowerCase());
-              u.roles = u.isManagement
-                ? [defaultChoice.role.charAt(0).toUpperCase() + defaultChoice.role.slice(1), "Employee"]
-                : ["Employee"];
+              u.activeRole = effectiveRole;
+              u.isManagement = ["owner", "admin", "manager"].includes((effectiveRole || "").toLowerCase());
+              u.roles = allowed.map(r => r === "member" ? "Employee" : r.charAt(0).toUpperCase() + r.slice(1));
               localStorage.setItem("user", JSON.stringify(u));
               setCurrentUser(u);
             }
@@ -440,6 +503,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         } else {
           setActiveCompanyId(null);
           setActiveCompanyIdStorage(null);
+          setActiveRoleState(null);
         }
       } catch (err) {
         console.error("Exception fetching memberships:", err);
@@ -477,6 +541,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       inFlightTokenRef.current = null;
       setMemberships([]);
       setActiveCompanyId(null);
+      setActiveRoleState(null);
       setCurrentUser(null);
       setIsLoading(false);
       setCompanyError(null);
@@ -493,6 +558,9 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       const newUser = e?.detail?.user || null;
       if (newUser) {
         setCurrentUser(newUser);
+        if (newUser.activeRole) {
+          setActiveRoleState(newUser.activeRole as CompanyRole);
+        }
       }
       const newCompanyId = newUser?.company?.id || e?.detail?.companyId || null;
       setActiveCompanyId(newCompanyId);
@@ -558,6 +626,43 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const activeMembership = useMemo(() => {
+    return memberships.find((m) => m.company_id === activeCompanyId) || null;
+  }, [memberships, activeCompanyId]);
+
+  const activeCompany = useMemo(() => {
+    if (activeMembership) return activeMembership.company;
+    if (currentUser?.company) {
+      if (!activeCompanyId || currentUser.company.id === activeCompanyId) {
+        return currentUser.company;
+      }
+    }
+    return null;
+  }, [activeMembership, currentUser, activeCompanyId]);
+
+  const availableRoles = useMemo(() => {
+    return getAllowedRoles(activeMembership, currentUser);
+  }, [activeMembership, currentUser]);
+
+  const activeRole = useMemo(() => {
+    if (!activeMembership) {
+      if (currentUser?.activeRole) {
+        return currentUser.activeRole as CompanyRole;
+      }
+      return null;
+    }
+    const allowed = getAllowedRoles(activeMembership, currentUser);
+    if (activeRoleState && allowed.includes(activeRoleState)) {
+      return activeRoleState;
+    }
+    return activeMembership.role;
+  }, [activeMembership, activeRoleState, currentUser]);
+
+  const isManagement = useMemo(() => {
+    if (!activeRole) return false;
+    return ["owner", "admin", "manager"].includes(activeRole.toLowerCase());
+  }, [activeRole]);
+
   // Handle company switch
   const switchCompany = useCallback((companyId: string) => {
     if (companyId === activeCompanyId) return;
@@ -572,25 +677,34 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       setActiveCompanyIdStorage(companyId);
       setActiveCompanyId(companyId);
 
+      // Selesaikan activeRole untuk target company
+      const targetAllowed = getAllowedRoles(target, currentUser);
+      const storedRoleForTarget = getActiveRole(companyId) as CompanyRole;
+      const targetRole = (storedRoleForTarget && targetAllowed.includes(storedRoleForTarget))
+        ? storedRoleForTarget
+        : target.role;
+
+      setActiveRoleStorage(companyId, targetRole);
+      setActiveRoleState(targetRole);
+
       // Sync local user object immediately with selected company
       try {
         const userStr = localStorage.getItem("user");
         if (userStr) {
           const u = JSON.parse(userStr);
           u.company = target.company;
-          u.activeRole = target.role;
-          u.isManagement = ["owner", "admin", "manager"].includes((target.role || "").toLowerCase());
-          u.roles = u.isManagement
-            ? [target.role.charAt(0).toUpperCase() + target.role.slice(1), "Employee"]
-            : ["Employee"];
+          u.activeRole = targetRole;
+          u.isManagement = ["owner", "admin", "manager"].includes((targetRole || "").toLowerCase());
+          u.roles = targetAllowed.map(r => r === "member" ? "Employee" : r.charAt(0).toUpperCase() + r.slice(1));
           localStorage.setItem("user", JSON.stringify(u));
           setCurrentUser(u);
         }
       } catch {}
 
       window.dispatchEvent(new CustomEvent("companyChanged", { detail: { companyId } }));
+      window.dispatchEvent(new CustomEvent("roleChanged", { detail: { role: targetRole, companyId } }));
 
-      const isTargetManagement = ["owner", "admin", "manager"].includes((target.role || "").toLowerCase());
+      const isTargetManagement = ["owner", "admin", "manager"].includes((targetRole || "").toLowerCase());
       const currentPath = window.location.pathname;
 
       if (currentPath.startsWith("/admin") && !isTargetManagement) {
@@ -598,7 +712,52 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         return;
       }
     }
-  }, [memberships, activeCompanyId]);
+  }, [memberships, activeCompanyId, currentUser]);
+
+  // Handle active role switch (e.g., between Employee and Management roles)
+  const switchRole = useCallback((newRole: CompanyRole) => {
+    if (!activeCompanyId) return;
+
+    const allowed = getAllowedRoles(activeMembership, currentUser);
+    if (!allowed.includes(newRole)) {
+      console.warn(`Cannot switch to role ${newRole}: Not authorized for company ${activeCompanyId}.`);
+      return;
+    }
+
+    if (newRole === activeRole) return;
+
+    const previousRole = activeRole;
+    setActiveRoleStorage(activeCompanyId, newRole);
+    setActiveRoleState(newRole);
+
+    try {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        const u = JSON.parse(userStr);
+        u.activeRole = newRole;
+        u.isManagement = ["owner", "admin", "manager"].includes(newRole.toLowerCase());
+        localStorage.setItem("user", JSON.stringify(u));
+        setCurrentUser(u);
+      }
+    } catch {}
+
+    window.dispatchEvent(
+      new CustomEvent("roleChanged", {
+        detail: {
+          role: newRole,
+          previousRole,
+          companyId: activeCompanyId,
+        },
+      })
+    );
+
+    const isNewRoleManagement = ["owner", "admin", "manager"].includes(newRole.toLowerCase());
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+
+    if (currentPath.startsWith("/admin") && !isNewRoleManagement) {
+      window.location.replace("/dashboard");
+    }
+  }, [activeCompanyId, activeMembership, activeRole, currentUser]);
 
   // Realtime subscription management on activeCompanyId change
   useEffect(() => {
@@ -663,38 +822,6 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     };
   }, [currentUser?.id, getCurrentProfileId, fetchMemberships]);
 
-  const activeMembership = useMemo(() => {
-    return memberships.find((m) => m.company_id === activeCompanyId) || null;
-  }, [memberships, activeCompanyId]);
-
-  const activeCompany = useMemo(() => {
-    if (activeMembership) return activeMembership.company;
-    if (currentUser?.company) {
-      if (!activeCompanyId || currentUser.company.id === activeCompanyId) {
-        return currentUser.company;
-      }
-    }
-    return null;
-  }, [activeMembership, currentUser, activeCompanyId]);
-
-  const activeRole = useMemo(() => {
-    if (activeMembership) return activeMembership.role;
-    if (currentUser?.activeRole) {
-      if (!activeCompanyId || !currentUser?.company?.id || currentUser.company.id === activeCompanyId) {
-        return currentUser.activeRole as CompanyRole;
-      }
-    }
-    return null;
-  }, [activeMembership, currentUser, activeCompanyId]);
-
-  const isManagement = useMemo(() => {
-    const role = activeRole || (currentUser?.company?.id === activeCompanyId ? currentUser?.activeRole : null);
-    if (role && typeof role === "string") {
-      return ["owner", "admin", "manager"].includes(role.toLowerCase());
-    }
-    return Boolean(currentUser?.isManagement);
-  }, [activeRole, currentUser, activeCompanyId]);
-
   // Role authorization helper
   const canCreate = useCallback((feature: "agendas" | "news"): boolean => {
     const role = activeRole || currentUser?.activeRole;
@@ -713,11 +840,13 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       activeMembership,
       activeCompany,
       activeRole,
+      availableRoles,
       isManagement,
       isLoading,
       isCompanyLoading: isLoading,
       companyError,
       switchCompany,
+      switchRole,
       refreshMemberships: fetchMemberships,
       canCreate,
       clearCacheAndRefresh,
@@ -730,10 +859,12 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       activeMembership,
       activeCompany,
       activeRole,
+      availableRoles,
       isManagement,
       isLoading,
       companyError,
       switchCompany,
+      switchRole,
       fetchMemberships,
       canCreate,
       clearCacheAndRefresh,
