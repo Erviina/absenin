@@ -13,29 +13,36 @@ export interface UserConsentStatus {
 
 /**
  * Checks if a user has consented to the current (or specified) policy version.
+ * If policyVersion is not provided, checks if user has any active accepted consent.
  */
 export async function getUserConsent(
   profileId: string,
-  policyVersion: string = CURRENT_PRIVACY_POLICY_VERSION
+  policyVersion?: string
 ): Promise<UserConsentStatus> {
   try {
-    const res = await db
-      .select()
-      .from(userConsents)
-      .where(
-        and(
+    const targetVersion = policyVersion || CURRENT_PRIVACY_POLICY_VERSION;
+    const condition = policyVersion
+      ? and(
           eq(userConsents.profile_id, profileId),
           eq(userConsents.policy_version, policyVersion),
           eq(userConsents.is_accepted, true)
         )
-      )
+      : and(
+          eq(userConsents.profile_id, profileId),
+          eq(userConsents.is_accepted, true)
+        );
+
+    const res = await db
+      .select()
+      .from(userConsents)
+      .where(condition)
       .orderBy(desc(userConsents.consented_at))
       .limit(1);
 
     if (res.length > 0) {
       return {
         hasConsented: true,
-        activePolicyVersion: policyVersion,
+        activePolicyVersion: res[0].policy_version || targetVersion,
         consentedAt: res[0].consented_at ? new Date(res[0].consented_at).toISOString() : null,
         consentType: res[0].consent_type,
       };
@@ -43,7 +50,7 @@ export async function getUserConsent(
 
     return {
       hasConsented: false,
-      activePolicyVersion: policyVersion,
+      activePolicyVersion: targetVersion,
       consentedAt: null,
       consentType: "data_processing_and_privacy",
     };
@@ -51,7 +58,7 @@ export async function getUserConsent(
     console.error("Error checking user consent:", error);
     return {
       hasConsented: false,
-      activePolicyVersion: policyVersion,
+      activePolicyVersion: policyVersion || CURRENT_PRIVACY_POLICY_VERSION,
       consentedAt: null,
       consentType: "data_processing_and_privacy",
     };

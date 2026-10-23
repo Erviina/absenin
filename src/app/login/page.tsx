@@ -29,23 +29,15 @@ function LoginForm() {
   useEffect(() => {
     let isMounted = true;
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-    const isDirect = searchParams.get("direct") === "true";
 
+    // Jika tidak ada token lokal: biarkan pengguna di halaman login untuk memilih akun Google
     if (!token) {
-      if (!isDirect) {
-        const q = redirectParam ? `?flow=consent&redirect=${encodeURIComponent(redirectParam)}` : "?flow=consent";
-        router.replace(`/syarat-ketentuan${q}`);
-      }
       return;
     }
 
-    // Penyaringan awal di sisi klien: jika token kedaluwarsa atau strukturnya cacat, bersihkan sesi
+    // Penyaringan awal di sisi klien: jika token kedaluwarsa atau strukturnya cacat, bersihkan sesi dan tetap di login
     if (!isTokenValid(token)) {
       clearAuthSession();
-      if (!isDirect) {
-        const q = redirectParam ? `?flow=consent&redirect=${encodeURIComponent(redirectParam)}` : "?flow=consent";
-        router.replace(`/syarat-ketentuan${q}`);
-      }
       return;
     }
 
@@ -80,14 +72,14 @@ function LoginForm() {
               localStorage.setItem("user", JSON.stringify(verifiedUser));
             } catch {}
 
-            // Jika belum pernah menyetujui kebijakan privasi, arahkan ke halaman persetujuan (Langkah 1: Syarat & Ketentuan)
-            if (!verifiedUser?.consent?.hasConsented) {
+            // HANYA jika akun ini belum pernah menyetujui syarat & kebijakan, arahkan ke alur persetujuan
+            if (verifiedUser?.isNewUser || verifiedUser?.consent?.hasConsented === false) {
               const q = redirectParam ? `?flow=consent&consent=required&redirect=${encodeURIComponent(redirectParam)}` : `?flow=consent&consent=required`;
               router.replace(`/syarat-ketentuan${q}`);
               return;
             }
 
-            // Arahkan ke target internal yang aman jika valid, atau fallback ke rute default
+            // Pengguna yang sudah pernah menyetujui: langsung ke target internal yang aman atau dashboard
             const safeRedirect = getSafeInternalRedirect(redirectParam);
             if (safeRedirect) {
               router.replace(safeRedirect);
@@ -153,15 +145,17 @@ function LoginForm() {
         // 1. Simpan sesi secara terpusat dan beritahu seluruh aplikasi (membersihkan cache akun lama)
         setAuthSession(token, user, user?.company?.id);
 
-        // 2. Cek apakah pengguna baru / belum pernah menyetujui kebijakan privasi
-        if (!user?.consent?.hasConsented) {
+        // 2. HANYA JIKA akun Google ini baru mendaftar atau belum pernah menyetujui kebijakan privasi:
+        const isNewRegistration = user?.isNewUser === true || user?.consent?.hasConsented === false;
+        if (isNewRegistration) {
           const q = redirectParam ? `?flow=consent&consent=required&redirect=${encodeURIComponent(redirectParam)}` : `?flow=consent&consent=required`;
           router.replace(`/syarat-ketentuan${q}`);
           return;
         }
 
-        // 3. Pengguna yang sudah pernah menyetujui: langsung ke alur setelah login biasa
+        // 3. Pengguna lama yang sudah pernah menyetujui: langsung ke alur aplikasi tanpa verifikasi ulang
         await refreshMemberships();
+        showToast("Login berhasil! Selamat datang kembali.", "success");
 
         // Cek jika terdapat target redirect yang aman dari tautan yang dibagikan
         const safeRedirect = getSafeInternalRedirect(redirectParam);

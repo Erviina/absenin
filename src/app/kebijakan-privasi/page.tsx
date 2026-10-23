@@ -40,17 +40,30 @@ function KebijakanPrivasiContent() {
     const hasValidToken = Boolean(token && isTokenValid(token));
     setHasExistingToken(hasValidToken);
 
-    let needsConsent = false;
-    if (flowParam === "consent" || consentParam === "required" || !hasValidToken) {
-      needsConsent = true;
-    } else if (userStr) {
+    let hasConsented = false;
+    let isNewUser = false;
+    if (userStr) {
       try {
         const user = JSON.parse(userStr);
-        if (user && user.consent && user.consent.hasConsented === false) {
-          needsConsent = true;
+        if (user?.consent?.hasConsented === true && user?.isNewUser !== true) {
+          hasConsented = true;
+        }
+        if (user?.isNewUser === true) {
+          isNewUser = true;
         }
       } catch {}
     }
+
+    // Jika pengguna sudah pernah menyetujui, alur persetujuan TIDAK PERLU AKTIF
+    if (hasConsented) {
+      setIsConsentFlow(false);
+      return;
+    }
+
+    // Alur persetujuan hanya aktif jika ada indikator flow=consent atau consent=required atau user baru
+    const needsConsent = Boolean(
+      (flowParam === "consent" || consentParam === "required" || isNewUser) && !hasConsented
+    );
 
     setIsConsentFlow(needsConsent);
   }, [flowParam, consentParam]);
@@ -102,8 +115,8 @@ function KebijakanPrivasiContent() {
     if (isConsentFlow) {
       // Kembali ke Langkah 1: Syarat dan Ketentuan
       const q = redirectParam 
-        ? `?flow=consent&redirect=${encodeURIComponent(redirectParam)}`
-        : `?flow=consent`;
+        ? `?flow=consent&consent=required&redirect=${encodeURIComponent(redirectParam)}` 
+        : `?flow=consent&consent=required`;
       router.push(`/syarat-ketentuan${q}`);
     } else {
       router.back();
@@ -152,6 +165,7 @@ function KebijakanPrivasiContent() {
             policyVersion: "v1.0",
             consentedAt: new Date().toISOString(),
           };
+          userObj.isNewUser = false;
           localStorage.setItem("user", JSON.stringify(userObj));
         }
       } catch {}
@@ -240,6 +254,7 @@ function KebijakanPrivasiContent() {
             policyVersion: "v1.0",
             consentedAt: new Date().toISOString(),
           };
+          user.isNewUser = false;
           localStorage.setItem("user", JSON.stringify(user));
         } catch (consentErr) {
           console.error("Gagal sinkronisasi catatan consent post-login:", consentErr);

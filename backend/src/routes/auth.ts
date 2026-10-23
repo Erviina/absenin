@@ -84,6 +84,7 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
     // Check if profile exists
     let profileResult = await db.select().from(profiles).where(eq(profiles.email, email));
     let profile = profileResult[0];
+    const isNewUser = !profile;
 
     // Note: The scope says "Setelah token valid, proses user/profile sesuai alur authentication pada PRD dan struktur database yang sudah ada."
     // But since we can't create `auth.users` easily from here and don't know the exact mechanism, we just fetch profile based on email.
@@ -156,19 +157,22 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
         }
       }
     } else {
-      // Pengguna lama: jika mencentang persetujuan pada login, catat/perbarui persetujuannya
-      if (consent_accepted === true) {
-        try {
+      // Pengguna lama (sudah pernah terdaftar sebelumnya):
+      // Jika belum memiliki rekaman di user_consents, catat persetujuan otomatis agar tidak muncul lagi
+      try {
+        const existingConsent = await getUserConsent(profile.id);
+        if (!existingConsent.hasConsented) {
           await recordUserConsent({
             profileId: profile.id,
-            policyVersion: policy_version || CURRENT_PRIVACY_POLICY_VERSION,
+            policyVersion: CURRENT_PRIVACY_POLICY_VERSION,
+            consentType: "existing_account_consent",
             isAccepted: true,
             ipAddress: (req.headers["x-forwarded-for"] as string) || req.ip || (req.socket?.remoteAddress as string),
             userAgent: req.headers["user-agent"] as string,
           });
-        } catch (consentErr) {
-          console.error("Gagal mencatat consent pengguna lama:", consentErr);
         }
+      } catch (consentErr) {
+        console.error("Gagal memeriksa/mencatat consent pengguna lama:", consentErr);
       }
     }
 
@@ -288,8 +292,9 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       { expiresIn: (process.env.JWT_EXPIRES_IN || "24h") as any }
     );
 
-    // Check consent status
+    // Check consent status: pengguna lama selalu dianggap telah menyetujui, pengguna baru dicek dari database
     const consentStatus = await getUserConsent(profile.id);
+    const hasConsented = !isNewUser || consentStatus.hasConsented;
 
     res.json({
       success: true,
@@ -306,8 +311,9 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
           activeRole: activeRole,
           isManagement: ["owner", "admin", "manager"].includes(activeRole),
           isDeveloper: profile.is_developer === true,
+          isNewUser: isNewUser,
           consent: {
-            hasConsented: consentStatus.hasConsented,
+            hasConsented: hasConsented,
             policyVersion: consentStatus.activePolicyVersion,
             consentedAt: consentStatus.consentedAt,
           },

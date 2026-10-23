@@ -18,13 +18,20 @@ function SyaratKetentuanContent() {
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Tentukan apakah dalam alur persetujuan:
-    // 1. Parameter eksplisit ?flow=consent
-    // 2. Pengguna belum login (tidak ada token sesi yang valid)
-    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-    const hasValidToken = Boolean(token && isTokenValid(token));
+    // Alur persetujuan HANYA aktif jika secara eksplisit terdapat parameter flow=consent
+    // DAN pengguna belum pernah menyetujui ketentuan sebelumnya.
+    const userStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+    let hasConsented = false;
+    if (userStr) {
+      try {
+        const u = JSON.parse(userStr);
+        if (u?.consent?.hasConsented === true && u?.isNewUser !== true) {
+          hasConsented = true;
+        }
+      } catch {}
+    }
 
-    if (flowParam === "consent" || !hasValidToken) {
+    if (flowParam === "consent" && !hasConsented) {
       setIsConsentFlow(true);
     } else {
       setIsConsentFlow(false);
@@ -76,7 +83,7 @@ function SyaratKetentuanContent() {
 
   const handleBack = () => {
     if (isConsentFlow) {
-      router.push("/login/onboard");
+      router.push("/login");
     } else {
       router.back();
     }
@@ -84,8 +91,8 @@ function SyaratKetentuanContent() {
 
   const handleGoNext = () => {
     const q = redirectParam 
-      ? `?flow=consent&redirect=${encodeURIComponent(redirectParam)}`
-      : `?flow=consent`;
+      ? `?flow=consent&consent=required&redirect=${encodeURIComponent(redirectParam)}`
+      : `?flow=consent&consent=required`;
     router.push(`/kebijakan-privasi${q}`);
   };
 

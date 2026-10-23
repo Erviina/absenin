@@ -30,14 +30,14 @@ export default function OnboardingPage() {
   }, [api]);
 
   const onSkip = () => {
-    router.push("/syarat-ketentuan?flow=consent");
+    router.push("/login");
   };
 
   const onNext = () => {
     if (api && current < 2) {
       api.scrollNext();
     } else {
-      router.push("/syarat-ketentuan?flow=consent");
+      router.push("/login");
     }
   };
 
