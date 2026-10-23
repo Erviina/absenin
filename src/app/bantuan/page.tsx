@@ -28,7 +28,8 @@ import {
   ThumbsDown,
   Navigation,
   Smartphone,
-  ExternalLink
+  ExternalLink,
+  Info
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 
@@ -725,44 +726,35 @@ function BantuanContent() {
           )}
         </div>
 
-        {/* Contact Support Channels Card */}
-        <div className="bg-white rounded-[22px] border border-[#E5E7EB] p-4.5 flex flex-col gap-3 shadow-xs mt-1">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
-              <HelpCircle className="w-4 h-4" strokeWidth={2.5} />
-            </div>
-            <div className="flex flex-col">
-              <h2 className="text-[#111827] text-[13.5px] font-bold">Belum menemukan jawaban?</h2>
-              <p className="text-[#6B7280] text-[12px]">Tim Customer Support AbsenIn siap membantu Anda.</p>
-            </div>
-          </div>
+        
+{/* SOP Document Card */}
+<div className="bg-white rounded-[22px] border border-[#E5E7EB] p-4.5 flex flex-col gap-3 shadow-xs mt-1">
+  <div className="flex items-center gap-2.5">
+    <div className="w-8 h-8 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
+      <FileText className="w-4 h-4" strokeWidth={2.5} />
+    </div>
 
-          <div className="grid grid-cols-2 gap-2 mt-1">
-            {/* WhatsApp CS Button */}
-            <a
-              href="https://wa.me/6281234567890?text=Halo%20Tim%20AbsenIn%2C%20saya%20butuh%20bantuan%20mengenai%20aplikasi%20AbsenIn"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 text-[#128C7E] rounded-xl text-[12px] font-bold transition-all text-center"
-            >
-              <PhoneCall className="w-3.5 h-3.5" />
-              <span>WhatsApp CS</span>
-            </a>
+    <div className="flex flex-col">
+      <h2 className="text-[#111827] text-[13.5px] font-bold">
+        Dokumen SOP AbsenIN
+      </h2>
+      <p className="text-[#6B7280] text-[12px]">
+        Lihat panduan resmi penggunaan aplikasi AbsenIN.
+      </p>
+    </div>
+  </div>
 
-            {/* Email Support Button */}
-            <a
-              href="mailto:support@absenin.com?subject=Pertanyaan%20Dukungan%20AbsenIn"
-              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#1E4738]/5 hover:bg-[#1E4738]/10 border border-[#1E4738]/20 text-[#1E4738] rounded-xl text-[12px] font-bold transition-all text-center"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              <span>Email Support</span>
-            </a>
-          </div>
+  <a href="https://absenin.my.id/document/ SOP-Absenin.pdf" aria-disabled="true" onClick={(e) => e.preventDefault()} className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#1E4738]/5 border border-[#1E4738]/15 text-[#9CA3AF] rounded-xl text-[12px] font-bold cursor-not-allowed text-center" >
+    <FileText className="w-3.5 h-3.5" />
+    <span>Dokumen SOP Belum Tersedia</span>
+  </a>
 
-          <div className="pt-2.5 border-t border-[#F3F4F6] flex items-center justify-between text-[11px] text-[#9CA3AF]">
-            <span>Jam Operasional: Senin - Jumat, 08:00 - 18:00 WIB</span>
-          </div>
-        </div>
+  <div className="pt-2.5 border-t border-[#F3F4F6] flex items-center gap-2 text-[11px] text-[#9CA3AF]">
+    <Info className="w-3.5 h-3.5 shrink-0" />
+    <span>Dokumen PDF akan tersedia setelah panduan resmi diterbitkan.</span>
+  </div>
+</div>
+
       </div>
     </div>
   );
