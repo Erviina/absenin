@@ -19,7 +19,7 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { AccountContextDrawer } from "@/components/AccountContextDrawer";
-import { getActiveCompanyId, setActiveCompanyId, clearAuthSession, getApiUrl } from "@/lib/api";
+import { getActiveCompanyId, setActiveCompanyId, clearAuthSession, logoutUser, getApiUrl } from "@/lib/api";
 import { ProfileSkeleton } from "@/components/CardSkeleton";
 
 export default function ProfilPage() {
@@ -125,8 +125,7 @@ export default function ProfilPage() {
     });
     if (!confirmed) return;
 
-    clearAuthSession();
-    router.replace("/login");
+    logoutUser("/login");
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

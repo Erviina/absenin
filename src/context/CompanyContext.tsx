@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { supabase } from "@/lib/supabase";
 import { clearPersonalModePreference } from "@/lib/personalMode";
 import { getActiveCompanyId, setActiveCompanyId as setActiveCompanyIdStorage, clearAuthSession, getApiUrl } from "@/lib/api";
+import { isPublicPath, isPlatformAdminPath } from "@/lib/routeUtils";
 
 export type CompanyCategoryCode = "community" | "organization" | "business";
 
@@ -539,17 +540,17 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
           const hasToken = typeof window !== "undefined" ? Boolean(localStorage.getItem("accessToken")) : false;
           const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
 
-          // Pengecualian endpoint autentikasi dan halaman publik untuk mencegah redirect loop
+          // Pengecualian endpoint autentikasi, Platform Admin, dan halaman publik untuk mencegah redirect loop
           const isAuthEndpoint = rawUrl.includes("/auth/google") || rawUrl.includes("/auth/login");
-          const isPublicPage = ["/login", "/login/onboard", "/unauthorized", "/admin/no-authorized", "/"].includes(currentPath);
+          const isExcludedPage = isPublicPath(currentPath) || isPlatformAdminPath(currentPath);
 
-          if (hasToken && !isAuthEndpoint && !isPublicPage && !isRedirectingToLogin) {
+          if (hasToken && !isAuthEndpoint && !isExcludedPage && !isRedirectingToLogin) {
             isRedirectingToLogin = true;
             clearAuthSession();
 
             const redirectTarget = currentPath + (window.location.search || "");
-            const unauthorizedUrl = `/unauthorized?type=401&redirect=${encodeURIComponent(redirectTarget)}`;
-            window.location.href = unauthorizedUrl;
+            const loginUrl = `/login?redirect=${encodeURIComponent(redirectTarget)}&session=expired`;
+            window.location.replace(loginUrl);
           }
         }
 

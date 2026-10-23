@@ -41,6 +41,7 @@ import {
   Compass,
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
+import { PlatformAdminErrorView } from "@/components/platform-admin/PlatformAdminErrorView";
 
 // Dynamically import MapLocation to avoid SSR issues
 const MapLocation = dynamic(() => import("@/components/MapLocation"), {
@@ -270,15 +271,15 @@ export default function PlatformCompanyDetailPage() {
       if (res.success && res.data) {
         setCompany(res.data);
       } else {
-        alert(res.message || "Perusahaan tidak ditemukan");
-        router.push("/platform-admin/companies");
+        setCompany(null);
       }
     } catch (e) {
       console.error("Gagal memuat detail perusahaan:", e);
+      setCompany(null);
     } finally {
       setIsLoadingCompany(false);
     }
-  }, [companyId, router]);
+  }, [companyId]);
 
   // 2. Fetch Feature Performance Analytics
   const loadAnalytics = useCallback(async () => {
@@ -462,16 +463,12 @@ export default function PlatformCompanyDetailPage() {
 
   if (!company) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-        <AlertCircle className="w-12 h-12 text-red-500" />
-        <h3 className="text-lg font-bold text-gray-900">Perusahaan Tidak Ditemukan</h3>
-        <Link
-          href="/platform-admin/companies"
-          className="px-4 py-2 bg-[#1E3F2B] text-white rounded-xl text-sm font-bold hover:bg-[#356E3B] transition-colors"
-        >
-          Kembali ke Direktori Perusahaan
-        </Link>
-      </div>
+      <PlatformAdminErrorView
+        type="404"
+        title="Perusahaan Tidak Ditemukan"
+        description="Data perusahaan dengan ID tersebut tidak terdaftar di direktori platform AbsenIn atau telah dihapus."
+        showBackToMainApp={false}
+      />
     );
   }
 

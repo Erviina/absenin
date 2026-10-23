@@ -96,6 +96,24 @@ export function clearAuthSession(): void {
   }
 }
 
+/**
+ * Melakukan logout pengguna secara menyeluruh tanpa memicu flash error page 401.
+ * Mengaktifkan status transisi logout, membersihkan state/cache, dan mengarahkan
+ * langsung ke targetUrl (default: /login) secara bersih.
+ */
+export function logoutUser(targetUrl: string = "/login"): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem("isLoggingOut", "true");
+    window.dispatchEvent(new CustomEvent("authLoggingOut"));
+    clearAuthSession();
+    window.location.replace(targetUrl);
+  } catch (e) {
+    console.error("Failed during logout:", e);
+    window.location.href = targetUrl;
+  }
+}
+
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("accessToken") || null;
