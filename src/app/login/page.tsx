@@ -317,16 +317,6 @@ function LoginForm() {
               </Link>
             </p>
 
-            {/* Navigasi ke Pusat Bantuan & FAQ */}
-            <div className="mt-3 pt-3 border-t border-gray-100 w-full flex items-center justify-center">
-              <Link
-                href="/bantuan"
-                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#5C786C] hover:text-[#1E4738] transition-colors"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-[#356E3B]" />
-                <span>Butuh Bantuan? Pusat Bantuan &amp; FAQ</span>
-              </Link>
-            </div>
           </div>
         </div>
       </div>
