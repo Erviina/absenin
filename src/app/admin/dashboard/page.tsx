@@ -19,8 +19,7 @@ import {
   Bell,
   AlertCircle,
   RefreshCw,
-  Loader2,
-  ArrowRightLeft
+  Loader2
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { ViewAllButton } from "@/components/ViewAllButton";
@@ -28,24 +27,13 @@ import { useRouter } from "next/navigation";
 import { useCompany } from "@/context/CompanyContext";
 import { handleNotificationNavigation } from "@/lib/notificationNavigation";
 import { parseMembershipNotification, cleanNotificationMessage } from "@/lib/membershipNotificationUtils";
-import { getActiveCompanyId, getApiUrl, getAuthHeaders, getActiveRole } from "@/lib/api";
+import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData } from "@/lib/clientCache";
-import { AccountContextDrawer } from "@/components/AccountContextDrawer";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const { activeCompanyId, activeCompany, activeRole, memberships, switchCompany, switchRole, isLoading: isCompanyLoading } = useCompany();
-  const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
-
-  const formatRoleLabel = (r?: string | null) => {
-    if (!r) return "Admin";
-    const role = r.toLowerCase();
-    if (role === "owner") return "Owner";
-    if (role === "admin") return "Admin";
-    if (role === "manager") return "Manajer";
-    return r;
-  };
+  const { activeCompanyId, activeCompany, activeRole, memberships, switchCompany, isLoading: isCompanyLoading } = useCompany();
   
   const [company, setCompany] = useState<{ id?: string; name: string; address: string; memberCount: number; avatar_company_url?: string } | null>(() => {
     if (typeof window === "undefined") return null;
@@ -79,25 +67,6 @@ export default function AdminDashboardPage() {
     };
     window.addEventListener("companyChanged", handleCompanyChanged);
     return () => window.removeEventListener("companyChanged", handleCompanyChanged);
-  }, []);
-
-  // Listener event pergantian role untuk mereset dashboard seketika
-  useEffect(() => {
-    const handleRoleChanged = () => {
-      setCompany(null);
-      setAttendanceStats(null);
-      setLeaveStats(null);
-      setActivities([]);
-      setIsLoading(true);
-      setIsStatsLoading(true);
-      setIsLeaveStatsLoading(true);
-      setIsActivitiesLoading(true);
-      setDashboardError(null);
-      setStatsError(null);
-      setActivitiesError(null);
-    };
-    window.addEventListener("roleChanged", handleRoleChanged);
-    return () => window.removeEventListener("roleChanged", handleRoleChanged);
   }, []);
 
   // Listener event pembersihan atau pembaruan sesi autentikasi untuk mereset dashboard admin seketika
@@ -221,8 +190,9 @@ export default function AdminDashboardPage() {
     try {
       const token = localStorage.getItem("accessToken");
       if (!token) return;
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
       const compId = activeCompanyId || getActiveCompanyId();
-      const headers = getAuthHeaders(compId ? { "x-company-id": compId } : {});
+      if (compId) headers["x-company-id"] = compId;
 
       const m = targetDate.getMonth() + 1;
       const y = targetDate.getFullYear();
@@ -280,7 +250,10 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      const headers = getAuthHeaders(compId ? { "x-company-id": compId } : {});
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      if (compId) {
+        headers["x-company-id"] = compId;
+      }
 
       const m = selectedDate.getMonth() + 1;
       const y = selectedDate.getFullYear();
@@ -502,33 +475,19 @@ export default function AdminDashboardPage() {
       {/* Header */}
       <TopBar 
         title="Manajemen" 
-        onBack={() => {
-          switchRole("member");
-          router.push("/dashboard");
-        }} 
+        onBack={() => router.push("/dashboard")} 
         rightAction={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsContextDrawerOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-[12px] font-bold backdrop-blur-sm transition-all cursor-pointer active:scale-95"
-              title="Ganti Mode / Role"
-              aria-label="Ganti Mode atau Role"
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span className="capitalize">{formatRoleLabel(activeRole)}</span>
-            </button>
-            <button
-              onClick={() => router.push("/notifikasi")}
-              className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all relative cursor-pointer"
-              title="Notifikasi"
-              aria-label="Notifikasi"
-            >
-              <Bell className="w-6 h-6 text-white" />
-              {unreadNotifCount > 0 && (
-                <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#EF4444] border-2 border-[#356E3B] rounded-full"></div>
-              )}
-            </button>
-          </div>
+          <button
+            onClick={() => router.push("/notifikasi")}
+            className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all relative cursor-pointer"
+            title="Notifikasi"
+            aria-label="Notifikasi"
+          >
+            <Bell className="w-6 h-6 text-white" />
+            {unreadNotifCount > 0 && (
+              <div className="absolute top-[8px] right-[8px] w-2.5 h-2.5 bg-[#EF4444] border-2 border-[#356E3B] rounded-full"></div>
+            )}
+          </button>
         }
       />
 
@@ -843,13 +802,6 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* Drawer Peralihan Akun & Perusahaan */}
-      <AccountContextDrawer 
-        isOpen={isContextDrawerOpen}
-        onClose={() => setIsContextDrawerOpen(false)}
-        currentMode="management"
-      />
 
     </div>
   );
