@@ -13,14 +13,14 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/img/assets/logo-icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/img/assets/logo-icon.png", sizes: "512x512", type: "image/png" },
-      { url: "/favicon.ico" },
+      { url: "/favicon.svg?v=2", type: "image/svg+xml" },
+      { url: "/img/assets/logo-icon.svg?v=2", type: "image/svg+xml" },
+      { url: "/favicon.ico?v=2" },
+      { url: "/img/assets/logo-icon.png?v=2", sizes: "512x512", type: "image/png" },
     ],
-    shortcut: "/favicon.svg",
+    shortcut: "/favicon.svg?v=2",
     apple: [
-      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-icon.png?v=2", sizes: "180x180", type: "image/png" },
     ],
   },
 };

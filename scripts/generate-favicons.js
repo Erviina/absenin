@@ -2,8 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 
-// Centered SVG logo mark (only the icon, no text)
+// Centered SVG logo mark with white rounded container for optimal contrast on both dark and light browser themes
 const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" fill="none">
+  <rect width="160" height="160" rx="36" fill="#FFFFFF" />
   <g transform="translate(5, 8)">
     <path 
       d="M 134,74 L 134,110 A 18,18 0 0 1 116,128 L 34,128 A 18,18 0 0 1 16,110 L 16,34 A 18,18 0 0 1 34,16 L 116,16 A 18,18 0 0 1 134,34 L 72,96 L 50,74" 
@@ -52,8 +53,10 @@ async function run() {
   // 1. Save SVG
   const svgDest = path.join(__dirname, '../public/img/assets/logo-icon.svg');
   const appSvgDest = path.join(__dirname, '../src/app/icon.svg');
+  const publicFaviconSvgDest = path.join(__dirname, '../public/favicon.svg');
   fs.writeFileSync(svgDest, svgContent);
   fs.writeFileSync(appSvgDest, svgContent);
+  fs.writeFileSync(publicFaviconSvgDest, svgContent);
 
   // 2. Generate PNG sizes
   const sizes = [16, 32, 48, 180, 192, 512];
