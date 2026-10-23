@@ -11,6 +11,17 @@ export const metadata: Metadata = {
   title: "AbsenIn - Smart Attendance System",
   description: "Absensi digital dengan verifikasi GPS real-time",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/img/assets/logo-icon.svg", type: "image/svg+xml" },
+      { url: "/img/assets/logo-icon.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
