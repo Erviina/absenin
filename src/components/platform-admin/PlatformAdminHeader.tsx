@@ -38,21 +38,6 @@ export function PlatformAdminHeader({
             </p>
           </div>
         </div>
-
-        {/* Right: Security Badge & Status Pill */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          <div className="hidden md:flex items-center gap-2 bg-[#EEF5F0] text-[#1E4738] border border-[#DCE9DF] px-3 py-1.5 rounded-full text-[11px] font-bold shadow-2xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Server Terhubung</span>
-          </div>
-
-          <div className="flex items-center gap-2 bg-[#F9FAFB] border border-gray-200/80 px-2.5 py-1 rounded-full">
-            <ShieldCheck className="w-4 h-4 text-[#356E3B]" />
-            <span className="text-[11px] font-bold text-gray-700 hidden sm:inline">
-              Akses Terverifikasi
-            </span>
-          </div>
-        </div>
       </div>
     </header>
   );

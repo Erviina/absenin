@@ -107,19 +107,10 @@ export function PlatformAdminErrorView({
       id="platform-admin-root" 
       className="min-h-screen w-full bg-[#F8FAF9] text-[#111827] flex flex-col justify-center items-center px-4 py-12 sm:px-6 lg:px-8 selection:bg-[#86EFAC] selection:text-[#1E3F2B]"
     >
-      <div className="w-full max-w-2xl bg-white border border-gray-200/80 rounded-[28px] p-8 sm:p-12 shadow-xl shadow-gray-900/5 flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-300 relative overflow-hidden">
         
         {/* Subtle Ambient Glow */}
         <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#86EFAC]/15 blur-3xl rounded-full pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-[#356E3B]/10 blur-3xl rounded-full pointer-events-none" />
-
-        {/* Top Context Badge */}
-        <div className="flex items-center gap-2 mb-6">
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase border ${config.badgeColor}`}>
-            <IconComponent className="w-3.5 h-3.5" />
-            {config.badge}
-          </span>
-        </div>
 
         {/* Big Stylized Error Code */}
         <div className="relative mb-4 select-none">
@@ -195,20 +186,7 @@ export function PlatformAdminErrorView({
           )}
         </div>
 
-        {/* Footer Link to Regular App */}
-        {showBackToMainApp && (
-          <div className="mt-8 pt-6 border-t border-gray-100 w-full flex items-center justify-center">
-            <Link
-              href="/dashboard"
-              className="text-[12.5px] text-[#356E3B] hover:text-[#1E3F2B] font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <span>Beralih ke Aplikasi AbsenIn Utama</span>
-              <span aria-hidden="true">&rarr;</span>
-            </Link>
-          </div>
-        )}
-
-      </div>
+      
     </div>
   );
 }

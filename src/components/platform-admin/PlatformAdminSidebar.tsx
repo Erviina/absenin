@@ -85,20 +85,21 @@ export function PlatformAdminSidebar({
       {/* Brand Header */}
       <div className="p-5 border-b border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[14px] bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xs">
-            <Shield className="w-5 h-5 text-[#86EFAC]" strokeWidth={2.5} />
+          <div className="w-10 h-10 rounded-[14px] bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xs overflow-hidden">
+            <img
+              src="/img/assets/logo-icon.png"
+              alt="Absenin Logo"
+              className="w-7 h-7 object-contain"
+            />
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-[17px] tracking-tight text-white leading-none">
                 AbsenIn
               </span>
-              <span className="bg-[#86EFAC] text-[#1E3F2B] text-[9.5px] font-black px-1.5 py-0.5 rounded tracking-wider uppercase">
-                Platform
-              </span>
             </div>
             <span className="text-[11px] text-white/60 font-medium mt-1">
-              Administrasi Platform
+              Admin Panel
             </span>
           </div>
         </div>
