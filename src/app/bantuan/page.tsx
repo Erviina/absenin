@@ -29,12 +29,15 @@ import {
   Navigation,
   Smartphone,
   ExternalLink,
-  Info
+  Info,
+  Shield,
+  FileCheck
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
+import { getPublicFaqs, FaqItem as BackendFaqItem } from "@/lib/faqApi";
 
-export type FAQCategory = "karyawan" | "perusahaan" | "admin";
-export type TopicFilter = "semua" | "gps" | "presensi" | "izin" | "tugas" | "akun";
+export type FAQCategory = "karyawan" | "perusahaan" | "admin" | "platform_admin";
+export type TopicFilter = "semua" | "gps" | "presensi" | "izin" | "tugas" | "akun" | "sop";
 
 interface FAQItem {
   id: string;
@@ -44,6 +47,10 @@ interface FAQItem {
   answer: string;
   tags: string[];
   icon: any;
+  sop_title?: string | null;
+  sop_url?: string | null;
+  scope?: "global" | "company" | "platform_admin";
+  company_name?: string | null;
 }
 
 const FAQ_DATA: FAQItem[] = [
@@ -262,6 +269,10 @@ function BantuanContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>("gps-radius-error");
 
+  // State FAQ Dinamis dari Backend
+  const [dynamicFaqs, setDynamicFaqs] = useState<BackendFaqItem[]>([]);
+  const [isLoadingFaqs, setIsLoadingFaqs] = useState(true);
+
   // State untuk Interactive Feedback per FAQ
   const [feedbackState, setFeedbackState] = useState<Record<string, "yes" | "no">>({});
 
@@ -278,6 +289,31 @@ function BantuanContent() {
     status: "idle",
     message: "Klik tombol di bawah untuk menguji keakuratan sinyal GPS pada perangkat Anda saat ini."
   });
+
+  useEffect(() => {
+    let isMounted = true;
+    getPublicFaqs().then((data) => {
+      if (isMounted) {
+        setDynamicFaqs(data);
+        setIsLoadingFaqs(false);
+      }
+    }).catch((e) => {
+      console.warn("Gagal mengambil FAQ publik backend:", e);
+      if (isMounted) setIsLoadingFaqs(false);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const hasCompanyFaqs = dynamicFaqs.some(f => f.scope === "company");
+  const hasPlatformAdminFaqs = dynamicFaqs.some(f => f.scope === "platform_admin");
+  const isPlatformOwner = Boolean(
+    currentUser?.is_developer ||
+    currentUser?.isDeveloper ||
+    (currentUser?.email && ["absenin.my.id@gmail.com"].includes(currentUser.email.toLowerCase())) ||
+    hasPlatformAdminFaqs
+  );
 
   useEffect(() => {
     if (isManagementMode) {
@@ -348,12 +384,62 @@ function BantuanContent() {
     );
   };
 
-  const effectiveCategory: FAQCategory = isManagementMode ? activeCategory : "karyawan";
+  const allFAQs: FAQItem[] = useMemo(() => {
+    const list: FAQItem[] = [...FAQ_DATA];
+
+    dynamicFaqs.forEach((item) => {
+      let cat: FAQCategory = "karyawan";
+      if (item.scope === "company") {
+        cat = "perusahaan";
+      } else if (item.scope === "platform_admin") {
+        cat = "platform_admin";
+      } else if (item.category?.toLowerCase().includes("admin") || item.category?.toLowerCase().includes("wewenang")) {
+        cat = "admin";
+      } else if (item.category?.toLowerCase().includes("perusahaan") || item.category?.toLowerCase().includes("kantor")) {
+        cat = "perusahaan";
+      }
+
+      let top: TopicFilter = "semua";
+      const c = item.category?.toLowerCase() || "";
+      if (c.includes("gps") || c.includes("lokasi") || c.includes("radius")) top = "gps";
+      else if (c.includes("presensi") || c.includes("hadir") || c.includes("absen")) top = "presensi";
+      else if (c.includes("izin") || c.includes("cuti") || c.includes("sakit")) top = "izin";
+      else if (c.includes("tugas") || c.includes("agenda")) top = "tugas";
+      else if (c.includes("sop") || c.includes("kebijakan")) top = "sop";
+      else if (c.includes("akun") || c.includes("profil") || c.includes("peran")) top = "akun";
+
+      const existingIdx = list.findIndex(
+        (x) => x.question.toLowerCase().trim() === item.question.toLowerCase().trim()
+      );
+
+      const mappedItem: FAQItem = {
+        id: item.id,
+        category: cat,
+        topic: top,
+        icon: cat === "platform_admin" ? Shield : cat === "perusahaan" ? Building2 : cat === "admin" ? ShieldCheck : HelpCircle,
+        question: item.question,
+        answer: item.answer,
+        tags: [item.category, item.scope, ...(item.sop_title ? [item.sop_title] : [])],
+        sop_title: item.sop_title,
+        sop_url: item.sop_url,
+        scope: item.scope,
+        company_name: item.company_name,
+      };
+
+      if (existingIdx >= 0) {
+        list[existingIdx] = mappedItem;
+      } else {
+        list.push(mappedItem);
+      }
+    });
+
+    return list;
+  }, [dynamicFaqs]);
 
   const filteredFAQs = useMemo(() => {
-    return FAQ_DATA.filter(item => {
+    return allFAQs.filter(item => {
       // 1. Filter kategori
-      if (item.category !== effectiveCategory) {
+      if (item.category !== activeCategory) {
         return false;
       }
 
@@ -372,7 +458,7 @@ function BantuanContent() {
 
       return matchQuestion || matchAnswer || matchTags;
     });
-  }, [effectiveCategory, activeTopic, searchQuery]);
+  }, [allFAQs, activeCategory, activeTopic, searchQuery]);
 
   const toggleExpand = (id: string) => {
     setExpandedId(prev => (prev === id ? null : id));
@@ -386,25 +472,26 @@ function BantuanContent() {
   };
 
   const getCategoryTitle = () => {
-    if (!isManagementMode) return "Pusat Bantuan & Panduan";
-    if (effectiveCategory === "perusahaan") return "Panduan Perusahaan & Kantor";
-    if (effectiveCategory === "admin") return "Panduan Administrator & Approval";
+    if (activeCategory === "platform_admin") return "Panduan Platform Owner";
+    if (activeCategory === "perusahaan") return "Panduan Perusahaan & SOP";
+    if (activeCategory === "admin") return "Panduan Administrator & Approval";
     return "Panduan Karyawan & Akun";
   };
 
   const getCategoryDesc = () => {
-    if (!isManagementMode) return "Temukan jawaban lengkap seputar absensi GPS, geofencing, izin cuti, dan solusi kendala.";
-    if (effectiveCategory === "perusahaan") return "Pengaturan titik koordinat GPS, radius geofencing, jam kerja kantor, dan QR Code.";
-    if (effectiveCategory === "admin") return "Persetujuan izin/cuti karyawan, ekspor laporan rekapitulasi, dan hierarki wewenang.";
-    return "Panduan presensi check-in/out, kendala radius GPS, pengajuan izin/cuti, dan penggunaan akun.";
+    if (activeCategory === "platform_admin") return "Petunjuk pengoperasian platform admin, manajemen lisensi, dan pemeliharaan sistem.";
+    if (activeCategory === "perusahaan") return "Tata tertib kantor, SOP resmi perusahaan, pengaturan radius absensi, dan jam kerja.";
+    if (activeCategory === "admin") return "Persetujuan izin/cuti karyawan, ekspor laporan rekapitulasi, dan hierarki wewenang.";
+    return "Temukan jawaban lengkap seputar absensi GPS, geofencing, izin cuti, dan solusi kendala.";
   };
 
   const TOPIC_BADGES = [
     { key: "semua" as TopicFilter, label: "Semua Topik" },
-    { key: "gps" as TopicFilter, label: "GPS & Lokasi" },
     { key: "presensi" as TopicFilter, label: "Presensi" },
+    { key: "gps" as TopicFilter, label: "GPS & Lokasi" },
     { key: "izin" as TopicFilter, label: "Izin & Cuti" },
     { key: "tugas" as TopicFilter, label: "Tugas & Agenda" },
+    { key: "sop" as TopicFilter, label: "SOP & Panduan" },
     { key: "akun" as TopicFilter, label: "Akun & Akses" },
   ];
 
@@ -443,11 +530,7 @@ function BantuanContent() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={
-              isManagementMode
-                ? `Cari di FAQ ${effectiveCategory === "perusahaan" ? "Perusahaan" : effectiveCategory === "admin" ? "Admin" : "Karyawan"}...`
-                : "Cari topik: GPS, checkin, izin, terlambat, dll..."
-            }
+            placeholder="Cari topik: GPS, checkin, izin, SOP, dll..."
             className="w-full bg-white rounded-2xl pl-10 pr-10 py-3.5 text-[13px] border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#356E3B]/30 focus:border-[#356E3B] transition-all text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.02)] placeholder:text-[#9CA3AF]"
           />
           {searchQuery && (
@@ -461,53 +544,74 @@ function BantuanContent() {
           )}
         </div>
 
-        {/* Role-Based Tabs: HANYA MUNCUL DI MODE MANAJEMEN / ADMIN (?from=admin) */}
-        {isManagementMode && (
-          <div className="w-full bg-[#EEF4F0] p-1.5 rounded-[18px] border border-[#D5E2D8]/80 flex items-center justify-between gap-1.5 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-            <button
-              onClick={() => {
-                setActiveCategory("perusahaan");
-                setActiveTopic("semua");
-              }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12.5px] font-bold transition-all ${
-                effectiveCategory === "perusahaan"
-                  ? "bg-[#1E4738] text-white shadow-sm"
-                  : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
-              }`}
-            >
-              <Building2 className="w-3.5 h-3.5 shrink-0" />
-              Perusahaan
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveCategory("admin");
-                setActiveTopic("semua");
-              }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12.5px] font-bold transition-all ${
-                effectiveCategory === "admin"
-                  ? "bg-[#1E4738] text-white shadow-sm"
-                  : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-              Admin
-            </button>
-
+        {/* Role & Scope Tabs */}
+        {(isManagementMode || hasCompanyFaqs || isPlatformOwner) && (
+          <div className="w-full bg-[#EEF4F0] p-1.5 rounded-[18px] border border-[#D5E2D8]/80 flex items-center justify-between gap-1 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-none">
             <button
               onClick={() => {
                 setActiveCategory("karyawan");
                 setActiveTopic("semua");
               }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12.5px] font-bold transition-all ${
-                effectiveCategory === "karyawan"
+              className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                activeCategory === "karyawan"
                   ? "bg-[#1E4738] text-white shadow-sm"
                   : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
               }`}
             >
               <UserCheck className="w-3.5 h-3.5 shrink-0" />
-              Karyawan
+              <span>Karyawan</span>
             </button>
+
+            {(hasCompanyFaqs || isManagementMode || activeRole) && (
+              <button
+                onClick={() => {
+                  setActiveCategory("perusahaan");
+                  setActiveTopic("semua");
+                }}
+                className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                  activeCategory === "perusahaan"
+                    ? "bg-[#1E4738] text-white shadow-sm"
+                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Perusahaan</span>
+              </button>
+            )}
+
+            {hasManagementRole && (
+              <button
+                onClick={() => {
+                  setActiveCategory("admin");
+                  setActiveTopic("semua");
+                }}
+                className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                  activeCategory === "admin"
+                    ? "bg-[#1E4738] text-white shadow-sm"
+                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                <span>Admin</span>
+              </button>
+            )}
+
+            {isPlatformOwner && (
+              <button
+                onClick={() => {
+                  setActiveCategory("platform_admin");
+                  setActiveTopic("semua");
+                }}
+                className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                  activeCategory === "platform_admin"
+                    ? "bg-[#1E4738] text-white shadow-sm"
+                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5 shrink-0" />
+                <span>Platform Owner</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -549,7 +653,12 @@ function BantuanContent() {
 
         {/* FAQ Accordion List */}
         <div className="flex flex-col gap-2.5">
-          {filteredFAQs.length > 0 ? (
+          {isLoadingFaqs && dynamicFaqs.length === 0 ? (
+            <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-2">
+              <div className="w-6 h-6 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-gray-400">Memuat pertanyaan Pusat Bantuan...</span>
+            </div>
+          ) : filteredFAQs.length > 0 ? (
             filteredFAQs.map((item) => {
               const isExpanded = expandedId === item.id;
               const Icon = item.icon;
@@ -567,7 +676,7 @@ function BantuanContent() {
                   >
                     <div className="flex items-start gap-3.5 flex-1 min-w-0">
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                        item.category === "admin" 
+                        item.category === "admin" || item.category === "platform_admin"
                           ? "bg-[#FEF3C7] text-[#92400E]" 
                           : item.category === "perusahaan"
                           ? "bg-[#E8F3EB] text-[#2D5A3F]"
@@ -589,15 +698,20 @@ function BantuanContent() {
                               ? "bg-purple-50 text-purple-700"
                               : item.topic === "tugas"
                               ? "bg-amber-50 text-amber-700"
+                              : item.topic === "sop"
+                              ? "bg-emerald-50 text-emerald-800 font-bold"
                               : "bg-gray-100 text-gray-700"
                           }`}>
                             {item.topic}
                           </span>
-                          {isManagementMode && (
-                            <span className="text-[10px] font-medium text-gray-400 capitalize">
-                              • {item.category}
+                          {item.company_name && (
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                              {item.company_name}
                             </span>
                           )}
+                          <span className="text-[10px] font-medium text-gray-400 capitalize">
+                            • {item.category}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -618,8 +732,24 @@ function BantuanContent() {
                         {item.answer}
                       </p>
 
+                      {/* Tautan Dokumen SOP jika tersedia */}
+                      {item.sop_url && (
+                        <div className="mt-3.5 pt-3 border-t border-gray-100 flex items-center justify-between">
+                          <a
+                            href={item.sop_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#E8F3EB] text-[#1E4738] hover:bg-[#356E3B] hover:text-white transition-colors text-[12px] font-bold border border-[#356E3B]/20 shadow-xs"
+                          >
+                            <FileCheck className="w-3.5 h-3.5" />
+                            <span>Dokumen SOP: {item.sop_title || "Lihat Dokumen Panduan"}</span>
+                            <ExternalLink className="w-3 h-3 ml-0.5 opacity-80" />
+                          </a>
+                        </div>
+                      )}
+
                       {/* Helpful Feedback Widget */}
-                      <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
                         <span className="text-[11.5px] text-[#6B7280]">
                           Apakah jawaban ini membantu?
                         </span>
@@ -672,7 +802,7 @@ function BantuanContent() {
                   setSearchQuery("");
                   setActiveTopic("semua");
                 }}
-                className="mt-2 px-4 py-2 rounded-full bg-[#356E3B] text-white text-[12px] font-bold hover:bg-[#2A582F] transition-colors"
+                className="mt-2 px-4 py-2 rounded-full bg-[#356E3B] text-white text-[12px] font-bold hover:bg-[#2A582F] transition-colors cursor-pointer"
               >
                 Reset Pencarian
               </button>
@@ -680,34 +810,62 @@ function BantuanContent() {
           )}
         </div>
 
-        
-{/* SOP Document Card */}
-<div className="bg-white rounded-[22px] border border-[#E5E7EB] p-4.5 flex flex-col gap-3 shadow-xs mt-1">
-  <div className="flex items-center gap-2.5">
-    <div className="w-8 h-8 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
-      <FileText className="w-4 h-4" strokeWidth={2.5} />
-    </div>
+        {/* SOP Document Card */}
+        {(() => {
+          const latestSop = allFAQs.find((f) => Boolean(f.sop_url));
+          return (
+            <div className="bg-white rounded-[22px] border border-[#E5E7EB] p-4.5 flex flex-col gap-3 shadow-xs mt-1">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
+                  <FileText className="w-4 h-4" strokeWidth={2.5} />
+                </div>
 
-    <div className="flex flex-col">
-      <h2 className="text-[#111827] text-[13.5px] font-bold">
-        Dokumen SOP AbsenIN
-      </h2>
-      <p className="text-[#6B7280] text-[12px]">
-        Lihat panduan resmi penggunaan aplikasi AbsenIN.
-      </p>
-    </div>
-  </div>
+                <div className="flex flex-col">
+                  <h2 className="text-[#111827] text-[13.5px] font-bold">
+                    Dokumen SOP Resmi AbsenIN
+                  </h2>
+                  <p className="text-[#6B7280] text-[12px]">
+                    {latestSop?.sop_title
+                      ? `Tersedia dokumen: ${latestSop.sop_title}`
+                      : "Lihat panduan resmi penggunaan dan operasional AbsenIN."}
+                  </p>
+                </div>
+              </div>
 
-  <a href="https://absenin.my.id/document/ SOP-Absenin.pdf" aria-disabled="true" onClick={(e) => e.preventDefault()} className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#1E4738]/5 border border-[#1E4738]/15 text-[#9CA3AF] rounded-xl text-[12px] font-bold cursor-not-allowed text-center" >
-    <FileText className="w-3.5 h-3.5" />
-    <span>Dokumen SOP Belum Tersedia</span>
-  </a>
+              {latestSop?.sop_url ? (
+                <a
+                  href={latestSop.sop_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#356E3B] text-white rounded-xl text-[12px] font-bold hover:bg-[#2A582F] transition-colors text-center shadow-xs cursor-pointer"
+                >
+                  <FileCheck className="w-3.5 h-3.5" />
+                  <span>Buka Dokumen SOP: {latestSop.sop_title || "Lihat Panduan"}</span>
+                  <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
+                </a>
+              ) : (
+                <a
+                  href="https://absenin.my.id/document/SOP-Absenin.pdf"
+                  aria-disabled="true"
+                  onClick={(e) => e.preventDefault()}
+                  className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#1E4738]/5 border border-[#1E4738]/15 text-[#9CA3AF] rounded-xl text-[12px] font-bold cursor-not-allowed text-center"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Dokumen SOP Belum Tersedia</span>
+                </a>
+              )}
 
-  <div className="pt-2.5 border-t border-[#F3F4F6] flex items-center gap-2 text-[11px] text-[#9CA3AF]">
-    <Info className="w-3.5 h-3.5 shrink-0" />
-    <span>Dokumen PDF akan tersedia setelah panduan resmi diterbitkan.</span>
-  </div>
-</div>
+              <div className="pt-2.5 border-t border-[#F3F4F6] flex items-center gap-2 text-[11px] text-[#9CA3AF]">
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  {latestSop?.sop_url
+                    ? "Tautan dokumen PDF / Google Drive resmi yang telah diverifikasi."
+                    : "Dokumen PDF akan tersedia setelah panduan resmi diterbitkan."}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
 
       </div>
     </div>

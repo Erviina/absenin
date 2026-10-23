@@ -68,6 +68,7 @@ export function isKnownPlatformAdminRoute(pathname: string | null | undefined): 
   if (pathname === "/platform-admin/system-health") return true;
   if (pathname === "/platform-admin/audit-logs") return true;
   if (pathname === "/platform-admin/settings") return true;
+  if (pathname === "/platform-admin/faq" || pathname.startsWith("/platform-admin/faq/")) return true;
   return false;
 }
 

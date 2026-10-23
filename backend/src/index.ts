@@ -22,6 +22,7 @@ import leavesRoutes from "./routes/leaves";
 import tasksRoutes from "./routes/tasks";
 import notificationsRoutes from "./routes/notifications";
 import platformRoutes from "./routes/platform";
+import faqsRoutes from "./routes/faqs";
 
 app.use(cors());
 app.use(express.json());
@@ -39,6 +40,7 @@ app.use("/api/attendances", attendancesRoutes);
 app.use("/api/leaves", leavesRoutes);
 app.use("/api/tasks", tasksRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/api/faqs", faqsRoutes);
 
 app.get("/api/health", async (req: Request, res: Response) => {
   try {

@@ -658,18 +658,19 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB] flex justify-between items-start mt-1">
+        <div className="bg-white rounded-[24px] p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border border-[#D1D5DB] grid grid-cols-3 gap-y-4 gap-x-2 mt-1">
           {[
             { icon: Calendar, label: "Agenda", path: "/admin/agenda" },
             { icon: FileCheck, label: "Perizinan", path: "/admin/izin", badge: pendingLeavesCount },
             { icon: Users2, label: "Karyawan", path: "/admin/karyawan", badge: karyawanBadgeCount },
             { icon: FileText, label: "Laporan", path: "/admin/laporan-kehadiran" },
-            { icon: Megaphone, label: "Berita", path: "/admin/berita" }
+            { icon: Megaphone, label: "Berita", path: "/admin/berita" },
+            { icon: HelpCircle, label: "FAQ & SOP", path: "/admin/faq" },
           ].map((item, i) => (
             <button 
               key={i} 
               onClick={() => router.push(item.path)}
-              className="flex flex-col items-center gap-2 text-center w-[55px] active:scale-95 transition-transform group"
+              className="flex flex-col items-center gap-2 text-center active:scale-95 transition-transform group cursor-pointer"
             >
               <div className="relative w-[48px] h-[48px] bg-[#f4f9f6] border border-[#D1D5DB] rounded-[16px] flex items-center justify-center group-hover:bg-[#e6f0ea] transition-colors">
                 <item.icon className="w-[20px] h-[20px] text-[#356E3B]" strokeWidth={1.5} />
