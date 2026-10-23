@@ -38,18 +38,10 @@ export default function PlatformAdminLayout({
   const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  const isLoginPage = pathname === "/platform-admin/login";
-
   const checkAuthorization = async () => {
-    // Jika di halaman login, lewati pemeriksaan sesi proteksi
-    if (isLoginPage) {
-      setIsLoading(false);
-      return;
-    }
-
     const token = getPlatformAuthToken();
     if (!token) {
-      router.replace("/platform-admin/login");
+      router.replace("/login");
       return;
     }
 
@@ -94,14 +86,7 @@ export default function PlatformAdminLayout({
     };
   }, []);
 
-  // 1. Rute Login: Render tanpa sidebar dan tanpa wrapper
-  if (isLoginPage) {
-    return (
-      <div id="platform-admin-root" className="w-full min-h-screen">
-        {children}
-      </div>
-    );
-  }
+
 
   // 2. Loading State: Menunggu verifikasi server-side allowlist
   if (isLoading) {

@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
 import { PlatformAdminErrorView } from "@/components/platform-admin/PlatformAdminErrorView";
+import { useDialog } from "@/context/DialogContext";
 
 // Dynamically import MapLocation to avoid SSR issues
 const MapLocation = dynamic(() => import("@/components/MapLocation"), {
@@ -371,7 +372,12 @@ export default function PlatformCompanyDetailPage() {
       if (res.success && res.data) {
         setMemberPerformance(res.data);
       } else {
-        alert(res.message || "Gagal memuat analitik karyawan");
+        await showAlert({
+  title: "Error",
+  message: res.message || "Gagal memuat analitik karyawan",
+  type: "error",
+  icon: "alert",
+});
         setSelectedMemberId(null);
       }
     } catch (e) {

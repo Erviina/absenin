@@ -85,7 +85,7 @@ export function PlatformAdminSidebar({
       {/* Brand Header */}
       <div className="p-5 border-b border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[14px] bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xs overflow-hidden">
+          <div className="w-10 h-10 rounded-[14px] bg-white flex items-center justify-center border border-white/20 shadow-xs overflow-hidden">
             <img
               src="/img/assets/logo-icon.png"
               alt="Absenin Logo"

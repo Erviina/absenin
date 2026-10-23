@@ -1,4 +1,5 @@
 "use client";
+import { useDialog } from "@/context/DialogContext";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
@@ -68,6 +69,7 @@ interface UsersResponse {
 }
 
 export default function PlatformAdminUsersPage() {
+  const { showConfirm, showAlert } = useDialog();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [summary, setSummary] = useState({
     totalUsers: 0,
@@ -97,7 +99,15 @@ export default function PlatformAdminUsersPage() {
       ? `Berikan hak akses Developer kepada "${targetUser.full_name || targetUser.email}"?\n\nPengguna ini akan dapat mengakses Platform Admin.`
       : `Cabut hak akses Developer dari "${targetUser.full_name || targetUser.email}"?\n\nPengguna tidak akan dapat mengakses Platform Admin lagi.`;
 
-    if (!window.confirm(confirmMsg)) return;
+    const confirmed = await showConfirm({
+      title: "Konfirmasi",
+      message: confirmMsg,
+      confirmText: "Ya",
+      cancelText: "Tidak",
+      type: "danger",
+      icon: "trash",
+    });
+    if (!confirmed) return;
 
     setIsTogglingDev(targetUser.id);
     try {
@@ -116,10 +126,20 @@ export default function PlatformAdminUsersPage() {
           );
         }
       } else {
-        alert(res.message || "Gagal memperbarui status developer");
+        await showAlert({
+        title: "Error",
+        message: res.message || "Gagal memperbarui status developer",
+        type: "error",
+        icon: "alert",
+      });
       }
     } catch (err: any) {
-      alert(err.message || "Terjadi kesalahan jaringan");
+      await showAlert({
+        title: "Error",
+        message: err.message || "Terjadi kesalahan jaringan",
+        type: "error",
+        icon: "alert",
+      });
     } finally {
       setIsTogglingDev(null);
     }
