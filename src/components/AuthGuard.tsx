@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
   "/unauthorized",
   "/admin/no-authorized",
   "/kebijakan-privasi",
+  "/syarat-ketentuan",
   "/platform-admin/login",
 ];
 
@@ -26,6 +27,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (PUBLIC_PATHS.includes(pathname)) return true;
     if (pathname.startsWith("/login/")) return true;
     if (pathname.startsWith("/kebijakan-privasi/")) return true;
+    if (pathname.startsWith("/syarat-ketentuan/")) return true;
     return false;
   }, [pathname]);
 

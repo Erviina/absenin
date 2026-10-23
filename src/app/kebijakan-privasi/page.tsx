@@ -138,6 +138,7 @@ function KebijakanPrivasiContent() {
       <TopBar 
         title={isConsentRequired ? "Persetujuan Privasi" : "Kebijakan Privasi"} 
         onBack={handleBack} 
+        fixed={true}
       />
 
       <main className="w-full px-4 pt-4 sm:pt-6">
