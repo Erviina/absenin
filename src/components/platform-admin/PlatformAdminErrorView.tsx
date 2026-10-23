@@ -52,8 +52,8 @@ export function PlatformAdminErrorView({
       defaultTitle: "Sesi Login Platform Diperlukan",
       defaultDesc: "Silakan masuk dengan akun Google yang terdaftar sebagai Pemilik Platform untuk membuka dashboard administratif.",
       primaryAction: {
-        label: "Login Platform Admin",
-        href: "/platform-admin/login",
+        label: "Login ke AbsenIn",
+        href: "/login",
         icon: ArrowLeft,
       },
     },
@@ -66,7 +66,7 @@ export function PlatformAdminErrorView({
       defaultDesc: "Tautan direktori atau modul Platform Admin yang Anda tuju tidak tersedia, telah dipindahkan, atau alamat URL salah.",
       primaryAction: {
         label: "Kembali ke Dashboard Platform",
-        href: "/platform-admin",
+        href: "/platform-admin/overview",
         icon: LayoutDashboard,
       },
     },
@@ -78,8 +78,8 @@ export function PlatformAdminErrorView({
       defaultTitle: "Akses Terbatas: Khusus Pemilik Platform",
       defaultDesc: "Akun Anda tidak terdaftar dalam allowlist administratif Platform Owner. Akses ke modul kontrol server ini dibatasi secara ketat.",
       primaryAction: {
-        label: "Ganti Akun Google",
-        href: "/platform-admin/login",
+        label: "Kembali ke Beranda Utama",
+        href: "/dashboard",
         icon: ArrowLeft,
       },
     },
@@ -105,7 +105,7 @@ export function PlatformAdminErrorView({
   return (
     <div 
       id="platform-admin-root" 
-      className="min-h-screen w-full bg-[#F8FAF9] text-[#111827] flex flex-col justify-center items-center px-4 py-12 sm:px-6 lg:px-8 selection:bg-[#86EFAC] selection:text-[#1E3F2B]"
+      className="fixed inset-0 z-[150] w-full min-h-screen bg-[#F8FAF9] text-[#111827] flex flex-col justify-center items-center px-4 py-12 sm:px-6 lg:px-8 overflow-y-auto selection:bg-[#86EFAC] selection:text-[#1E3F2B]"
     >
         
         {/* Subtle Ambient Glow */}

@@ -69,19 +69,20 @@ export async function verifyPlatformAdmin(): Promise<PlatformApiResponse<Platfor
   return fetchPlatformApi<PlatformOwnerProfile>("me", { method: "GET" });
 }
 
+import { clearAuthSession } from "@/lib/api";
+
 /**
- * Logout dari sesi Platform Admin tanpa flash error page
+ * Logout dari sesi Platform Admin dan sesi utama Absenin tanpa flash error page
  */
 export function logoutPlatformAdmin(): void {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.setItem("isLoggingOut", "true");
     window.dispatchEvent(new CustomEvent("authLoggingOut"));
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("user");
-    window.location.replace("/platform-admin/login");
+    clearAuthSession();
+    window.location.replace("/login");
   } catch (e) {
-    window.location.href = "/platform-admin/login";
+    window.location.href = "/login";
   }
 }
 

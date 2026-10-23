@@ -9,9 +9,11 @@ import {
   logoutPlatformAdmin,
   getPlatformAuthToken,
 } from "@/lib/platformAdminApi";
+import { isKnownPlatformAdminRoute } from "@/lib/routeUtils";
 import { PlatformAdminSidebar } from "@/components/platform-admin/PlatformAdminSidebar";
 import { PlatformAdminHeader } from "@/components/platform-admin/PlatformAdminHeader";
 import { PlatformAdminErrorView } from "@/components/platform-admin/PlatformAdminErrorView";
+import { PlatformAdminShellSkeleton } from "@/components/platform-admin/PlatformAdminSkeleton";
 
 interface PlatformAdminContextType {
   profile: PlatformOwnerProfile | null;
@@ -37,8 +39,24 @@ export default function PlatformAdminLayout({
   const [profile, setProfile] = useState<PlatformOwnerProfile | null>(null);
   const [accessDeniedMessage, setAccessDeniedMessage] = useState<string | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // 1. Validasi apakah rute yang dituju adalah rute resmi Platform Admin (mencegah nesting 404 di dalam layout)
+  const isInvalid = !isKnownPlatformAdminRoute(pathname);
 
   const checkAuthorization = async () => {
+    // Jika rute tidak valid, jangan periksa auth dan jangan tampilkan dashboard
+    if (isInvalid) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Periksa status logout
+    if (typeof window !== "undefined" && sessionStorage.getItem("isLoggingOut") === "true") {
+      setIsLoggingOut(true);
+      return;
+    }
+
     const token = getPlatformAuthToken();
     if (!token) {
       router.replace("/login");
@@ -69,8 +87,22 @@ export default function PlatformAdminLayout({
   };
 
   useEffect(() => {
+    if (pathname === "/platform-admin/login") {
+      router.replace("/login");
+      return;
+    }
     checkAuthorization();
-  }, [pathname]);
+  }, [pathname, isInvalid]);
+
+  // Listener untuk event logout seketika
+  useEffect(() => {
+    const handleLoggingOut = () => {
+      setIsLoggingOut(true);
+      setProfile(null);
+    };
+    window.addEventListener("authLoggingOut", handleLoggingOut);
+    return () => window.removeEventListener("authLoggingOut", handleLoggingOut);
+  }, []);
 
   // Ensure document and body switch to full-width desktop mode for platform admin
   useEffect(() => {
@@ -86,29 +118,27 @@ export default function PlatformAdminLayout({
     };
   }, []);
 
-
-
-  // 2. Loading State: Menunggu verifikasi server-side allowlist
-  if (isLoading) {
-    return (
-      <div
-        id="platform-admin-root"
-        className="w-full min-h-screen bg-[#F8FAF9] flex flex-col items-center justify-center p-6 text-center"
-      >
-        <div className="w-14 h-14 rounded-[20px] bg-[#1E3F2B] text-white flex items-center justify-center shadow-lg mb-4 animate-in zoom-in-95 duration-200">
-          <Loader2 className="w-7 h-7 animate-spin text-[#86EFAC]" />
-        </div>
-        <h2 className="text-[16px] font-bold text-[#1E3F2B] mb-1">
-          Memverifikasi Otorisasi Platform Admin...
-        </h2>
-        <p className="text-[12.5px] text-[#5C786C] max-w-sm">
-          Memeriksa hak akses administratif Pemilik Platform.
-        </p>
-      </div>
-    );
+  // Jika mengakses /platform-admin/login, langsung alihkan ke login utama tanpa flash
+  if (pathname === "/platform-admin/login") {
+    return <div className="fixed inset-0 z-[150] bg-[#F8FAF9]" aria-busy="true" />;
   }
 
-  // 3. Access Denied State (403): Pengguna login tetapi email tidak ada di allowlist
+  // Transisi logout netral: cegah layout atau skeleton tampil sekilas saat logout
+  if (isLoggingOut) {
+    return <div className="fixed inset-0 z-[150] bg-[#F8FAF9]" aria-busy="true" />;
+  }
+
+  // 404 Langsung: jika URL tidak terdaftar di Platform Admin, tampilkan full viewport 404 tanpa sidebar/header
+  if (isInvalid) {
+    return <PlatformAdminErrorView type="404" />;
+  }
+
+  // 2. Loading State: Menampilkan Skeleton UI desktop yang identik dengan layout asli (menghilangkan flicker dan layout shift)
+  if (isLoading) {
+    return <PlatformAdminShellSkeleton />;
+  }
+
+  // 3. Access Denied State (403): Pengguna login tetapi email tidak ada di allowlist / bukan developer
   if (accessDeniedMessage) {
     return (
       <PlatformAdminErrorView

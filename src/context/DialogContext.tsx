@@ -37,10 +37,22 @@ export interface AlertDialogOptions {
   icon?: "alert" | "check" | "info";
 }
 
+export interface PromptDialogOptions {
+  title: string;
+  message?: React.ReactNode;
+  placeholder?: string;
+  defaultValue?: string;
+  confirmText?: string;
+  cancelText?: string;
+  inputType?: "text" | "email" | "password" | "number";
+  validate?: (value: string) => string | null | undefined;
+}
+
 interface DialogContextType {
   showToast: (message: string, type?: ToastType, duration?: number) => void;
   showConfirm: (options: ConfirmDialogOptions) => Promise<boolean>;
   showAlert: (options: AlertDialogOptions | string) => Promise<void>;
+  showPrompt: (options: PromptDialogOptions) => Promise<string | null>;
 }
 
 const DialogContext = createContext<DialogContextType | undefined>(undefined);
@@ -56,6 +68,12 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   // Alert Dialog State
   const [alertConfig, setAlertConfig] = useState<AlertDialogOptions | null>(null);
   const alertResolveRef = useRef<(() => void) | null>(null);
+
+  // Prompt Dialog State
+  const [promptConfig, setPromptConfig] = useState<PromptDialogOptions | null>(null);
+  const [promptValue, setPromptValue] = useState("");
+  const [promptError, setPromptError] = useState<string | null>(null);
+  const promptResolveRef = useRef<((value: string | null) => void) | null>(null);
 
   // Show Toast
   const showToast = useCallback((message: string, type: ToastType = "info", duration = 2000) => {
@@ -117,6 +135,62 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
     setAlertConfig(null);
   };
 
+  // Show Prompt (Promise based)
+  const showPrompt = useCallback((options: PromptDialogOptions): Promise<string | null> => {
+    return new Promise((resolve) => {
+      promptResolveRef.current = resolve;
+      setPromptValue(options.defaultValue || "");
+      setPromptError(null);
+      setPromptConfig(options);
+    });
+  }, []);
+
+  const handlePromptCancel = () => {
+    if (promptResolveRef.current) {
+      promptResolveRef.current(null);
+      promptResolveRef.current = null;
+    }
+    setPromptConfig(null);
+    setPromptValue("");
+    setPromptError(null);
+  };
+
+  const handlePromptConfirm = () => {
+    if (!promptConfig) return;
+    if (promptConfig.validate) {
+      const err = promptConfig.validate(promptValue);
+      if (err) {
+        setPromptError(err);
+        return;
+      }
+    }
+    if (promptResolveRef.current) {
+      promptResolveRef.current(promptValue);
+      promptResolveRef.current = null;
+    }
+    setPromptConfig(null);
+    setPromptValue("");
+    setPromptError(null);
+  };
+
+  // Global Keyboard listener for dialogs (Esc to cancel)
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (promptConfig) {
+          handlePromptCancel();
+        } else if (confirmConfig) {
+          handleConfirmAction(false);
+        } else if (alertConfig) {
+          handleAlertClose();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [promptConfig, confirmConfig, alertConfig]);
+
   // Render Icon Helper for Confirm Dialog
   const renderConfirmIcon = () => {
     const type = confirmConfig?.type || "primary";
@@ -164,7 +238,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <DialogContext.Provider value={{ showToast, showConfirm, showAlert }}>
+    <DialogContext.Provider value={{ showToast, showConfirm, showAlert, showPrompt }}>
       {children}
 
       {/* 1. TOAST NOTIFICATIONS CONTAINER */}
@@ -312,6 +386,77 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
             >
               {alertConfig.buttonText || "Mengerti"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 4. PROMPT DIALOG MODAL */}
+      {promptConfig && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/60 backdrop-blur-sm p-5 animate-in fade-in duration-200">
+          <div 
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-sm bg-white rounded-[24px] p-6 flex flex-col items-center text-center gap-4 shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200"
+          >
+            {/* Header */}
+            <div className="flex flex-col gap-1.5 w-full text-left">
+              <h3 className="text-[18px] font-bold text-[#111827] leading-tight text-center">
+                {promptConfig.title}
+              </h3>
+              {promptConfig.message && (
+                <div className="text-[13px] text-gray-500 leading-relaxed text-center px-1">
+                  {promptConfig.message}
+                </div>
+              )}
+            </div>
+
+            {/* Input field */}
+            <div className="w-full flex flex-col gap-1 text-left">
+              <input
+                autoFocus
+                type={promptConfig.inputType || "text"}
+                value={promptValue}
+                placeholder={promptConfig.placeholder || ""}
+                onChange={(e) => {
+                  setPromptValue(e.target.value);
+                  if (promptError) setPromptError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handlePromptConfirm();
+                  }
+                }}
+                className={`w-full px-4 py-3 rounded-[14px] border text-[14px] text-gray-900 bg-gray-50/70 focus:bg-white focus:outline-none transition-all ${
+                  promptError 
+                    ? "border-red-400 focus:ring-2 focus:ring-red-400/20" 
+                    : "border-gray-200 focus:border-[#356E3B] focus:ring-2 focus:ring-[#356E3B]/20"
+                }`}
+              />
+              {promptError && (
+                <span className="text-[12px] text-red-600 font-medium px-1">
+                  {promptError}
+                </span>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 w-full mt-1">
+              <button
+                type="button"
+                onClick={handlePromptCancel}
+                className="flex-1 py-3 px-4 rounded-full border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-[13px] transition-colors active:scale-95"
+              >
+                {promptConfig.cancelText || "Batal"}
+              </button>
+              <button
+                type="button"
+                onClick={handlePromptConfirm}
+                className="flex-1 py-3 px-4 rounded-full bg-[#356E3B] hover:bg-[#2A582F] text-white font-semibold text-[13px] shadow-md shadow-[#356E3B]/20 active:scale-95 transition-all"
+              >
+                {promptConfig.confirmText || "Simpan"}
+              </button>
+            </div>
           </div>
         </div>
       )}

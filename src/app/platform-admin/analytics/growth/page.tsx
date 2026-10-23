@@ -16,6 +16,7 @@ import { fetchPlatformApi } from "@/lib/platformAdminApi";
 import { DateRangeFilter, PeriodType } from "@/components/platform-admin/DateRangeFilter";
 import { GrowthChart, TrendItem } from "@/components/platform-admin/GrowthChart";
 import { ActivationFunnel, FunnelStep } from "@/components/platform-admin/ActivationFunnel";
+import { PlatformAdminOverviewSkeleton } from "@/components/platform-admin/PlatformAdminSkeleton";
 
 interface GrowthData {
   period: PeriodType;
@@ -65,6 +66,10 @@ export default function PlatformAdminGrowthAnalyticsPage() {
           data.trends.length
         ).toFixed(1)
       : "0";
+
+  if (isLoading && !data) {
+    return <PlatformAdminOverviewSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300">

@@ -13,7 +13,7 @@ export default function PlatformAdminRootPage() {
     if (token) {
       router.replace("/platform-admin/overview");
     } else {
-      router.replace("/platform-admin/login");
+      router.replace("/login");
     }
   }, [router]);
 

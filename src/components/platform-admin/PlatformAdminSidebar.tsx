@@ -17,6 +17,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { PlatformOwnerProfile, logoutPlatformAdmin } from "@/lib/platformAdminApi";
+import { useDialog } from "@/context/DialogContext";
 
 interface PlatformAdminSidebarProps {
   profile: PlatformOwnerProfile | null;
@@ -73,9 +74,18 @@ export function PlatformAdminSidebar({
   onCloseMobile,
 }: PlatformAdminSidebarProps) {
   const pathname = usePathname();
+  const { showConfirm } = useDialog();
 
-  const handleLogout = () => {
-    if (confirm("Apakah Anda yakin ingin keluar dari Platform Admin?")) {
+  const handleLogout = async () => {
+    const confirmed = await showConfirm({
+      title: "Konfirmasi Keluar",
+      message: "Apakah Anda yakin ingin keluar dari Platform Admin dan sesi AbsenIn?",
+      confirmText: "Keluar",
+      cancelText: "Batal",
+      type: "danger",
+      icon: "logout",
+    });
+    if (confirmed) {
       logoutPlatformAdmin();
     }
   };

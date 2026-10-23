@@ -15,7 +15,6 @@ export const PUBLIC_EXACT_ROUTES = new Set([
   "/unauthorized",
   "/admin/no-authorized",
   "/kebijakan-privasi",
-  "/platform-admin/login",
 ]);
 
 export const PUBLIC_PREFIXES = [
@@ -46,6 +45,21 @@ export const KNOWN_APP_PREFIXES = [
 export function isPlatformAdminPath(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
   return pathname === "/platform-admin" || pathname.startsWith("/platform-admin/");
+}
+
+/**
+ * Memeriksa apakah pathname merupakan rute resmi di dalam Platform Admin
+ */
+export function isKnownPlatformAdminRoute(pathname: string | null | undefined): boolean {
+  if (!pathname || !isPlatformAdminPath(pathname)) return false;
+  if (pathname === "/platform-admin" || pathname === "/platform-admin/overview") return true;
+  if (pathname === "/platform-admin/analytics/growth" || pathname === "/platform-admin/analytics/features") return true;
+  if (pathname === "/platform-admin/companies" || pathname.startsWith("/platform-admin/companies/")) return true;
+  if (pathname === "/platform-admin/users") return true;
+  if (pathname === "/platform-admin/system-health") return true;
+  if (pathname === "/platform-admin/audit-logs") return true;
+  if (pathname === "/platform-admin/settings") return true;
+  return false;
 }
 
 export function isPublicPath(pathname: string | null | undefined): boolean {

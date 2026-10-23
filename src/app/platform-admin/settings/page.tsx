@@ -15,9 +15,11 @@ import {
 } from "lucide-react";
 import { usePlatformAdmin } from "../layout";
 import { logoutPlatformAdmin } from "@/lib/platformAdminApi";
+import { useDialog } from "@/context/DialogContext";
 
 export default function PlatformAdminSettingsPage() {
   const { profile } = usePlatformAdmin();
+  const { showConfirm, showAlert } = useDialog();
   const [autoRefreshInterval, setAutoRefreshInterval] = useState("30");
   const [alertHighLatency, setAlertHighLatency] = useState(true);
   const [alertFailedAuth, setAlertFailedAuth] = useState(true);
@@ -29,9 +31,37 @@ export default function PlatformAdminSettingsPage() {
     setTimeout(() => setIsSaved(false), 2500);
   };
 
-  const handleClearCache = () => {
-    if (confirm("Bersihkan cache lokal Platform Admin?")) {
+  const handleClearCache = async () => {
+    const confirmed = await showConfirm({
+      title: "Bersihkan Cache",
+      message: "Bersihkan seluruh cache lokal Platform Admin pada sesi ini?",
+      confirmText: "Bersihkan",
+      cancelText: "Batal",
+      type: "warning",
+      icon: "trash",
+    });
+    if (confirmed) {
       sessionStorage.clear();
+      await showAlert({
+        title: "Cache Dibersihkan",
+        message: "Cache sesi lokal Platform Admin telah berhasil dibersihkan.",
+        type: "success",
+        icon: "check",
+      });
+    }
+  };
+
+  const handleLogout = async () => {
+    const confirmed = await showConfirm({
+      title: "Konfirmasi Keluar",
+      message: "Apakah Anda yakin ingin keluar dari Platform Admin dan sesi AbsenIn?",
+      confirmText: "Keluar",
+      cancelText: "Batal",
+      type: "danger",
+      icon: "logout",
+    });
+    if (confirmed) {
+      logoutPlatformAdmin();
     }
   };
 
@@ -231,9 +261,8 @@ export default function PlatformAdminSettingsPage() {
             </span>
           </div>
           <button
-            onClick={() => {
-              if (confirm("Keluar dari Platform Admin?")) logoutPlatformAdmin();
-            }}
+            type="button"
+            onClick={handleLogout}
             className="px-4 py-2 rounded-[14px] bg-red-600 text-white hover:bg-red-700 text-[12.5px] font-bold transition-colors cursor-pointer"
           >
             Keluar Sekarang

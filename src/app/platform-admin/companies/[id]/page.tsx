@@ -43,6 +43,7 @@ import {
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
 import { PlatformAdminErrorView } from "@/components/platform-admin/PlatformAdminErrorView";
 import { useDialog } from "@/context/DialogContext";
+import { PlatformAdminCompanyDetailSkeleton } from "@/components/platform-admin/PlatformAdminSkeleton";
 
 // Dynamically import MapLocation to avoid SSR issues
 const MapLocation = dynamic(() => import("@/components/MapLocation"), {
@@ -238,6 +239,7 @@ export default function PlatformCompanyDetailPage() {
   const params = useParams();
   const router = useRouter();
   const companyId = params?.id as string;
+  const { showAlert } = useDialog();
 
   const [activeTab, setActiveTab] = useState<TabType>("analytics");
   const [copiedCode, setCopiedCode] = useState(false);
@@ -459,12 +461,7 @@ export default function PlatformCompanyDetailPage() {
   };
 
   if (isLoadingCompany && !company) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-[#356E3B]" />
-        <span className="text-sm font-semibold text-gray-500">Memuat profil lengkap perusahaan...</span>
-      </div>
-    );
+    return <PlatformAdminCompanyDetailSkeleton />;
   }
 
   if (!company) {

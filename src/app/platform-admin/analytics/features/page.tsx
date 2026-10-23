@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
 import { DateRangeFilter, PeriodType } from "@/components/platform-admin/DateRangeFilter";
+import { PlatformAdminOverviewSkeleton } from "@/components/platform-admin/PlatformAdminSkeleton";
 
 interface FeatureAnalyticsData {
   period: string;
@@ -109,6 +110,10 @@ export default function PlatformAdminFeatureAnalyticsPage() {
     data && data.leaves.total > 0
       ? Math.round((data.leaves.approved / data.leaves.total) * 100)
       : 0;
+
+  if (isLoading && !data) {
+    return <PlatformAdminOverviewSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300">

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
 import { InfiniteScrollFooter } from "@/components/InfiniteScrollFooter";
+import { PlatformAdminTableRowsSkeleton } from "@/components/platform-admin/PlatformAdminSkeleton";
 
 interface CompanyItem {
   id: string;
@@ -185,11 +186,7 @@ export default function PlatformAdminCompaniesPage() {
             </thead>
             <tbody className="divide-y divide-gray-50 text-[13px]">
               {isLoading ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-400">
-                    Memuat data perusahaan...
-                  </td>
-                </tr>
+                <PlatformAdminTableRowsSkeleton cols={7} count={8} />
               ) : companies.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-gray-400">

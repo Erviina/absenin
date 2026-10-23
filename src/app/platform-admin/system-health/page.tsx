@@ -17,6 +17,7 @@ import {
   FileCheck,
 } from "lucide-react";
 import { fetchPlatformApi } from "@/lib/platformAdminApi";
+import { PlatformAdminSystemHealthSkeleton } from "@/components/platform-admin/PlatformAdminSkeleton";
 
 interface SystemHealthData {
   status: string;
@@ -123,6 +124,10 @@ export default function PlatformAdminSystemHealthPage() {
       </span>
     );
   };
+
+  if (isLoading && !data) {
+    return <PlatformAdminSystemHealthSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300">

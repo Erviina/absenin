@@ -20,6 +20,7 @@ import { GrowthChart, TrendItem } from "@/components/platform-admin/GrowthChart"
 import { ActivationFunnel, FunnelStep } from "@/components/platform-admin/ActivationFunnel";
 import { RecentCompaniesTable, CompanySummaryItem } from "@/components/platform-admin/RecentCompaniesTable";
 import { RecentActivityList, ActivityItem } from "@/components/platform-admin/RecentActivityList";
+import { PlatformAdminOverviewSkeleton } from "@/components/platform-admin/PlatformAdminSkeleton";
 
 interface OverviewData {
   period: PeriodType;
@@ -90,6 +91,10 @@ export default function PlatformAdminOverviewPage() {
     data?.kpi?.periodAttendances && data.kpi.periodAttendances > 0
       ? Math.round((data.kpi.wfoCount / data.kpi.periodAttendances) * 100)
       : 100;
+
+  if (isLoading && !data) {
+    return <PlatformAdminOverviewSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 select-none animate-in fade-in duration-300">
