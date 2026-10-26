@@ -10,17 +10,16 @@ import {
   FileText,
   ExternalLink,
   CheckCircle2,
-  AlertCircle,
   Eye,
   EyeOff,
   Layers,
-  Sparkles,
   RotateCw,
   X,
   FileCheck,
   Globe,
   Shield,
-  Folder,
+  MoreVertical,
+  ChevronDown,
 } from "lucide-react";
 import {
   FaqItem,
@@ -32,6 +31,8 @@ import {
   getFaqCategories,
 } from "@/lib/faqApi";
 import { useDialog } from "@/context/DialogContext";
+import { FaqRichEditor } from "@/components/FaqRichEditor";
+import { FaqAnswerContent } from "@/components/FaqAnswerContent";
 
 export default function PlatformAdminFaqPage() {
   const { showConfirm, showAlert } = useDialog();
@@ -44,6 +45,19 @@ export default function PlatformAdminFaqPage() {
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  // Click outside to close more option menu
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setActiveMenuId(null);
+    };
+    if (activeMenuId) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [activeMenuId]);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -107,6 +121,15 @@ export default function PlatformAdminFaqPage() {
   useEffect(() => {
     fetchFaqs();
   }, [fetchFaqs]);
+
+  // Urutkan FAQ secara alfabetis (A-Z) berdasarkan judul pertanyaan
+  const sortedFaqs = useMemo(() => {
+    return [...faqs].sort((a, b) => {
+      const cmp = a.question.localeCompare(b.question, "id", { sensitivity: "base" });
+      if (cmp !== 0) return cmp;
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+  }, [faqs]);
 
   // Buka Modal Tambah
   const handleOpenAdd = () => {
@@ -444,14 +467,14 @@ export default function PlatformAdminFaqPage() {
       </div>
 
       {/* FAQ List Content */}
-      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs overflow-hidden">
+      <div className="flex flex-col gap-3">
         {isLoading ? (
-          <div className="p-12 flex flex-col items-center justify-center gap-3 text-gray-500">
+          <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-12 flex flex-col items-center justify-center gap-3 text-gray-500 shadow-2xs">
             <div className="w-8 h-8 border-3 border-[#1E3F2B] border-t-transparent rounded-full animate-spin" />
             <p className="text-sm font-medium">Memuat data FAQ...</p>
           </div>
-        ) : faqs.length === 0 ? (
-          <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+        ) : sortedFaqs.length === 0 ? (
+          <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-12 text-center flex flex-col items-center justify-center gap-3 shadow-2xs">
             <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
               <HelpCircle className="w-7 h-7" />
             </div>
@@ -474,120 +497,191 @@ export default function PlatformAdminFaqPage() {
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {faqs.map((faq, idx) => (
+          sortedFaqs.map((faq, index) => {
+            const isExpanded = expandedId === faq.id;
+            const isNearBottom = index >= sortedFaqs.length - 2 && sortedFaqs.length > 2;
+
+            return (
               <div
                 key={faq.id}
-                className="p-5 hover:bg-gray-50/70 transition-colors flex flex-col md:flex-row md:items-start justify-between gap-4"
+                className={`bg-white rounded-[20px] border border-[#E5E7EB] shadow-2xs transition-all relative ${
+                  activeMenuId === faq.id ? "z-30" : "z-0"
+                }`}
               >
-                {/* FAQ Details */}
-                <div className="space-y-2 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                      {faq.category}
-                    </span>
+                <div className="p-4 flex flex-col gap-2.5">
+                  {/* Header Badges & MoreVertical */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                        {faq.category}
+                      </span>
 
-                    <span
-                      className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border inline-flex items-center gap-1 ${
-                        faq.is_published
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200"
-                      }`}
-                    >
-                      {faq.is_published ? (
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${
+                          faq.is_published
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}
+                      >
+                        {faq.is_published ? (
+                          <>
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            <span>Terbit</span>
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff className="w-2.5 h-2.5" />
+                            <span>Draft</span>
+                          </>
+                        )}
+                      </span>
+
+                      {faq.scope === "platform_admin" && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                          Platform Admin
+                        </span>
+                      )}
+
+                      {faq.sop_url && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1">
+                          <FileCheck className="w-2.5 h-2.5" />
+                          <span>SOP</span>
+                        </span>
+                      )}
+
+                      {faq.author_name && (
+                        <span className="text-[10px] text-gray-400">
+                          Oleh: {faq.author_name}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* More Action Menu (Titik Tiga Vertikal) */}
+                    <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuId(activeMenuId === faq.id ? null : faq.id);
+                        }}
+                        className="w-7 h-7 rounded-full hover:bg-gray-100 active:scale-95 text-gray-500 hover:text-[#1E3F2B] flex items-center justify-center transition-all cursor-pointer"
+                        aria-label="Opsi FAQ"
+                        title="Opsi FAQ"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+
+                      {/* Dropdown Menu */}
+                      {activeMenuId === faq.id && (
                         <>
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Terbit</span>
-                        </>
-                      ) : (
-                        <>
-                          <EyeOff className="w-3 h-3" />
-                          <span>Draft</span>
+                          <div 
+                            className="fixed inset-0 z-30" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuId(null);
+                            }} 
+                          />
+                          <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className={`absolute right-0 ${
+                              isNearBottom ? "bottom-full mb-1" : "top-full mt-1"
+                            } w-44 bg-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.18),0_8px_10px_-6px_rgba(0,0,0,0.1)] border border-[#E5E7EB] py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150`}
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleTogglePublish(faq);
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#1E3F2B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              {faq.is_published ? (
+                                <>
+                                  <EyeOff className="w-4 h-4 text-amber-600" />
+                                  <span>Jadikan Draft</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="w-4 h-4 text-emerald-600" />
+                                  <span>Terbitkan FAQ</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleOpenEdit(faq);
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#1E3F2B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Edit3 className="w-4 h-4 text-gray-500" />
+                              <span>Edit FAQ</span>
+                            </button>
+
+                            <div className="h-[1px] bg-gray-100 mx-3 my-0.5" />
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                                handleDelete(faq);
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-500" />
+                              <span>Hapus FAQ</span>
+                            </button>
+                          </div>
                         </>
                       )}
-                    </span>
-
-                    {faq.scope === "platform_admin" && (
-                      <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                        Platform Admin
-                      </span>
-                    )}
-
-                    {faq.author_name && (
-                      <span className="text-xs text-gray-400">
-                        Oleh: {faq.author_name}
-                      </span>
-                    )}
+                    </div>
                   </div>
 
-                  <h3 className="text-base font-bold text-gray-900 leading-snug">
-                    {faq.question}
-                  </h3>
+                  {/* Question Title & Accordion Toggle */}
+                  <div
+                    onClick={() => setExpandedId(isExpanded ? null : faq.id)}
+                    className="cursor-pointer flex items-start justify-between gap-2 select-none group"
+                  >
+                    <h3 className="text-gray-900 group-hover:text-[#1E3F2B] text-[13.5px] font-bold leading-snug transition-colors">
+                      {faq.question}
+                    </h3>
+                    <ChevronDown
+                      className={`w-4 h-4 text-gray-400 shrink-0 transition-transform mt-0.5 ${
+                        isExpanded ? "rotate-180 text-[#1E3F2B]" : ""
+                      }`}
+                    />
+                  </div>
 
-                  <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed max-w-3xl line-clamp-3">
-                    {faq.answer}
-                  </p>
+                  {/* Expanded Detail (Answer & SOP Document) - Hanya tampil saat dibuka */}
+                  {isExpanded && (
+                    <div className="pt-2 border-t border-[#F3F4F6] flex flex-col gap-2.5 animate-in fade-in duration-150">
+                      <FaqAnswerContent content={faq.answer} className="text-gray-600 text-[12.5px]" />
 
-                  {/* SOP Document badge if available */}
-                  {faq.sop_url && (
-                    <div className="pt-1">
-                      <a
-                        href={faq.sop_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-semibold border border-emerald-200 transition-colors"
-                      >
-                        <FileCheck className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Dokumen SOP: {faq.sop_title || "Lihat Dokumen Panduan"}</span>
-                        <ExternalLink className="w-3 h-3 text-emerald-600 ml-0.5" />
-                      </a>
+                      {faq.sop_url && (
+                        <div className="pt-1">
+                          <a
+                            href={faq.sop_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-semibold border border-emerald-200 transition-colors"
+                          >
+                            <FileCheck className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>Dokumen SOP: {faq.sop_title || "Lihat Dokumen Panduan"}</span>
+                            <ExternalLink className="w-3 h-3 text-emerald-600 ml-0.5" />
+                          </a>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 md:self-start shrink-0">
-                  <button
-                    onClick={() => handleTogglePublish(faq)}
-                    title={faq.is_published ? "Ubah jadi Draft" : "Publikasikan FAQ"}
-                    className={`p-2 rounded-xl border text-xs font-semibold transition-all inline-flex items-center gap-1.5 ${
-                      faq.is_published
-                        ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-                        : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                    }`}
-                  >
-                    {faq.is_published ? (
-                      <>
-                        <EyeOff className="w-4 h-4" />
-                        <span className="hidden sm:inline">Jadikan Draft</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="w-4 h-4" />
-                        <span className="hidden sm:inline">Terbitkan</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => handleOpenEdit(faq)}
-                    className="p-2 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
-                    title="Edit FAQ"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={() => handleDelete(faq)}
-                    className="p-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                    title="Hapus FAQ"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
               </div>
-            ))}
-          </div>
+            );
+          })
         )}
       </div>
 
@@ -701,17 +795,15 @@ export default function PlatformAdminFaqPage() {
                 )}
               </div>
 
-              {/* Jawaban */}
+              {/* Jawaban Lengkap (TipTap Rich-Text Editor) */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
                   Jawaban Lengkap *
                 </label>
-                <textarea
-                  rows={5}
+                <FaqRichEditor
                   value={formData.answer}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, answer: e.target.value }))}
+                  onChange={(html) => setFormData((prev) => ({ ...prev, answer: html }))}
                   placeholder="Tuliskan penjelasan dan langkah-langkah solutif di sini..."
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 leading-relaxed focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3F2B]/20 focus:border-[#1E3F2B]"
                 />
                 {formErrors.answer && (
                   <p className="text-xs text-rose-600 mt-1">{formErrors.answer}</p>

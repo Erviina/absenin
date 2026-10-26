@@ -22,19 +22,14 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  PhoneCall,
-  Mail,
-  ThumbsUp,
-  ThumbsDown,
   Navigation,
-  Smartphone,
   ExternalLink,
-  Info,
   Shield,
   FileCheck
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 import { getPublicFaqs, FaqItem as BackendFaqItem } from "@/lib/faqApi";
+import { FaqAnswerContent } from "@/components/FaqAnswerContent";
 
 export type FAQCategory = "karyawan" | "perusahaan" | "admin" | "platform_admin";
 export type TopicFilter = "semua" | "gps" | "presensi" | "izin" | "tugas" | "akun" | "sop";
@@ -54,6 +49,70 @@ interface FAQItem {
 }
 
 const FAQ_DATA: FAQItem[] = [
+  // ================= 0. PANDUAN LOGIN & AKSES AKUN =================
+  {
+    id: "login-cara-google",
+    category: "karyawan",
+    topic: "akun",
+    icon: Lock,
+    question: "Bagaimana cara masuk (login) ke AbsenIN menggunakan Akun Google?",
+    answer: "1. Buka aplikasi atau tautan resmi AbsenIN pada browser perangkat Anda.\n2. Di halaman login, klik tombol 'Sign in with Google'.\n3. Pilih akun Google yang terdaftar atau masukkan email dan kata sandi Google Anda.\n4. Berikan izin akses profil dasar dan email jika diminta oleh Google.\n5. Setelah verifikasi berhasil, Anda akan langsung diarahkan ke beranda aplikasi.",
+    tags: ["login", "masuk", "google", "sso", "akun", "cara login", "sign in"]
+  },
+  {
+    id: "login-kendala-sesi",
+    category: "karyawan",
+    topic: "akun",
+    icon: AlertTriangle,
+    question: "Mengapa muncul pesan 'Gagal verifikasi sesi' atau gagal login dengan Google?",
+    answer: "Kendala saat login Google umumnya disebabkan oleh:\n• Gangguan koneksi internet: Pastikan perangkat Anda terhubung ke internet yang stabil.\n• Sesi Google kedaluwarsa: Muat ulang (refresh) halaman login dan ketuk kembali 'Sign in with Google'.\n• Cache browser menumpuk: Bersihkan riwayat dan cache browser, atau coba buka melalui jendela penyamaran (Incognito Window).\n• Popup terblokir: Pastikan browser ponsel tidak memblokir jendela sembulan (pop-up) autentikasi Google.",
+    tags: ["gagal login", "verifikasi sesi", "error", "kendala login", "google gagal", "troubleshoot", "akses"]
+  },
+  {
+    id: "login-tanpa-password",
+    category: "karyawan",
+    topic: "akun",
+    icon: Lock,
+    question: "Apakah saya perlu membuat kata sandi (password) baru untuk akun AbsenIN?",
+    answer: "Tidak perlu. AbsenIN menggunakan sistem Single Sign-On (SSO) Google yang terenkripsi dan aman. Anda tidak perlu membuat atau mengingat kata sandi tambahan. Keamanan akun Anda sepenuhnya dilindungi oleh autentikasi dua faktor (2FA) dan standar keamanan akun Google Anda.",
+    tags: ["password", "kata sandi", "lupa password", "keamanan", "sso google", "login"]
+  },
+  {
+    id: "login-akun-baru",
+    category: "karyawan",
+    topic: "akun",
+    icon: FileText,
+    question: "Bagaimana alur persetujuan kebijakan bagi akun Google yang baru pertama kali mendaftar?",
+    answer: "Bagi akun Google yang baru pertama kali mendaftar, sistem akan menampilkan lembar persetujuan Syarat & Ketentuan serta Kebijakan Privasi PII secara transparan. Setelah Anda membaca dan menyetujui kedua dokumen tersebut, akun Anda akan langsung aktif untuk digunakan.",
+    tags: ["akun baru", "daftar", "persetujuan", "syarat ketentuan", "kebijakan privasi", "onboarding", "login"]
+  },
+  {
+    id: "login-gabung-perusahaan",
+    category: "karyawan",
+    topic: "akun",
+    icon: Building2,
+    question: "Bagaimana jika email saya belum terhubung ke perusahaan mana pun setelah login?",
+    answer: "Setelah berhasil login untuk pertama kali:\n• Jika Anda karyawan: Minta Kode Perusahaan atau QR Code pendaftaran kepada Admin/HR kantor Anda, lalu masukkan pada menu 'Gabung Perusahaan'.\n• Jika Anda pemilik usaha/HR: Anda dapat memilih 'Buat Perusahaan Baru' untuk mendaftarkan organisasi kantor Anda secara mandiri.",
+    tags: ["gabung perusahaan", "kode perusahaan", "kantor baru", "organisasi", "karyawan baru", "login", "akses"]
+  },
+  {
+    id: "login-multi-akun",
+    category: "karyawan",
+    topic: "akun",
+    icon: Users,
+    question: "Bisakah satu akun email Google digunakan di lebih dari satu perusahaan?",
+    answer: "Bisa. Satu akun Google dapat terhubung ke beberapa cabang atau perusahaan berbeda. Setelah login, Anda dapat beralih perusahaan kapan saja melalui fitur 'Ganti Perusahaan' di halaman Profil atau Company Switcher di bilah atas Beranda.",
+    tags: ["multi perusahaan", "pindah kantor", "cabang", "switch company", "akun", "login"]
+  },
+  {
+    id: "login-privasi-data",
+    category: "karyawan",
+    topic: "akun",
+    icon: ShieldCheck,
+    question: "Apakah data pribadi akun saya aman dan dilindungi di AbsenIN?",
+    answer: "AbsenIN menerapkan standar perlindungan data pribadi (PII) yang ketat. Informasi profil hanya digunakan untuk keperluan identifikasi presensi dan administrasi internal perusahaan Anda. Data lokasi GPS hanya diakses pada detik presensi dan tidak pernah dilacak secara latar belakang (24 jam).",
+    tags: ["privasi", "keamanan data", "pii", "perlindungan data", "gps", "akun", "login"]
+  },
   // ================= 1. KARYAWAN =================
   {
     id: "absen-checkin",
@@ -237,16 +296,25 @@ function BantuanContent() {
   const searchParams = useSearchParams();
   const { activeRole, isManagement: isCompanyManagement, currentUser } = useCompany();
   const [savedRole, setSavedRole] = useState<string | null>(null);
+  const [hasLocalAuth, setHasLocalAuth] = useState<boolean | null>(null);
 
   useEffect(() => {
     try {
       const savedUserStr = localStorage.getItem("user");
+      const token = localStorage.getItem("accessToken");
+      setHasLocalAuth(Boolean(savedUserStr && token));
       if (savedUserStr) {
         const parsed = JSON.parse(savedUserStr);
         if (parsed.activeRole) setSavedRole(parsed.activeRole);
       }
-    } catch {}
+    } catch {
+      setHasLocalAuth(false);
+    }
   }, []);
+
+  const isFromLogin = searchParams.get("from") === "login";
+  // Konteks pra-login: dibuka dengan parameter ?from=login ATAU jika pengguna belum login
+  const isLoginContext = isFromLogin || (hasLocalAuth === false && !currentUser?.id);
 
   const isFromAdmin = searchParams.get("from") === "admin";
   
@@ -260,21 +328,18 @@ function BantuanContent() {
     savedRole === "admin"
   );
 
-  const isManagementMode = isFromAdmin && hasManagementRole;
+  const isManagementMode = !isLoginContext && isFromAdmin && hasManagementRole;
 
   const [activeCategory, setActiveCategory] = useState<FAQCategory>(
     isManagementMode ? "perusahaan" : "karyawan"
   );
   const [activeTopic, setActiveTopic] = useState<TopicFilter>("semua");
   const [searchQuery, setSearchQuery] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>("gps-radius-error");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // State FAQ Dinamis dari Backend
   const [dynamicFaqs, setDynamicFaqs] = useState<BackendFaqItem[]>([]);
   const [isLoadingFaqs, setIsLoadingFaqs] = useState(true);
-
-  // State untuk Interactive Feedback per FAQ
-  const [feedbackState, setFeedbackState] = useState<Record<string, "yes" | "no">>({});
 
   // State untuk GPS Diagnostic Tool
   const [isCheckingGPS, setIsCheckingGPS] = useState(false);
@@ -433,42 +498,83 @@ function BantuanContent() {
       }
     });
 
+    // Urutkan seluruh FAQ gabungan secara alfabetis (A-Z) berdasarkan judul pertanyaan
+    list.sort((a, b) => {
+      const cmp = a.question.localeCompare(b.question, "id", { sensitivity: "base" });
+      if (cmp !== 0) return cmp;
+      return (a.id || "").localeCompare(b.id || "");
+    });
+
     return list;
   }, [dynamicFaqs]);
 
   const filteredFAQs = useMemo(() => {
-    return allFAQs.filter(item => {
-      // 1. Filter kategori
-      if (item.category !== activeCategory) {
-        return false;
+    return allFAQs.filter((item) => {
+      // 1. Jika dalam konteks pra-login (?from=login atau belum login)
+      if (isLoginContext) {
+        // Tampilkan hanya FAQ terkait Login, Google, Akun, dan Akses
+        const isAccountTopic = item.topic === "akun";
+        const hasLoginKeyword = item.tags?.some((tag) => {
+          const t = tag.toLowerCase();
+          return (
+            t.includes("login") ||
+            t.includes("google") ||
+            t.includes("akun") ||
+            t.includes("sesi") ||
+            t.includes("masuk") ||
+            t.includes("sso") ||
+            t.includes("akses")
+          );
+        });
+        const isQuestionRelated =
+          item.question.toLowerCase().includes("login") ||
+          item.question.toLowerCase().includes("masuk") ||
+          item.question.toLowerCase().includes("google") ||
+          item.question.toLowerCase().includes("akun") ||
+          item.question.toLowerCase().includes("sandi") ||
+          item.question.toLowerCase().includes("password") ||
+          item.question.toLowerCase().includes("sesi");
+
+        if (!isAccountTopic && !hasLoginKeyword && !isQuestionRelated) {
+          return false;
+        }
+
+        // Jangan pernah tampilkan FAQ operasional presensi, gps radius, izin, tugas saat belum login
+        if (
+          item.topic === "presensi" ||
+          item.topic === "gps" ||
+          item.topic === "izin" ||
+          item.topic === "tugas"
+        ) {
+          return false;
+        }
+      } else {
+        // Mode normal pasca-login:
+        // Filter kategori wewenang
+        if (item.category !== activeCategory) {
+          return false;
+        }
+
+        // Filter topik
+        if (activeTopic !== "semua" && item.topic !== activeTopic) {
+          return false;
+        }
       }
 
-      // 2. Filter topik
-      if (activeTopic !== "semua" && item.topic !== activeTopic) {
-        return false;
-      }
-
-      // 3. Filter query search
+      // Filter query search
       if (!searchQuery.trim()) return true;
 
       const q = searchQuery.toLowerCase();
       const matchQuestion = item.question.toLowerCase().includes(q);
       const matchAnswer = item.answer.toLowerCase().includes(q);
-      const matchTags = item.tags.some(tag => tag.toLowerCase().includes(q));
+      const matchTags = item.tags.some((tag) => tag.toLowerCase().includes(q));
 
       return matchQuestion || matchAnswer || matchTags;
     });
-  }, [allFAQs, activeCategory, activeTopic, searchQuery]);
+  }, [allFAQs, isLoginContext, activeCategory, activeTopic, searchQuery]);
 
   const toggleExpand = (id: string) => {
     setExpandedId(prev => (prev === id ? null : id));
-  };
-
-  const handleFeedback = (faqId: string, rating: "yes" | "no") => {
-    setFeedbackState(prev => ({
-      ...prev,
-      [faqId]: rating
-    }));
   };
 
   const getCategoryTitle = () => {
@@ -499,8 +605,8 @@ function BantuanContent() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-20">
       {/* TopBar Header */}
       <TopBar 
-        title="Pusat Bantuan & FAQ" 
-        onBack={() => router.back()} 
+        title={isLoginContext ? "Bantuan Login & Akses" : "Pusat Bantuan & FAQ"} 
+        onBack={() => (isFromLogin ? router.push("/login") : router.back())} 
       />
 
       <div className="px-5 py-5 flex flex-col gap-4 max-w-md mx-auto w-full">
@@ -509,13 +615,15 @@ function BantuanContent() {
           <div className="relative z-10 flex flex-col gap-1.5">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-xs text-[11px] font-semibold text-white/90 w-fit">
               <Sparkles className="w-3.5 h-3.5 text-[#7FAF8B]" />
-              {getCategoryTitle()}
+              {isLoginContext ? "Panduan Akun & Akses Masuk" : getCategoryTitle()}
             </div>
             <h1 className="text-[19px] font-extrabold tracking-tight mt-1">
-              Ada yang bisa kami bantu?
+              {isLoginContext ? "Bantuan Login & Akses Akun" : "Ada yang bisa kami bantu?"}
             </h1>
             <p className="text-white/80 text-[12.5px] leading-relaxed">
-              {getCategoryDesc()}
+              {isLoginContext
+                ? "Temukan petunjuk tata cara masuk menggunakan Akun Google, verifikasi sesi, serta panduan akun baru."
+                : getCategoryDesc()}
             </p>
           </div>
           <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full pointer-events-none blur-sm" />
@@ -530,7 +638,11 @@ function BantuanContent() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari topik: GPS, checkin, izin, SOP, dll..."
+            placeholder={
+              isLoginContext
+                ? "Cari kendala: login Google, sesi, akun baru..."
+                : "Cari topik: GPS, checkin, izin, SOP, dll..."
+            }
             className="w-full bg-white rounded-2xl pl-10 pr-10 py-3.5 text-[13px] border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#356E3B]/30 focus:border-[#356E3B] transition-all text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.02)] placeholder:text-[#9CA3AF]"
           />
           {searchQuery && (
@@ -544,8 +656,8 @@ function BantuanContent() {
           )}
         </div>
 
-        {/* Role & Scope Tabs */}
-        {(isManagementMode || hasCompanyFaqs || isPlatformOwner) && (
+        {/* Role & Scope Tabs (Hanya setelah login) */}
+        {!isLoginContext && (isManagementMode || hasCompanyFaqs || isPlatformOwner) && (
           <div className="w-full bg-[#EEF4F0] p-1.5 rounded-[18px] border border-[#D5E2D8]/80 flex items-center justify-between gap-1 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-none">
             <button
               onClick={() => {
@@ -615,30 +727,88 @@ function BantuanContent() {
           </div>
         )}
 
-        {/* Quick Topic Filter Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-          {TOPIC_BADGES.map((badge) => {
-            const isActive = activeTopic === badge.key;
-            return (
+        {/* Quick Topic Filter Chips (Hanya setelah login) */}
+        {!isLoginContext && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+            {TOPIC_BADGES.map((badge) => {
+              const isActive = activeTopic === badge.key;
+              return (
+                <button
+                  key={badge.key}
+                  onClick={() => setActiveTopic(badge.key)}
+                  className={`px-3 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                    isActive
+                      ? "bg-[#1E4738] text-white shadow-xs"
+                      : "bg-white text-[#5C786C] border border-[#E5E7EB] hover:border-[#1E4738]/30 hover:text-[#1E4738]"
+                  }`}
+                >
+                  {badge.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* GPS Diagnostic Tool (Hanya ditampilkan setelah login saat topik presensi/gps atau semua) */}
+        {!isLoginContext && (activeTopic === "semua" || activeTopic === "gps") && (
+          <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-4.5 flex flex-col gap-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F]">
+                  <Compass className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-[#111827] text-[13.5px] font-bold">Uji Akurasi GPS Perangkat</h2>
+                  <p className="text-[#6B7280] text-[11.5px]">Periksa kekuatan sinyal lokasi sebelum check-in</p>
+                </div>
+              </div>
               <button
-                key={badge.key}
-                onClick={() => setActiveTopic(badge.key)}
-                className={`px-3 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-                  isActive
-                    ? "bg-[#1E4738] text-white shadow-xs"
-                    : "bg-white text-[#5C786C] border border-[#E5E7EB] hover:border-[#1E4738]/30 hover:text-[#1E4738]"
-                }`}
+                type="button"
+                onClick={handleTestGPS}
+                disabled={isCheckingGPS}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-xl text-[12px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
               >
-                {badge.label}
+                {isCheckingGPS ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Navigation className="w-3.5 h-3.5" />
+                )}
+                <span>{isCheckingGPS ? "Menguji..." : "Uji GPS"}</span>
               </button>
-            );
-          })}
-        </div>
+            </div>
+
+            {gpsDiagnostic.status !== "idle" && (
+              <div className={`p-3 rounded-xl text-[12px] flex flex-col gap-1.5 ${
+                gpsDiagnostic.status === "success" 
+                  ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
+                  : "bg-rose-50 text-rose-900 border border-rose-200"
+              }`}>
+                <div className="flex items-start gap-2">
+                  {gpsDiagnostic.status === "success" ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium leading-relaxed">{gpsDiagnostic.message}</p>
+                    {gpsDiagnostic.latitude && gpsDiagnostic.longitude && (
+                      <div className="mt-1.5 pt-1.5 border-t border-emerald-200/60 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-emerald-800">
+                        <span>Lat: {gpsDiagnostic.latitude.toFixed(6)}</span>
+                        <span>Long: {gpsDiagnostic.longitude.toFixed(6)}</span>
+                        <span>Waktu: {gpsDiagnostic.timestamp}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Counter Info */}
         <div className="flex items-center justify-between text-[12px] text-[#5C786C] px-1 font-medium mt-1">
           <span>Menampilkan {filteredFAQs.length} pertanyaan</span>
-          {(searchQuery || activeTopic !== "semua") && (
+          {(searchQuery || (!isLoginContext && activeTopic !== "semua")) && (
             <button 
               onClick={() => {
                 setSearchQuery("");
@@ -662,7 +832,6 @@ function BantuanContent() {
             filteredFAQs.map((item) => {
               const isExpanded = expandedId === item.id;
               const Icon = item.icon;
-              const userRating = feedbackState[item.id];
 
               return (
                 <div
@@ -728,9 +897,7 @@ function BantuanContent() {
                   {/* Accordion Content */}
                   {isExpanded && (
                     <div className="px-4.5 pb-4 pt-1 text-[#4B5563] text-[13px] leading-relaxed border-t border-[#F3F4F6] bg-[#FAFCF9]/60">
-                      <p className="whitespace-pre-line mt-2 text-[#374151]">
-                        {item.answer}
-                      </p>
+                      <FaqAnswerContent content={item.answer} className="mt-2 text-[#374151]" />
 
                       {/* Tautan Dokumen SOP jika tersedia */}
                       {item.sop_url && (
@@ -747,38 +914,6 @@ function BantuanContent() {
                           </a>
                         </div>
                       )}
-
-                      {/* Helpful Feedback Widget */}
-                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-                        <span className="text-[11.5px] text-[#6B7280]">
-                          Apakah jawaban ini membantu?
-                        </span>
-                        {userRating ? (
-                          <div className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#166534]">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Terima kasih atas tanggapan Anda!</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleFeedback(item.id, "yes")}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-[11.5px] font-medium transition-colors"
-                            >
-                              <ThumbsUp className="w-3 h-3" />
-                              <span>Ya</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleFeedback(item.id, "no")}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 text-[11.5px] font-medium transition-colors"
-                            >
-                              <ThumbsDown className="w-3 h-3" />
-                              <span>Tidak</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   )}
                 </div>
@@ -810,59 +945,37 @@ function BantuanContent() {
           )}
         </div>
 
-        {/* SOP Document Card */}
-        {(() => {
+        {/* SOP Document Banner Ringkas (Hanya setelah login) */}
+        {!isLoginContext && (() => {
           const latestSop = allFAQs.find((f) => Boolean(f.sop_url));
+          const docUrl = latestSop?.sop_url || "https://absenin.my.id/document/SOP-Absenin.pdf";
+          const docTitle = latestSop?.sop_title || "Dokumen SOP Resmi AbsenIN";
+
           return (
-            <div className="bg-white rounded-[22px] border border-[#E5E7EB] p-4.5 flex flex-col gap-3 shadow-xs mt-1">
-              <div className="flex items-center gap-2.5">
+            <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs mt-1">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
                   <FileText className="w-4 h-4" strokeWidth={2.5} />
                 </div>
-
-                <div className="flex flex-col">
-                  <h2 className="text-[#111827] text-[13.5px] font-bold">
-                    Dokumen SOP Resmi AbsenIN
+                <div className="min-w-0">
+                  <h2 className="text-[#111827] text-[13px] font-bold truncate">
+                    {docTitle}
                   </h2>
-                  <p className="text-[#6B7280] text-[12px]">
-                    {latestSop?.sop_title
-                      ? `Tersedia dokumen: ${latestSop.sop_title}`
-                      : "Lihat panduan resmi penggunaan dan operasional AbsenIN."}
+                  <p className="text-[#6B7280] text-[11.5px] truncate">
+                    Panduan operasional dan SOP resmi AbsenIN
                   </p>
                 </div>
               </div>
-
-              {latestSop?.sop_url ? (
-                <a
-                  href={latestSop.sop_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#356E3B] text-white rounded-xl text-[12px] font-bold hover:bg-[#2A582F] transition-colors text-center shadow-xs cursor-pointer"
-                >
-                  <FileCheck className="w-3.5 h-3.5" />
-                  <span>Buka Dokumen SOP: {latestSop.sop_title || "Lihat Panduan"}</span>
-                  <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
-                </a>
-              ) : (
-                <a
-                  href="https://absenin.my.id/document/SOP-Absenin.pdf"
-                  aria-disabled="true"
-                  onClick={(e) => e.preventDefault()}
-                  className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#1E4738]/5 border border-[#1E4738]/15 text-[#9CA3AF] rounded-xl text-[12px] font-bold cursor-not-allowed text-center"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Dokumen SOP Belum Tersedia</span>
-                </a>
-              )}
-
-              <div className="pt-2.5 border-t border-[#F3F4F6] flex items-center gap-2 text-[11px] text-[#9CA3AF]">
-                <Info className="w-3.5 h-3.5 shrink-0" />
-                <span>
-                  {latestSop?.sop_url
-                    ? "Tautan dokumen PDF / Google Drive resmi yang telah diverifikasi."
-                    : "Dokumen PDF akan tersedia setelah panduan resmi diterbitkan."}
-                </span>
-              </div>
+              <a
+                href={docUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-xl text-[12px] font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+              >
+                <FileCheck className="w-3.5 h-3.5" />
+                <span>Buka Dokumen</span>
+                <ExternalLink className="w-3 h-3 ml-0.5" />
+              </a>
             </div>
           );
         })()}

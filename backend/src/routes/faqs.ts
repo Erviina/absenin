@@ -5,10 +5,63 @@ import { eq, and, sql, desc, asc, isNull } from "drizzle-orm";
 import { authenticate } from "../middleware/auth";
 import { resolveTenant } from "../utils/tenant";
 import { isPlatformOwnerEmail } from "../middleware/platformAuth";
-import { z } from "zod";
 import jwt from "jsonwebtoken";
+import sanitizeHtml from "sanitize-html";
+import { z } from "zod";
 
 const router = Router();
+
+/**
+ * Sanitasi HTML aman untuk jawaban FAQ pada sisi server.
+ * Mempertahankan tag formatting TipTap dan mencegah script/XSS.
+ */
+export function sanitizeFaqAnswer(raw: string): string {
+  if (!raw) return "";
+
+  // Jika input berupa teks biasa murni (tanpa tag HTML), pertahankan apa adanya
+  if (!/<[a-z][\s\S]*>/i.test(raw)) {
+    return raw.trim();
+  }
+
+  return sanitizeHtml(raw, {
+    allowedTags: [
+      "p",
+      "br",
+      "strong",
+      "b",
+      "em",
+      "i",
+      "u",
+      "s",
+      "strike",
+      "h2",
+      "h3",
+      "h4",
+      "ul",
+      "ol",
+      "li",
+      "a",
+      "blockquote",
+      "code",
+    ],
+    allowedAttributes: {
+      a: ["href", "target", "rel", "title"],
+    },
+    allowedSchemes: ["http", "https", "mailto", "tel"],
+    transformTags: {
+      a: (tagName, attribs) => {
+        return {
+          tagName: "a",
+          attribs: {
+            ...attribs,
+            target: "_blank",
+            rel: "noopener noreferrer",
+          },
+        };
+      },
+    },
+  }).trim();
+}
 
 // Zod Schema untuk Validasi Input FAQ
 const createFaqSchema = z.object({
@@ -173,7 +226,7 @@ router.get("/", optionalAuthenticate, async (req: Request, res: Response): Promi
         ${explicitScopeCondition}
         ${searchCondition}
         ${categoryCondition}
-      ORDER BY f.order_index ASC, f.created_at DESC;
+      ORDER BY LOWER(f.question) ASC, f.created_at DESC;
     `);
 
     return res.status(200).json({
@@ -291,7 +344,7 @@ router.get("/manage", authenticate, async (req: Request, res: Response): Promise
         ${statusCondition}
         ${searchCondition}
         ${categoryCondition}
-      ORDER BY f.order_index ASC, f.created_at DESC;
+      ORDER BY LOWER(f.question) ASC, f.created_at DESC;
     `);
 
     return res.status(200).json({
@@ -371,7 +424,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
         scope: data.scope,
         category: data.category.trim(),
         question: data.question.trim(),
-        answer: data.answer.trim(),
+        answer: sanitizeFaqAnswer(data.answer),
         sop_title: sopTitle,
         sop_url: sopUrl,
         is_published: data.is_published,
@@ -462,7 +515,7 @@ router.put("/:id", authenticate, async (req: Request, res: Response): Promise<an
     };
 
     if (data.question !== undefined) updateValues.question = data.question.trim();
-    if (data.answer !== undefined) updateValues.answer = data.answer.trim();
+    if (data.answer !== undefined) updateValues.answer = sanitizeFaqAnswer(data.answer);
     if (data.category !== undefined) updateValues.category = data.category.trim();
     if (data.is_published !== undefined) updateValues.is_published = data.is_published;
     if (data.order_index !== undefined) updateValues.order_index = data.order_index;

@@ -215,7 +215,7 @@ function LoginForm() {
       {/* Top Help Button */}
       <div className="absolute top-5 right-5 z-30">
         <Link
-          href="/bantuan"
+          href="/bantuan?from=login"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 hover:bg-white text-[#1E4738] text-[12px] font-semibold shadow-xs border border-white/60 backdrop-blur-xs transition-all hover:scale-105 active:scale-95"
           title="Buka Pusat Bantuan & FAQ"
         >

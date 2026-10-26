@@ -18,9 +18,8 @@ import {
   X,
   FileCheck,
   ChevronDown,
-  Layers,
   RotateCw,
-  FolderPlus,
+  MoreVertical,
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
@@ -33,6 +32,8 @@ import {
   deleteFaq,
   getFaqCategories,
 } from "@/lib/faqApi";
+import { FaqRichEditor } from "@/components/FaqRichEditor";
+import { FaqAnswerContent } from "@/components/FaqAnswerContent";
 
 export default function AdminCompanyFaqPage() {
   const router = useRouter();
@@ -47,6 +48,18 @@ export default function AdminCompanyFaqPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  // Click outside to close more option menu
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setActiveMenuId(null);
+    };
+    if (activeMenuId) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [activeMenuId]);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -109,6 +122,15 @@ export default function AdminCompanyFaqPage() {
   useEffect(() => {
     fetchFaqs();
   }, [fetchFaqs]);
+
+  // Urutkan FAQ secara alfabetis (A-Z) berdasarkan judul pertanyaan
+  const sortedFaqs = useMemo(() => {
+    return [...faqs].sort((a, b) => {
+      const cmp = a.question.localeCompare(b.question, "id", { sensitivity: "base" });
+      if (cmp !== 0) return cmp;
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+  }, [faqs]);
 
   // Buka Modal Tambah
   const handleOpenAdd = () => {
@@ -392,7 +414,7 @@ export default function AdminCompanyFaqPage() {
               <div className="w-7 h-7 border-3 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
               <span className="text-[12px] text-gray-500 font-medium">Memuat FAQ perusahaan...</span>
             </div>
-          ) : faqs.length === 0 ? (
+          ) : sortedFaqs.length === 0 ? (
             <div className="bg-white rounded-[22px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-3">
               <div className="w-12 h-12 rounded-full bg-emerald-50 text-[#356E3B] flex items-center justify-center">
                 <HelpCircle className="w-6 h-6" />
@@ -411,15 +433,19 @@ export default function AdminCompanyFaqPage() {
               </button>
             </div>
           ) : (
-            faqs.map((faq) => {
+            sortedFaqs.map((faq, index) => {
               const isExpanded = expandedId === faq.id;
+              const isNearBottom = index >= sortedFaqs.length - 2 && sortedFaqs.length > 2;
+
               return (
                 <div
                   key={faq.id}
-                  className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-2xs overflow-hidden transition-all"
+                  className={`bg-white rounded-[20px] border border-[#E5E7EB] shadow-2xs transition-all relative ${
+                    activeMenuId === faq.id ? "z-30" : "z-0"
+                  }`}
                 >
                   <div className="p-4 flex flex-col gap-2.5">
-                    {/* Header Badges */}
+                    {/* Header Badges & MoreVertical */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EEF5F0] text-[#1E4738] border border-[#1E4738]/10">
@@ -445,77 +471,135 @@ export default function AdminCompanyFaqPage() {
                             </>
                           )}
                         </span>
+
+                        {faq.sop_url && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1">
+                            <FileCheck className="w-2.5 h-2.5" />
+                            <span>SOP</span>
+                          </span>
+                        )}
                       </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-1">
+                      {/* More Action Menu (Titik Tiga Vertikal) */}
+                      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => handleTogglePublish(faq)}
-                          title={faq.is_published ? "Jadikan Draft" : "Terbitkan ke Karyawan"}
-                          className={`p-1.5 rounded-lg border text-[11px] font-semibold transition-all ${
-                            faq.is_published
-                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          }`}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuId(activeMenuId === faq.id ? null : faq.id);
+                          }}
+                          className="w-7 h-7 rounded-full hover:bg-gray-100 active:scale-95 text-gray-500 hover:text-[#1E4738] flex items-center justify-center transition-all cursor-pointer"
+                          aria-label="Opsi FAQ"
+                          title="Opsi FAQ"
                         >
-                          {faq.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          <MoreVertical className="w-4 h-4" />
                         </button>
 
-                        <button
-                          onClick={() => handleOpenEdit(faq)}
-                          className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                          title="Edit FAQ"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
+                        {/* Dropdown Menu */}
+                        {activeMenuId === faq.id && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-30" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(null);
+                              }} 
+                            />
+                            <div 
+                              onClick={(e) => e.stopPropagation()}
+                              className={`absolute right-0 ${
+                                isNearBottom ? "bottom-full mb-1" : "top-full mt-1"
+                              } w-44 bg-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.18),0_8px_10px_-6px_rgba(0,0,0,0.1)] border border-[#E5E7EB] py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150`}
+                            >
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuId(null);
+                                  handleTogglePublish(faq);
+                                }}
+                                className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                              >
+                                {faq.is_published ? (
+                                  <>
+                                    <EyeOff className="w-4 h-4 text-amber-600" />
+                                    <span>Jadikan Draft</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Eye className="w-4 h-4 text-emerald-600" />
+                                    <span>Terbitkan FAQ</span>
+                                  </>
+                                )}
+                              </button>
 
-                        <button
-                          onClick={() => handleDelete(faq)}
-                          className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
-                          title="Hapus FAQ"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuId(null);
+                                  handleOpenEdit(faq);
+                                }}
+                                className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                              >
+                                <Edit3 className="w-4 h-4 text-gray-500" />
+                                <span>Edit FAQ</span>
+                              </button>
+
+                              <div className="h-[1px] bg-gray-100 mx-3 my-0.5" />
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuId(null);
+                                  handleDelete(faq);
+                                }}
+                                className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4 text-rose-500" />
+                                <span>Hapus FAQ</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    {/* Question Title */}
+                    {/* Question Title & Accordion Toggle */}
                     <div
                       onClick={() => setExpandedId(isExpanded ? null : faq.id)}
-                      className="cursor-pointer flex items-start justify-between gap-2 select-none"
+                      className="cursor-pointer flex items-start justify-between gap-2 select-none group"
                     >
-                      <h3 className="text-[#111827] text-[13.5px] font-bold leading-snug">
+                      <h3 className="text-[#111827] group-hover:text-[#356E3B] text-[13.5px] font-bold leading-snug transition-colors">
                         {faq.question}
                       </h3>
                       <ChevronDown
-                        className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${
+                        className={`w-4 h-4 text-gray-400 shrink-0 transition-transform mt-0.5 ${
                           isExpanded ? "rotate-180 text-[#1E4738]" : ""
                         }`}
                       />
                     </div>
 
-                    {/* Answer Preview / Full */}
-                    <p
-                      className={`text-[#4B5563] text-[12.5px] leading-relaxed whitespace-pre-line ${
-                        !isExpanded ? "line-clamp-2" : ""
-                      }`}
-                    >
-                      {faq.answer}
-                    </p>
+                    {/* Expanded Detail (Answer & SOP Document) - Hanya tampil saat dibuka */}
+                    {isExpanded && (
+                      <div className="pt-2 border-t border-[#F3F4F6] flex flex-col gap-2.5 animate-in fade-in duration-150">
+                        <FaqAnswerContent content={faq.answer} className="text-[#4B5563] text-[12.5px]" />
 
-                    {/* SOP Document Badge */}
-                    {faq.sop_url && (
-                      <div className="pt-1">
-                        <a
-                          href={faq.sop_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-[11px] font-bold border border-emerald-200 transition-colors"
-                        >
-                          <FileCheck className="w-3.5 h-3.5 text-emerald-700" />
-                          <span>Dokumen SOP: {faq.sop_title || "Lihat SOP"}</span>
-                          <ExternalLink className="w-3 h-3 text-emerald-600" />
-                        </a>
+                        {faq.sop_url && (
+                          <div className="pt-1">
+                            <a
+                              href={faq.sop_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-[11px] font-bold border border-emerald-200 transition-colors"
+                            >
+                              <FileCheck className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>Dokumen SOP: {faq.sop_title || "Lihat SOP"}</span>
+                              <ExternalLink className="w-3 h-3 text-emerald-600" />
+                            </a>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -616,17 +700,15 @@ export default function AdminCompanyFaqPage() {
                 )}
               </div>
 
-              {/* Jawaban */}
+              {/* Jawaban Lengkap (TipTap Rich-Text Editor) */}
               <div>
                 <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
                   Jawaban Lengkap *
                 </label>
-                <textarea
-                  rows={4}
+                <FaqRichEditor
                   value={formData.answer}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, answer: e.target.value }))}
+                  onChange={(html) => setFormData((prev) => ({ ...prev, answer: html }))}
                   placeholder="Tuliskan petunjuk operasional atau jawaban resmi di sini..."
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 leading-relaxed focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
                 />
                 {formErrors.answer && (
                   <p className="text-[11px] text-rose-600 mt-1">{formErrors.answer}</p>

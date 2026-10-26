@@ -150,4 +150,53 @@ body::-webkit-scrollbar {
   border-style: solid;
 }
 
+/* ==========================================================================
+   TipTap ProseMirror Rich-Text Editor Styling
+   ========================================================================== */
+.ProseMirror {
+  outline: none !important;
+  min-height: 140px;
+}
+.ProseMirror p {
+  margin: 0.35rem 0;
+}
+.ProseMirror ul {
+  list-style-type: disc !important;
+  padding-left: 1.25rem !important;
+  margin: 0.5rem 0 !important;
+}
+.ProseMirror ol {
+  list-style-type: decimal !important;
+  padding-left: 1.25rem !important;
+  margin: 0.5rem 0 !important;
+}
+.ProseMirror li {
+  margin: 0.15rem 0 !important;
+}
+.ProseMirror h2 {
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  color: #111827 !important;
+  margin: 0.6rem 0 0.25rem 0 !important;
+}
+.ProseMirror h3 {
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+  margin: 0.5rem 0 0.2rem 0 !important;
+}
+.ProseMirror a {
+  color: #356E3B !important;
+  text-decoration: underline !important;
+  text-underline-offset: 2px !important;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #9CA3AF;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+
 
