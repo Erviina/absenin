@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useState, useMemo, useEffect } from "react";
+import React, { Suspense, useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { TopBar } from "@/components/TopBar";
@@ -11,7 +11,6 @@ import {
   HelpCircle, 
   Building2, 
   UserCheck, 
-  ShieldCheck, 
   Sparkles,
   MapPin,
   Clock,
@@ -27,11 +26,14 @@ import {
   FileCheck,
   Layers,
   SlidersHorizontal,
-  ChevronRight
+  PlayCircle,
+  Video,
+  RotateCcw
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 import { 
   getPublicFaqs, 
+  getFaqCategories,
   FaqItem as BackendFaqItem, 
   ContentScope, 
   TargetRole, 
@@ -41,7 +43,8 @@ import {
   getContentTypeBadge,
   CONTENT_SCOPE_OPTIONS,
   CONTENT_TYPE_OPTIONS,
-  TARGET_ROLE_OPTIONS
+  isMediaVideo,
+  getYouTubeThumbnail
 } from "@/lib/faqApi";
 import { FaqAnswerContent } from "@/components/FaqAnswerContent";
 
@@ -63,7 +66,8 @@ export interface FAQItem {
   company_name?: string | null;
 }
 
-function getFaqIcon(item: { content_type?: string; category?: string; scope?: string; content_scope?: string }) {
+function getFaqIcon(item: { content_type?: string; category?: string; scope?: string; content_scope?: string; sop_url?: string | null; sop_title?: string | null }) {
+  if (isMediaVideo(item.sop_url, item.sop_title)) return Video;
   if (item.content_type === "sop_guide") return FileCheck;
   if (item.content_type === "troubleshooting") return AlertTriangle;
   if (item.content_type === "tips_best_practice") return Sparkles;
@@ -82,7 +86,7 @@ function getFaqIcon(item: { content_type?: string; category?: string; scope?: st
 function BantuanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { currentUser, activeRole, isManagement } = useCompany();
+  const { currentUser, activeRole } = useCompany();
 
   const [hasLocalAuth, setHasLocalAuth] = useState<boolean | null>(null);
   const [savedRole, setSavedRole] = useState<string | null>(null);
@@ -103,18 +107,8 @@ function BantuanContent() {
   }, []);
 
   const isFromLogin = searchParams.get("from") === "login";
-  // Konteks login: eksplisit via ?from=login ATAU jika pengguna belum terautentikasi sama sekali
+  // Konteks login: dibuka dengan parameter ?from=login ATAU jika pengguna belum login sama sekali
   const isLoginContext = isFromLogin || (hasLocalAuth === false && !currentUser?.id);
-
-  // Wewenang manajemen (Owner, Admin, Manager)
-  const hasManagementRole = Boolean(
-    isManagement || 
-    activeRole === "owner" || 
-    activeRole === "admin" || 
-    currentUser?.roles?.includes("Admin") || 
-    savedRole === "owner" || 
-    savedRole === "admin"
-  );
 
   const isPlatformOwner = Boolean(
     currentUser?.is_developer ||
@@ -122,7 +116,7 @@ function BantuanContent() {
     (currentUser?.email && ["absenin.my.id@gmail.com"].includes(currentUser.email.toLowerCase()))
   );
 
-  // User Mapped Role untuk filter target_roles pasca-login
+  // Pemetaan role pengguna untuk penyaringan relevansi panduan (tanpa membuka peran lain)
   const userMappedRole: TargetRole = useMemo(() => {
     if (isPlatformOwner) return "platform_admin";
     if (activeRole === "owner" || activeRole === "admin" || currentUser?.roles?.includes("Admin") || savedRole === "owner" || savedRole === "admin") {
@@ -132,16 +126,17 @@ function BantuanContent() {
     return "employee";
   }, [isPlatformOwner, activeRole, currentUser, savedRole]);
 
-  // State FAQ Dinamis dari Backend
+  // State Data Dinamis dari Backend
   const [dynamicFaqs, setDynamicFaqs] = useState<BackendFaqItem[]>([]);
+  const [backendCategories, setBackendCategories] = useState<string[]>([]);
   const [isLoadingFaqs, setIsLoadingFaqs] = useState(true);
+  const [hasFetchError, setHasFetchError] = useState(false);
 
-  // State Pencarian & Filter Metadata
+  // State Pencarian & Filter
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [scopeFilter, setScopeFilter] = useState<"all" | ContentScope>("all");
-  const [targetRoleFilter, setTargetRoleFilter] = useState<"all" | TargetRole>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<"all" | ContentType>("all");
+  const [scopeFilter, setScopeFilter] = useState<"all" | ContentScope>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   // State untuk GPS Diagnostic Tool
@@ -158,28 +153,33 @@ function BantuanContent() {
     message: "Klik tombol di bawah untuk menguji keakuratan sinyal GPS pada perangkat Anda saat ini."
   });
 
-  // Fetch FAQ Publik dari Backend sesuai Konteks Tampilan
-  useEffect(() => {
-    let isMounted = true;
+  // Fungsi Fetch Data dari Backend
+  const loadFaqsData = useCallback(async () => {
     setIsLoadingFaqs(true);
+    setHasFetchError(false);
 
-    const contextParam = isLoginContext ? "login" : "help_center";
-    getPublicFaqs({ display_context: contextParam })
-      .then((data) => {
-        if (isMounted) {
-          setDynamicFaqs(data);
-          setIsLoadingFaqs(false);
-        }
-      })
-      .catch((e) => {
-        console.warn("Gagal mengambil FAQ publik backend:", e);
-        if (isMounted) setIsLoadingFaqs(false);
-      });
+    try {
+      const contextParam = isLoginContext ? "login" : "help_center";
+      
+      // Ambil FAQ dan Kategori Dinamis secara paralel dari Backend
+      const [faqsData, categoriesData] = await Promise.all([
+        getPublicFaqs({ display_context: contextParam }),
+        getFaqCategories({ display_context: contextParam, only_existing: true })
+      ]);
 
-    return () => {
-      isMounted = false;
-    };
+      setDynamicFaqs(faqsData);
+      setBackendCategories(categoriesData);
+      setIsLoadingFaqs(false);
+    } catch (err) {
+      console.error("Gagal memuat Pusat Bantuan dari backend:", err);
+      setHasFetchError(true);
+      setIsLoadingFaqs(false);
+    }
   }, [isLoginContext]);
+
+  useEffect(() => {
+    loadFaqsData();
+  }, [loadFaqsData]);
 
   // Handle GPS Diagnostic Check
   const handleTestGPS = () => {
@@ -272,93 +272,92 @@ function BantuanContent() {
     return list;
   }, [dynamicFaqs]);
 
-  // Daftar Kategori Unik yang Tersedia
-  const availableCategories = useMemo(() => {
-    const set = new Set<string>();
-    dynamicFaqs.forEach((f) => {
-      if (f.category?.trim()) set.add(f.category.trim());
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "id"));
-  }, [dynamicFaqs]);
-
-  // Filter FAQ Berdasarkan Konteks, Role Target, Scope, Jenis Konten, Kategori, dan Search
-  const filteredFAQs = useMemo(() => {
+  // Saring FAQ yang relevan sesuai otorisasi role pengguna (untuk pasca-login)
+  const roleAccessibleFAQs = useMemo(() => {
     return allFAQs.filter((item) => {
-      // 1. Konteks Pra-Login
       if (isLoginContext) {
-        // Hanya tampilkan konten yang ditandai untuk login atau both
-        const dc = item.display_context;
-        if (dc !== "login" && dc !== "both") {
-          return false;
-        }
-        // Jangan pernah menampilkan konten perusahaan privat atau platform admin di login
-        if (item.scope === "company" || item.scope === "platform_admin" || item.content_scope === "platform") {
-          return false;
-        }
-      } else {
-        // 2. Konteks Pasca-Login (Pusat Bantuan)
-        // a. Otorisasi role target:
-        // Konten tanpa pembatasan role (target_roles kosong / undefined) tampil untuk semua
-        if (item.target_roles && item.target_roles.length > 0) {
-          if (!isPlatformOwner) {
-            if (userMappedRole === "employee") {
-              if (!item.target_roles.includes("employee")) return false;
-            } else if (userMappedRole === "manager") {
-              if (!item.target_roles.includes("manager") && !item.target_roles.includes("employee")) return false;
-            } else if (userMappedRole === "company_owner_admin") {
-              if (
-                !item.target_roles.includes("company_owner_admin") &&
-                !item.target_roles.includes("manager") &&
-                !item.target_roles.includes("employee")
-              ) {
-                return false;
-              }
+        // Pada halaman login: hanya login atau both, dan bukan privat perusahaan/platform
+        if (item.display_context !== "login" && item.display_context !== "both") return false;
+        if (item.scope === "company" || item.scope === "platform_admin" || item.content_scope === "platform") return false;
+        return true;
+      }
+
+      // Pasca-login:
+      // Konten tanpa pembatasan role (target_roles kosong) adalah konten umum untuk semua
+      if (item.target_roles && item.target_roles.length > 0) {
+        if (!isPlatformOwner) {
+          if (userMappedRole === "employee") {
+            if (!item.target_roles.includes("employee")) return false;
+          } else if (userMappedRole === "manager") {
+            if (!item.target_roles.includes("manager") && !item.target_roles.includes("employee")) return false;
+          } else if (userMappedRole === "company_owner_admin") {
+            if (
+              !item.target_roles.includes("company_owner_admin") &&
+              !item.target_roles.includes("manager") &&
+              !item.target_roles.includes("employee")
+            ) {
+              return false;
             }
           }
         }
-
-        // b. Filter Target Role eksplisit (jika dipilih)
-        if (targetRoleFilter !== "all") {
-          if (item.target_roles && item.target_roles.length > 0) {
-            if (!item.target_roles.includes(targetRoleFilter)) return false;
-          }
-        }
-
-        // c. Filter Scope
-        if (scopeFilter !== "all") {
-          const itemScope = item.content_scope || (item.scope === "platform_admin" ? "platform" : item.scope === "company" ? "company" : "user");
-          if (itemScope !== scopeFilter) return false;
-        }
-
-        // d. Filter Jenis Konten
-        if (contentTypeFilter !== "all") {
-          const itemType = item.content_type || "faq";
-          if (itemType !== contentTypeFilter) return false;
-        }
-
-        // e. Filter Kategori/Topik
-        if (categoryFilter !== "all") {
-          if (item.category?.toLowerCase() !== categoryFilter.toLowerCase()) return false;
-        }
       }
 
-      // 3. Filter Query Pencarian
+      return true;
+    });
+  }, [allFAQs, isLoginContext, userMappedRole, isPlatformOwner]);
+
+  // Daftar Kategori Unik Dinamis: HANYA menampilkan kategori yang memiliki konten relevan
+  const relevantCategories = useMemo(() => {
+    const presentCategories = new Set<string>();
+    roleAccessibleFAQs.forEach((f) => {
+      if (f.category?.trim()) presentCategories.add(f.category.trim());
+    });
+
+    // Gabungkan dengan backendCategories yang memang ada di presentCategories
+    const validCategories = backendCategories.filter((cat) => presentCategories.has(cat));
+    // Tambahkan kategori dari presentCategories yang mungkin belum ada di backendCategories
+    presentCategories.forEach((cat) => {
+      if (!validCategories.includes(cat)) validCategories.push(cat);
+    });
+
+    return validCategories.sort((a, b) => a.localeCompare(b, "id"));
+  }, [roleAccessibleFAQs, backendCategories]);
+
+  // Filter FAQ Berdasarkan Search, Jenis Konten, Scope, dan Kategori
+  const filteredFAQs = useMemo(() => {
+    return roleAccessibleFAQs.filter((item) => {
+      // 1. Filter Scope (Pasca-login)
+      if (!isLoginContext && scopeFilter !== "all") {
+        const itemScope = item.content_scope || (item.scope === "platform_admin" ? "platform" : item.scope === "company" ? "company" : "user");
+        if (itemScope !== scopeFilter) return false;
+      }
+
+      // 2. Filter Jenis Konten (Pasca-login)
+      if (!isLoginContext && contentTypeFilter !== "all") {
+        const itemType = item.content_type || "faq";
+        if (itemType !== contentTypeFilter) return false;
+      }
+
+      // 3. Filter Kategori/Topik (Dinamis)
+      if (!isLoginContext && categoryFilter !== "all") {
+        if (item.category?.toLowerCase() !== categoryFilter.toLowerCase()) return false;
+      }
+
+      // 4. Filter Query Pencarian (Judul, Jawaban, Tags, SOP Title)
       if (!searchQuery.trim()) return true;
 
       const q = searchQuery.toLowerCase();
       const matchQuestion = item.question.toLowerCase().includes(q);
       const matchAnswer = item.answer.toLowerCase().includes(q);
-      const matchTags = item.tags.some((tag) => tag.toLowerCase().includes(q));
       const matchCategory = item.category.toLowerCase().includes(q);
+      const matchSopTitle = item.sop_title ? item.sop_title.toLowerCase().includes(q) : false;
+      const matchTags = item.tags.some((tag) => tag.toLowerCase().includes(q));
 
-      return matchQuestion || matchAnswer || matchTags || matchCategory;
+      return matchQuestion || matchAnswer || matchCategory || matchSopTitle || matchTags;
     });
   }, [
-    allFAQs, 
+    roleAccessibleFAQs, 
     isLoginContext, 
-    userMappedRole, 
-    isPlatformOwner, 
-    targetRoleFilter, 
     scopeFilter, 
     contentTypeFilter, 
     categoryFilter, 
@@ -372,7 +371,6 @@ function BantuanContent() {
   const handleResetFilters = () => {
     setSearchQuery("");
     setScopeFilter("all");
-    setTargetRoleFilter("all");
     setContentTypeFilter("all");
     setCategoryFilter("all");
   };
@@ -380,7 +378,6 @@ function BantuanContent() {
   const hasActiveFilters = Boolean(
     searchQuery || 
     scopeFilter !== "all" || 
-    targetRoleFilter !== "all" || 
     contentTypeFilter !== "all" || 
     categoryFilter !== "all"
   );
@@ -389,7 +386,7 @@ function BantuanContent() {
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-20">
       {/* TopBar Header */}
       <TopBar 
-        title={isLoginContext ? "Bantuan Login & Akses" : "Pusat Bantuan & FAQ"} 
+        title="Pusat Bantuan" 
         onBack={() => (isFromLogin ? router.push("/login") : router.back())} 
       />
 
@@ -399,15 +396,15 @@ function BantuanContent() {
           <div className="relative z-10 flex flex-col gap-1.5">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-xs text-[11px] font-semibold text-white/90 w-fit">
               <Sparkles className="w-3.5 h-3.5 text-[#7FAF8B]" />
-              {isLoginContext ? "Panduan Akun & Akses Masuk" : "Pusat Bantuan AbsenIN"}
+              {isLoginContext ? "Bantuan Masuk & Akses" : "Pusat Bantuan AbsenIN"}
             </div>
             <h1 className="text-[19px] font-extrabold tracking-tight mt-1">
-              {isLoginContext ? "Bantuan Login & Akses Akun" : "Ada yang bisa kami bantu?"}
+              Pusat Bantuan
             </h1>
             <p className="text-white/80 text-[12.5px] leading-relaxed">
               {isLoginContext
-                ? "Temukan petunjuk tata cara masuk menggunakan Akun Google, verifikasi sesi, serta panduan akun baru."
-                : "Temukan jawaban lengkap seputar presensi GPS, perizinan, SOP perusahaan, dan solusi kendala teknis."}
+                ? "Panduan tata cara masuk menggunakan Akun Google, verifikasi sesi, dan akses akun baru."
+                : "Temukan panduan operasional, SOP, FAQ, dan solusi kendala teknis AbsenIN."}
             </p>
           </div>
           <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full pointer-events-none blur-sm" />
@@ -424,8 +421,8 @@ function BantuanContent() {
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={
               isLoginContext
-                ? "Cari kendala: login Google, sesi, akun baru..."
-                : "Cari pertanyaan, SOP, kendala, atau tips..."
+                ? "Cari panduan login, akun, atau sesi..."
+                : "Cari pertanyaan, prosedur SOP, atau solusi..."
             }
             className="w-full bg-white rounded-2xl pl-10 pr-10 py-3.5 text-[13px] border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#356E3B]/30 focus:border-[#356E3B] transition-all text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.02)] placeholder:text-[#9CA3AF]"
           />
@@ -440,7 +437,7 @@ function BantuanContent() {
           )}
         </div>
 
-        {/* Filter Section (Hanya Pasca-Login) */}
+        {/* Filter Section: Jenis Konten, Scope, dan Topik/Kategori Dinamis (Hanya Pasca-Login) */}
         {!isLoginContext && (
           <div className="flex flex-col gap-2.5">
             {/* Filter Scope Pills */}
@@ -448,7 +445,7 @@ function BantuanContent() {
               <button
                 type="button"
                 onClick={() => setScopeFilter("all")}
-                className={`flex-1 min-w-[80px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                className={`flex-1 min-w-[75px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
                   scopeFilter === "all"
                     ? "bg-[#1E4738] text-white shadow-xs"
                     : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
@@ -461,7 +458,7 @@ function BantuanContent() {
               <button
                 type="button"
                 onClick={() => setScopeFilter("company")}
-                className={`flex-1 min-w-[90px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                className={`flex-1 min-w-[85px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
                   scopeFilter === "company"
                     ? "bg-[#1E4738] text-white shadow-xs"
                     : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
@@ -474,7 +471,7 @@ function BantuanContent() {
               <button
                 type="button"
                 onClick={() => setScopeFilter("user")}
-                className={`flex-1 min-w-[85px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                className={`flex-1 min-w-[80px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
                   scopeFilter === "user"
                     ? "bg-[#1E4738] text-white shadow-xs"
                     : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
@@ -488,7 +485,7 @@ function BantuanContent() {
                 <button
                   type="button"
                   onClick={() => setScopeFilter("platform")}
-                  className={`flex-1 min-w-[85px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                  className={`flex-1 min-w-[80px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
                     scopeFilter === "platform"
                       ? "bg-[#1E4738] text-white shadow-xs"
                       : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
@@ -532,8 +529,8 @@ function BantuanContent() {
               })}
             </div>
 
-            {/* Filter Kategori Chips */}
-            {availableCategories.length > 0 && (
+            {/* Filter Topik / Kategori Dinamis dari Backend (Hanya yang memiliki konten relevan) */}
+            {relevantCategories.length > 0 && (
               <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none -mx-1 px-1">
                 <button
                   type="button"
@@ -546,7 +543,7 @@ function BantuanContent() {
                 >
                   Semua Topik
                 </button>
-                {availableCategories.map((cat) => {
+                {relevantCategories.map((cat) => {
                   const isActive = categoryFilter.toLowerCase() === cat.toLowerCase();
                   return (
                     <button
@@ -568,7 +565,7 @@ function BantuanContent() {
           </div>
         )}
 
-        {/* GPS Diagnostic Tool (Hanya ditampilkan setelah login saat topik relevan) */}
+        {/* GPS Diagnostic Tool (Hanya Pasca-Login saat topik Presensi/GPS atau Semua) */}
         {!isLoginContext && (categoryFilter === "all" || categoryFilter.toLowerCase().includes("gps") || categoryFilter.toLowerCase().includes("presensi")) && (
           <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-4.5 flex flex-col gap-3 shadow-2xs">
             <div className="flex items-center justify-between">
@@ -626,24 +623,46 @@ function BantuanContent() {
 
         {/* Counter Info & Reset Filter */}
         <div className="flex items-center justify-between text-[12px] text-[#5C786C] px-1 font-medium mt-1">
-          <span>Menampilkan {filteredFAQs.length} pertanyaan</span>
+          <span>Menampilkan {filteredFAQs.length} panduan</span>
           {hasActiveFilters && (
             <button 
               type="button"
               onClick={handleResetFilters}
-              className="text-[#356E3B] font-bold hover:underline cursor-pointer"
+              className="inline-flex items-center gap-1 text-[#356E3B] font-bold hover:underline cursor-pointer"
             >
-              Reset filter
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset filter</span>
             </button>
           )}
         </div>
 
-        {/* FAQ List */}
+        {/* FAQ / SOP Cards List */}
         <div className="flex flex-col gap-2.5">
           {isLoadingFaqs && dynamicFaqs.length === 0 ? (
             <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-2">
               <div className="w-6 h-6 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-gray-400">Memuat pertanyaan Pusat Bantuan...</span>
+              <span className="text-xs text-gray-500">Memuat panduan Pusat Bantuan...</span>
+            </div>
+          ) : hasFetchError && dynamicFaqs.length === 0 ? (
+            /* Error State */
+            <div className="bg-white rounded-[24px] border border-rose-200 p-8 text-center flex flex-col items-center justify-center gap-3 shadow-2xs">
+              <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center text-rose-600">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-[#111827] text-[15px] font-bold">
+                Gagal memuat konten bantuan
+              </h3>
+              <p className="text-[#6B7280] text-[12.5px] max-w-[280px] leading-relaxed">
+                Terjadi kendala jaringan saat mengambil panduan. Silakan coba muat ulang kembali.
+              </p>
+              <button
+                type="button"
+                onClick={loadFaqsData}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#1E4738] text-white text-[12px] font-bold hover:bg-[#2A582F] transition-colors cursor-pointer shadow-xs"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Coba Lagi</span>
+              </button>
             </div>
           ) : filteredFAQs.length > 0 ? (
             filteredFAQs.map((item) => {
@@ -651,6 +670,8 @@ function BantuanContent() {
               const Icon = item.icon;
               const scopeBadge = getContentScopeBadge(item.content_scope);
               const typeBadge = getContentTypeBadge(item.content_type);
+              const hasVideo = isMediaVideo(item.sop_url, item.sop_title);
+              const ytThumb = hasVideo ? getYouTubeThumbnail(item.sop_url) : null;
 
               return (
                 <div
@@ -674,25 +695,26 @@ function BantuanContent() {
                         <Icon className="w-4 h-4" strokeWidth={2.2} />
                       </div>
                       <div className="flex flex-col flex-1 min-w-0">
+                        {/* Judul Pertanyaan / Panduan sebagai Elemen Utama */}
                         <span className="text-[#111827] text-[14px] font-bold leading-snug">
                           {item.question}
                         </span>
                         
-                        {/* Metadata Badges */}
+                        {/* Badge Ringkas & Relevan */}
                         <div className="flex items-center flex-wrap gap-1.5 mt-2">
-                          {/* Kategori Badge */}
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
-                            {item.category}
-                          </span>
-
-                          {/* Jenis Konten Badge */}
+                          {/* Badge Jenis Konten */}
                           {item.content_type && (
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${typeBadge.className}`}>
                               {typeBadge.label}
                             </span>
                           )}
 
-                          {/* Scope Badge (Pasca-Login) */}
+                          {/* Badge Kategori */}
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                            {item.category}
+                          </span>
+
+                          {/* Badge Scope (Pasca-Login) */}
                           {!isLoginContext && (
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${scopeBadge.className}`}>
                               {scopeBadge.label}
@@ -706,13 +728,18 @@ function BantuanContent() {
                             </span>
                           )}
 
-                          {/* Dokumen SOP Indicator */}
-                          {item.sop_url && (
+                          {/* Indikator Video Tutorial atau Dokumen */}
+                          {hasVideo ? (
+                            <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
+                              <PlayCircle className="w-3 h-3 text-rose-600" />
+                              <span>Video</span>
+                            </span>
+                          ) : item.sop_url ? (
                             <span className="text-[10px] font-bold text-[#1E4738] bg-[#E8F3EB] px-2 py-0.5 rounded-full border border-[#356E3B]/20 flex items-center gap-1">
                               <FileCheck className="w-3 h-3" />
-                              <span>SOP</span>
+                              <span>Dokumen</span>
                             </span>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -726,24 +753,79 @@ function BantuanContent() {
                     </div>
                   </button>
 
-                  {/* Accordion Content */}
+                  {/* Detail Konten Saat Dibuka */}
                   {isExpanded && (
-                    <div className="px-4.5 pb-4 pt-1 text-[#4B5563] text-[13px] leading-relaxed border-t border-[#F3F4F6] bg-[#FAFCF9]/60">
+                    <div className="px-4.5 pb-4.5 pt-1 text-[#4B5563] text-[13px] leading-relaxed border-t border-[#F3F4F6] bg-[#FAFCF9]/60">
+                      {/* Jawaban / Prosedur SOP dengan format rapi */}
                       <FaqAnswerContent content={item.answer} className="mt-2 text-[#374151]" />
 
-                      {/* Tautan Dokumen SOP jika tersedia */}
+                      {/* Box Materi Pendukung: Video Tutorial atau Dokumen SOP */}
                       {item.sop_url && (
-                        <div className="mt-3.5 pt-3 border-t border-gray-100 flex items-center justify-between">
-                          <a
-                            href={item.sop_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#E8F3EB] text-[#1E4738] hover:bg-[#356E3B] hover:text-white transition-colors text-[12px] font-bold border border-[#356E3B]/20 shadow-xs"
-                          >
-                            <FileCheck className="w-3.5 h-3.5" />
-                            <span>Dokumen SOP: {item.sop_title || "Lihat Dokumen Panduan"}</span>
-                            <ExternalLink className="w-3 h-3 ml-0.5 opacity-80" />
-                          </a>
+                        <div className="mt-4 pt-3.5 border-t border-gray-100 flex flex-col gap-2">
+                          {hasVideo ? (
+                            /* Video Tutorial Card */
+                            <div className="bg-white rounded-xl border border-rose-200/80 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                {ytThumb ? (
+                                  <div className="relative w-16 h-10 rounded-lg overflow-hidden shrink-0 border border-gray-200 bg-black">
+                                    <img src={ytThumb} alt="Video Thumbnail" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                                      <PlayCircle className="w-4 h-4 text-white" />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 shrink-0">
+                                    <Video className="w-4 h-4" />
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <p className="text-[12.5px] font-bold text-[#111827] truncate">
+                                    {item.sop_title || "Video Tutorial Panduan"}
+                                  </p>
+                                  <p className="text-[11px] text-gray-500">
+                                    Materi panduan visual dan langkah praktik
+                                  </p>
+                                </div>
+                              </div>
+                              <a
+                                href={item.sop_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition-colors text-[11.5px] font-bold shrink-0 shadow-2xs"
+                              >
+                                <PlayCircle className="w-3.5 h-3.5" />
+                                <span>Tonton Video</span>
+                                <ExternalLink className="w-3 h-3 ml-0.5 opacity-80" />
+                              </a>
+                            </div>
+                          ) : (
+                            /* Dokumen SOP Card */
+                            <div className="bg-white rounded-xl border border-emerald-200/80 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-9 h-9 rounded-xl bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
+                                  <FileCheck className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-[12.5px] font-bold text-[#111827] truncate">
+                                    {item.sop_title || "Dokumen SOP Resmi"}
+                                  </p>
+                                  <p className="text-[11px] text-gray-500">
+                                    Dokumentasi prosedur kerja dan kebijakan
+                                  </p>
+                                </div>
+                              </div>
+                              <a
+                                href={item.sop_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1E4738] hover:bg-[#2A582F] text-white transition-colors text-[11.5px] font-bold shrink-0 shadow-2xs"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>Buka Dokumen</span>
+                                <ExternalLink className="w-3 h-3 ml-0.5 opacity-80" />
+                              </a>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -752,7 +834,7 @@ function BantuanContent() {
               );
             })
           ) : isLoginContext ? (
-            /* Empty State Khusus Halaman Login */
+            /* Empty State Khusus Bantuan Login */
             <div className="bg-white rounded-[24px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-3 shadow-2xs">
               <div className="w-14 h-14 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F]">
                 <HelpCircle className="w-7 h-7" />
@@ -792,7 +874,7 @@ function BantuanContent() {
                 Tidak ada pertanyaan yang sesuai
               </h3>
               <p className="text-[#6B7280] text-[12.5px] max-w-[280px] leading-relaxed">
-                Coba sesuaikan kata kunci pencarian atau reset filter scope, jenis konten, dan topik.
+                Coba sesuaikan kata kunci pencarian atau reset filter jenis konten, scope, dan topik.
               </p>
               <button
                 type="button"
@@ -804,40 +886,6 @@ function BantuanContent() {
             </div>
           )}
         </div>
-
-        {/* SOP Document Banner Ringkas (Hanya setelah login jika tersedia) */}
-        {!isLoginContext && (() => {
-          const latestSop = allFAQs.find((f) => Boolean(f.sop_url));
-          if (!latestSop?.sop_url) return null;
-
-          return (
-            <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs mt-1">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
-                  <FileText className="w-4 h-4" strokeWidth={2.5} />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-[#111827] text-[13px] font-bold truncate">
-                    {latestSop.sop_title || "Dokumen SOP Resmi AbsenIN"}
-                  </h2>
-                  <p className="text-[#6B7280] text-[11.5px] truncate">
-                    Panduan operasional dan SOP resmi AbsenIN
-                  </p>
-                </div>
-              </div>
-              <a
-                href={latestSop.sop_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-xl text-[12px] font-bold transition-all shadow-xs shrink-0 cursor-pointer"
-              >
-                <FileCheck className="w-3.5 h-3.5" />
-                <span>Buka Dokumen</span>
-                <ExternalLink className="w-3 h-3 ml-0.5" />
-              </a>
-            </div>
-          );
-        })()}
 
       </div>
     </div>

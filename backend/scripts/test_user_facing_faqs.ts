@@ -374,8 +374,62 @@ async function main() {
     }
     console.log(`✓ PASS: ${questions.length} FAQ terurut secara alfabetis (A-Z) dengan tepat.`);
 
+    // ==========================================================
+    // 7. PENGUJIAN KATEGORI DINAMIS (NON-EMPTY) & MATERI VIDEO/DOKUMEN
+    // ==========================================================
+    console.log("\n[TEST 9] Uji Master Kategori Dinamis Backend & Video Tutorial SOP:");
+
+    // 9a. Verifikasi endpoint /categories?only_existing=true tidak mengembalikan kategori kosong
+    const resCatsOnlyExisting = await fetch(`${baseUrl}/categories?only_existing=true&display_context=help_center`, {
+      headers: { Authorization: `Bearer ${normalToken}` },
+    });
+    const jsonCatsOnlyExisting = await resCatsOnlyExisting.json();
+    if (!resCatsOnlyExisting.ok || !jsonCatsOnlyExisting.success) {
+      throw new Error("FAIL: Endpoint /categories?only_existing=true gagal!");
+    }
+    const existingCats: string[] = jsonCatsOnlyExisting.data;
+    console.log(`✓ Kategori aktif yang ditemukan di database: ${existingCats.join(", ")}`);
+    
+    // Pastikan semua kategori yang dikembalikan benar-benar ada FAQ terbitnya
+    for (const cat of existingCats) {
+      const checkCatRes = await fetch(`${baseUrl}?category=${encodeURIComponent(cat)}`, {
+        headers: { Authorization: `Bearer ${normalToken}` },
+      });
+      const checkCatJson = await checkCatRes.json();
+      if (checkCatJson.data.length === 0) {
+        throw new Error(`FAIL: Kategori '${cat}' dikembalikan padahal tidak memiliki konten relevan!`);
+      }
+    }
+    console.log("✓ PASS: only_existing=true hanya mengembalikan kategori yang memiliki konten aktif (tanpa kategori kosong).");
+
+    // 9b. Uji Materi SOP Video Tutorial
+    const [videoFaq] = await db.insert(faqs).values({
+      question: "GGG Tutorial Presensi Melalui Video",
+      answer: "Tonton langkah-langkah presensi cepat berikut.",
+      category: "Presensi",
+      scope: "global",
+      content_scope: "user",
+      display_context: "both",
+      content_type: "sop_guide",
+      sop_title: "Video Panduan Presensi Cepat",
+      sop_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      is_published: true,
+    }).returning();
+    cleanupFaqIds.push(videoFaq.id);
+
+    const resVideoCheck = await fetch(`${baseUrl}?search=Tutorial Presensi Melalui Video`);
+    const jsonVideoCheck = await resVideoCheck.json();
+    if (jsonVideoCheck.data.length === 0) {
+      throw new Error("FAIL: FAQ materi video tutorial tidak ditemukan!");
+    }
+    const retrievedVideo = jsonVideoCheck.data[0];
+    if (retrievedVideo.sop_url !== "https://www.youtube.com/watch?v=dQw4w9WgXcQ") {
+      throw new Error("FAIL: URL video tutorial tidak tersimpan / terambil dengan benar!");
+    }
+    console.log("✓ PASS: Panduan dengan materi video tutorial tersimpan dan terambil dengan akurat.");
+
     console.log("\n==========================================================");
-    console.log("ALL 8 USER-FACING FAQ METADATA TEST SCENARIOS PASSED! (8/8)");
+    console.log("ALL 9 USER-FACING FAQ METADATA TEST SCENARIOS PASSED! (9/9)");
     console.log("==========================================================");
 
   } catch (err: any) {

@@ -154,15 +154,37 @@ function optionalAuthenticate(req: Request, res: Response, next: NextFunction) {
  */
 router.get("/categories", optionalAuthenticate, async (req: Request, res: Response): Promise<any> => {
   try {
-    const { content_scope, display_context } = req.query;
+    const { content_scope, display_context, only_existing } = req.query;
 
     const user = (req as any).user;
+    let companyId: string | null = null;
+    let isPlatformOwner = false;
+
+    if (user?.id) {
+      isPlatformOwner = await checkIsPlatformOwner(user.id, user.email);
+      const tenant = await resolveTenant(req, user.id);
+      if (tenant?.companyId) {
+        companyId = tenant.companyId;
+      }
+    }
+
     let filterCondition = sql`deleted_at IS NULL AND is_published = true`;
 
     if (!user?.id) {
       // Pengunjung belum login: batasi kategori hanya dari konten global/publik login
       filterCondition = sql`${filterCondition} AND scope = 'global' AND company_id IS NULL AND content_scope != 'platform' AND display_context IN ('login', 'both')`;
     } else {
+      // Terapkan isolasi tenant dan wewenang platform
+      if (companyId && isPlatformOwner) {
+        filterCondition = sql`${filterCondition} AND (scope = 'global' OR (scope = 'company' AND company_id = ${companyId}) OR scope = 'platform_admin')`;
+      } else if (companyId) {
+        filterCondition = sql`${filterCondition} AND (scope = 'global' OR (scope = 'company' AND company_id = ${companyId}))`;
+      } else if (isPlatformOwner) {
+        filterCondition = sql`${filterCondition} AND (scope = 'global' OR scope = 'platform_admin')`;
+      } else {
+        filterCondition = sql`${filterCondition} AND scope = 'global' AND company_id IS NULL`;
+      }
+
       if (content_scope && typeof content_scope === "string") {
         filterCondition = sql`${filterCondition} AND content_scope = ${content_scope.trim()}`;
       }
@@ -186,6 +208,16 @@ router.get("/categories", optionalAuthenticate, async (req: Request, res: Respon
     `);
 
     const dbCategories = categoriesRes.rows.map((r: any) => r.category).filter(Boolean);
+
+    // Jika dipanggil dengan only_existing=true (misalnya untuk filter Pusat Bantuan publik),
+    // kembalikan hanya kategori yang benar-benar memiliki konten relevan
+    if (only_existing === "true") {
+      return res.status(200).json({
+        success: true,
+        data: dbCategories,
+      });
+    }
+
     const combined = Array.from(new Set([...STANDARD_CATEGORIES, ...LEGACY_CATEGORIES, ...dbCategories]));
 
     return res.status(200).json({

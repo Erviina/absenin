@@ -199,28 +199,64 @@ export async function getManageFaqs(params: {
 }
 
 /**
- * Mengambil daftar kategori FAQ yang tersedia
+ * Memeriksa apakah URL materi SOP merupakan video tutorial
  */
-export async function getFaqCategories(): Promise<string[]> {
+export function isMediaVideo(url?: string | null, title?: string | null): boolean {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  const t = (title || "").toLowerCase();
+  return (
+    u.includes("youtube.com") ||
+    u.includes("youtu.be") ||
+    u.includes("vimeo.com") ||
+    u.includes("loom.com") ||
+    u.endsWith(".mp4") ||
+    u.endsWith(".webm") ||
+    t.includes("video") ||
+    t.includes("tutorial") ||
+    t.includes("rekaman")
+  );
+}
+
+/**
+ * Mendapatkan thumbnail YouTube jika URL berupa tautan YouTube
+ */
+export function getYouTubeThumbnail(url?: string | null): string | null {
+  if (!url) return null;
   try {
-    const url = getApiUrl("/faqs/categories");
+    const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    if (ytMatch && ytMatch[1]) {
+      return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * Mengambil daftar kategori FAQ yang tersedia secara dinamis dari backend
+ */
+export async function getFaqCategories(params?: {
+  content_scope?: string;
+  display_context?: string;
+  only_existing?: boolean;
+}): Promise<string[]> {
+  try {
+    const query = new URLSearchParams();
+    if (params?.content_scope) query.set("content_scope", params.content_scope);
+    if (params?.display_context) query.set("display_context", params.display_context);
+    if (params?.only_existing) query.set("only_existing", "true");
+
+    const qs = query.toString();
+    const url = getApiUrl(`/faqs/categories${qs ? `?${qs}` : ""}`);
     const headers = getAuthHeaders();
 
     const res = await fetch(url, { method: "GET", headers });
-    if (!res.ok) return [
-      "Akun", "Perusahaan", "Absensi", "Persetujuan", "Tugas", "Laporan", "Analitik", "Sistem", "Pengaturan",
-      "Umum", "Presensi", "GPS & Lokasi", "Izin & Cuti", "Kebijakan Kantor", "SOP Kerja"
-    ];
+    if (!res.ok) return [];
 
     const json = await res.json();
-    return json.data || [
-      "Akun", "Perusahaan", "Absensi", "Persetujuan", "Tugas", "Laporan", "Analitik", "Sistem", "Pengaturan"
-    ];
+    return json.data || [];
   } catch {
-    return [
-      "Akun", "Perusahaan", "Absensi", "Persetujuan", "Tugas", "Laporan", "Analitik", "Sistem", "Pengaturan",
-      "Umum", "Presensi", "GPS & Lokasi", "Izin & Cuti", "Kebijakan Kantor", "SOP Kerja"
-    ];
+    return [];
   }
 }
 
