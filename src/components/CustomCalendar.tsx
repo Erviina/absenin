@@ -43,12 +43,28 @@ export function CustomCalendar({ selectedDate, onSelect, minDate }: CustomCalend
   const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
   const dayNames = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
+  const isPrevMonthDisabled = (() => {
+    if (!minDate) return false;
+    const parts = minDate.split("-").map(Number);
+    if (parts.length < 2) return false;
+    const minYear = parts[0];
+    const minMonth = parts[1] - 1;
+    return (
+      currentMonth.getFullYear() < minYear ||
+      (currentMonth.getFullYear() === minYear && currentMonth.getMonth() <= minMonth)
+    );
+  })();
+
   return (
     <div className="bg-white rounded-[24px] border border-[#E5E7EB] p-4 mt-4 shadow-sm">
       <div className="flex justify-between items-center mb-4 px-1">
         <button 
           onClick={prevMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-[#4B5563] shrink-0"
+          disabled={isPrevMonthDisabled}
+          className={`w-8 h-8 flex items-center justify-center rounded-full text-[#4B5563] shrink-0 transition-colors ${
+            isPrevMonthDisabled ? "opacity-30 cursor-not-allowed" : "hover:bg-gray-100 cursor-pointer"
+          }`}
+          aria-label="Bulan sebelumnya"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -91,7 +107,9 @@ export function CustomCalendar({ selectedDate, onSelect, minDate }: CustomCalend
         {days.map(day => {
           const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const isSelected = selectedDate === dateStr;
-          const isToday = new Date().toISOString().split('T')[0] === dateStr;
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          const isToday = todayStr === dateStr;
           
           // Check if disabled because it's before minDate
           // (String comparison works perfectly for YYYY-MM-DD format)
@@ -105,7 +123,7 @@ export function CustomCalendar({ selectedDate, onSelect, minDate }: CustomCalend
               className={`
                 h-9 flex items-center justify-center rounded-full text-[14px] font-medium transition-colors
                 ${isDisabled 
-                  ? "text-[#D1D5DB] cursor-not-allowed"
+                  ? "text-[#D1D5DB] cursor-not-allowed opacity-40 select-none" 
                   : isSelected 
                     ? "bg-[#2D5A3F] text-white shadow-sm" 
                     : isToday 

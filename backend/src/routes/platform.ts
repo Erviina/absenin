@@ -202,7 +202,7 @@ router.get("/analytics/overview", authenticatePlatformOwner, async (req: Request
         p.avatar_url as user_avatar,
         c.name as company_name,
         CASE 
-          WHEN a.check_in_time::time > COALESCE(c.work_start_time, '08:00:00'::time) THEN true 
+          WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE(c.work_start_time, '08:00:00'::time) + interval '15 minutes') THEN true 
           ELSE false 
         END as is_late
       FROM attendances a
@@ -452,8 +452,8 @@ router.get("/companies/:id/analytics", authenticatePlatformOwner, async (req: Re
     const attRes = await db.execute(sql`
       SELECT 
         COUNT(*)::int as total,
-        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 1 END)::int as on_time,
-        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${startStr}::time THEN 1 END)::int as late,
+        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= (${startStr}::time + interval '15 minutes') THEN 1 END)::int as on_time,
+        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (${startStr}::time + interval '15 minutes') THEN 1 END)::int as late,
         COUNT(CASE WHEN work_mode = 'WFO' THEN 1 END)::int as wfo_count,
         COUNT(CASE WHEN work_mode = 'WFH' THEN 1 END)::int as wfh_count,
         COUNT(DISTINCT profile_id)::int as active_attendees
@@ -469,8 +469,8 @@ router.get("/companies/:id/analytics", authenticatePlatformOwner, async (req: Re
         TO_CHAR(d.day, 'YYYY-MM-DD') as date,
         TO_CHAR(d.day, 'Dy, DD Mon') as display_date,
         COUNT(a.id)::int as total,
-        COUNT(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 1 END)::int as on_time,
-        COUNT(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${startStr}::time THEN 1 END)::int as late
+        COUNT(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= (${startStr}::time + interval '15 minutes') THEN 1 END)::int as on_time,
+        COUNT(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (${startStr}::time + interval '15 minutes') THEN 1 END)::int as late
       FROM generate_series(
         CURRENT_DATE - INTERVAL '13 days',
         CURRENT_DATE,
@@ -624,8 +624,8 @@ router.get("/companies/:id/members", authenticatePlatformOwner, async (req: Requ
         SELECT 
           profile_id,
           COUNT(*)::int as total_attendances,
-          COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 1 END)::int as on_time_attendances,
-          COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${startStr}::time THEN 1 END)::int as late_attendances,
+          COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= (${startStr}::time + interval '15 minutes') THEN 1 END)::int as on_time_attendances,
+          COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (${startStr}::time + interval '15 minutes') THEN 1 END)::int as late_attendances,
           MAX(check_in_time) as last_attendance
         FROM attendances
         WHERE company_id = ${companyId}::uuid AND deleted_at IS NULL
@@ -725,8 +725,8 @@ router.get("/companies/:id/members/:memberId/performance", authenticatePlatformO
     const attStatsRes = await db.execute(sql`
       SELECT 
         COUNT(*)::int as total,
-        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 1 END)::int as on_time,
-        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${startStr}::time THEN 1 END)::int as late,
+        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= (${startStr}::time + interval '15 minutes') THEN 1 END)::int as on_time,
+        COUNT(CASE WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (${startStr}::time + interval '15 minutes') THEN 1 END)::int as late,
         COUNT(CASE WHEN work_mode = 'WFO' THEN 1 END)::int as wfo_count,
         COUNT(CASE WHEN work_mode = 'WFH' THEN 1 END)::int as wfh_count,
         MAX(check_in_time) as last_attendance
@@ -745,7 +745,7 @@ router.get("/companies/:id/members/:memberId/performance", authenticatePlatformO
         work_mode,
         check_in_address,
         CASE 
-          WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= ${startStr}::time THEN 'on_time'
+          WHEN (check_in_time AT TIME ZONE 'Asia/Jakarta')::time <= (${startStr}::time + interval '15 minutes') THEN 'on_time'
           ELSE 'late'
         END as status
       FROM attendances

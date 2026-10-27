@@ -753,8 +753,8 @@ export default function DetailKaryawanMonitoringPage() {
               </div>
 
               {isLoadingAttendance ? (
-                <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2.5">
-                  <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2.5" role="status" aria-live="polite">
+                  <Loader2 className="w-7 h-7 animate-spin text-[#1E4738]" />
                   <span className="text-[13px] font-medium text-[#7d998c]">Memuat riwayat kehadiran...</span>
                 </div>
               ) : attendanceError ? (
@@ -1106,8 +1106,8 @@ export default function DetailKaryawanMonitoringPage() {
               </div>
 
               {isLoadingTasks ? (
-                <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2.5">
-                  <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2.5" role="status" aria-live="polite">
+                  <Loader2 className="w-7 h-7 animate-spin text-[#1E4738]" />
                   <span className="text-[13px] font-medium text-[#7d998c]">Memuat daftar tugas...</span>
                 </div>
               ) : tasksError ? (
@@ -1244,8 +1244,8 @@ export default function DetailKaryawanMonitoringPage() {
 
             {/* Agenda List */}
             {isLoadingAgendas ? (
-              <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2.5">
-                <div className="w-7 h-7 border-2 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2.5" role="status" aria-live="polite">
+                <Loader2 className="w-7 h-7 animate-spin text-[#1E4738]" />
                 <span className="text-[13px] font-medium text-[#7d998c]">Memuat agenda...</span>
               </div>
             ) : agendasError ? (

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft, RefreshCcw, ArrowRight,
-  MapPin, Check, CheckCircle2, AlertTriangle, Info, SwitchCamera
+  MapPin, Check, CheckCircle2, AlertTriangle, Info, SwitchCamera, Loader2
 } from "lucide-react";
 import dynamic from 'next/dynamic';
 
@@ -518,8 +518,8 @@ export default function CheckinPage() {
 
   if (isStatusLoading) {
     return (
-      <div className="flex flex-col min-h-[100dvh] w-full bg-[#fbfdfc] relative items-center justify-center">
-        <div className="w-10 h-10 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-4" />
+      <div className="flex flex-col min-h-[100dvh] w-full bg-[#fbfdfc] relative items-center justify-center" role="status" aria-live="polite">
+        <Loader2 className="w-10 h-10 animate-spin text-[#1E4738] mb-4" />
         <p className="text-[#4B5563] font-medium text-[14px]">Memeriksa status kehadiran...</p>
       </div>
     );
@@ -624,8 +624,8 @@ export default function CheckinPage() {
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6" />
 
             {isLocating ? (
-              <div className="flex flex-col items-center justify-center py-6">
-                <div className="w-8 h-8 border-4 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin mb-3"></div>
+              <div className="flex flex-col items-center justify-center py-6" role="status" aria-live="polite">
+                <Loader2 className="w-8 h-8 animate-spin text-[#1E4738] mb-3" />
                 <p className="text-[#1E4738] font-bold text-sm">Mendeteksi lokasi...</p>
               </div>
             ) : locationError ? (

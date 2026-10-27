@@ -13,7 +13,8 @@ import {
   ShieldCheck, 
   UserCheck, 
   Crown,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -118,15 +119,15 @@ export function CompanySwitcher({ compact = false, variant = "light" }: CompanyS
   if (!mounted || isLoading) {
     if (variant === "dark") {
       return (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 animate-pulse text-white/70 text-[12px]">
-          <div className="w-3.5 h-3.5 rounded-full bg-white/30" />
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-white/70 text-[12px]" role="status" aria-live="polite">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-white/70" />
           <span>Memuat...</span>
         </div>
       );
     }
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#EAF3ED] border border-[#BFDFCA] animate-pulse text-[#3B7053] text-[12px] font-medium">
-        <div className="w-3.5 h-3.5 rounded-full bg-[#1E4738]/30 animate-spin" />
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#EAF3ED] border border-[#BFDFCA] text-[#3B7053] text-[12px] font-medium" role="status" aria-live="polite">
+        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1E4738]" />
         <span>Memuat...</span>
       </div>
     );

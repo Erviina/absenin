@@ -970,8 +970,8 @@ export default function KelolaPerusahaanPage() {
             
             {/* Loading Overlay */}
             {isUploadingImage && (
-              <div className="absolute inset-0 bg-white/70 rounded-full flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin" />
+              <div className="absolute inset-0 bg-white/70 rounded-full flex items-center justify-center" role="status" aria-live="polite">
+                <Loader2 className="w-6 h-6 text-[#1E4738] animate-spin" />
               </div>
             )}
 
@@ -1370,7 +1370,7 @@ export default function KelolaPerusahaanPage() {
                     className="flex-1 text-[14px] text-[#1E4738] placeholder-gray-400 outline-none bg-transparent font-medium"
                   />
                   {isSearching && (
-                    <div className="animate-spin w-4 h-4 border-2 border-[#356E3B] border-t-transparent rounded-full ml-2 shrink-0"></div>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#356E3B] ml-2 shrink-0" />
                   )}
                 </div>
                 {searchResults.length > 0 && (

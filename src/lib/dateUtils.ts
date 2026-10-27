@@ -137,3 +137,145 @@ export function formatTime(
   const minutes = String(d.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes}`;
 }
+
+/**
+ * Mendapatkan representasi tanggal lokal dalam format "YYYY-MM-DD"
+ */
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Mengonversi tanggal dan waktu tugas menjadi objek Date lokal yang akurat
+ */
+export function getTaskDeadline(
+  dateStr?: string | null,
+  timeStr?: string | null
+): Date | null {
+  const effectiveDate = dateStr?.trim() || getLocalDateString();
+  const dateMatch = effectiveDate.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!dateMatch) return null;
+
+  const year = parseInt(dateMatch[1], 10);
+  const month = parseInt(dateMatch[2], 10) - 1;
+  const day = parseInt(dateMatch[3], 10);
+
+  let hour = 23;
+  let minute = 59;
+  if (timeStr?.trim()) {
+    const timeMatch = timeStr.trim().match(/^(\d{1,2}):(\d{1,2})/);
+    if (timeMatch) {
+      hour = parseInt(timeMatch[1], 10);
+      minute = parseInt(timeMatch[2], 10);
+    }
+  }
+
+  const d = new Date(year, month, day, hour, minute, 0, 0);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Menentukan apakah tugas sudah melewati batas waktu (deadline)
+ */
+export function isTaskOverdue(
+  dateStr?: string | null,
+  timeStr?: string | null,
+  completed?: boolean,
+  referenceTime: Date = new Date()
+): boolean {
+  if (completed) return false;
+  const deadline = getTaskDeadline(dateStr, timeStr);
+  if (!deadline) return false;
+  return deadline.getTime() < referenceTime.getTime();
+}
+
+/**
+ * Menghitung teks durasi keterlambatan tugas secara human-readable
+ */
+export function getOverdueDelayText(
+  dateStr?: string | null,
+  timeStr?: string | null,
+  referenceTime: Date = new Date()
+): string {
+  const deadline = getTaskDeadline(dateStr, timeStr);
+  if (!deadline) return "";
+  const diffMs = referenceTime.getTime() - deadline.getTime();
+  if (diffMs <= 0) return "";
+
+  const diffMinutes = Math.floor(diffMs / (60 * 1000));
+  if (diffMinutes < 60) {
+    return `${Math.max(1, diffMinutes)} menit lalu`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours} jam lalu`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} hari lalu`;
+}
+
+export type TaskDeadlineStatus = "overdue" | "today" | "upcoming" | "completed" | "unknown";
+
+/**
+ * Menentukan status kondisi deadline tugas:
+ * - "completed": Tugas sudah selesai
+ * - "overdue": Tugas belum selesai & deadline sudah lewat
+ * - "today": Tugas belum selesai & deadline jatuh pada hari ini
+ * - "upcoming": Tugas belum selesai & deadline jatuh di hari mendatang
+ */
+export function getTaskDeadlineStatus(
+  dateStr?: string | null,
+  timeStr?: string | null,
+  completed?: boolean,
+  referenceTime: Date = new Date()
+): TaskDeadlineStatus {
+  if (completed) return "completed";
+  const deadline = getTaskDeadline(dateStr, timeStr);
+  if (!deadline) return "unknown";
+
+  if (deadline.getTime() < referenceTime.getTime()) {
+    return "overdue";
+  }
+
+  const todayStr = getLocalDateString(referenceTime);
+  const taskDateStr = dateStr?.trim() || todayStr;
+  if (taskDateStr === todayStr) {
+    return "today";
+  }
+
+  return "upcoming";
+}
+
+/**
+ * Mendapatkan kategori kondisi waktu deadline tugas:
+ * - "overdue": Deadline sudah lewat
+ * - "today": Deadline hari ini
+ * - "upcoming": Deadline di hari mendatang
+ */
+export function getTaskDeadlineCategory(
+  dateStr?: string | null,
+  timeStr?: string | null,
+  referenceTime: Date = new Date()
+): "overdue" | "today" | "upcoming" | "unknown" {
+  const deadline = getTaskDeadline(dateStr, timeStr);
+  if (!deadline) return "unknown";
+
+  if (deadline.getTime() < referenceTime.getTime()) {
+    return "overdue";
+  }
+
+  const todayStr = getLocalDateString(referenceTime);
+  const taskDateStr = dateStr?.trim() || todayStr;
+  if (taskDateStr === todayStr) {
+    return "today";
+  }
+
+  return "upcoming";
+}
+
+

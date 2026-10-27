@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Check, Pencil, Trash2 } from "lucide-react";
-import { formatDate } from "@/lib/dateUtils";
+import { Check, Pencil, Trash2, Clock, Calendar } from "lucide-react";
+import { formatDate, getTaskDeadlineStatus, getOverdueDelayText } from "@/lib/dateUtils";
 
 interface Task {
   id: string;
@@ -28,6 +28,8 @@ interface SwipeableTaskItemProps {
 }
 
 export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }: SwipeableTaskItemProps) {
+  const status = getTaskDeadlineStatus(task.date, task.time, task.completed);
+  const delayText = status === "overdue" ? getOverdueDelayText(task.date, task.time) : "";
   const [translateX, setTranslateX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const touchStartX = useRef<number | null>(null);
@@ -146,25 +148,49 @@ export function SwipeableTaskItem({ task, onToggle, onEdit, onDelete, onClick }:
         onMouseUp={handleTouchEnd}
         onMouseLeave={(e) => touchStartX.current !== null && handleTouchEnd(e)}
       >
-        <div className="flex flex-col flex-1 pr-4">
-          <span className={`text-[14px] font-bold leading-tight mb-1 ${task.completed ? "text-[#6B7280]" : "text-[#111827]"}`}>
-            {task.title}
-          </span>
-          <div className="flex items-center gap-1.5">
-            {task.date ? (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-[#6EA874]">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 6v6l4 2" />
-              </svg>
+        <div className="flex flex-col flex-1 pr-3 min-w-0 justify-center">
+          <div className="flex items-center gap-1.5 mb-1 min-w-0">
+            <span className={`text-[14px] font-bold leading-tight truncate ${task.completed ? "text-[#6B7280] line-through" : "text-[#111827]"}`}>
+              {task.title}
+            </span>
+            {status === "overdue" && (
+              <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FEF2F2] text-[#DC2626] border border-[#FCA5A5]/60">
+                Terlambat
+              </span>
+            )}
+            {status === "today" && (
+              <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]/70">
+                Hari ini
+              </span>
+            )}
+            {status === "upcoming" && (
+              <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]/70">
+                Mendatang
+              </span>
+            )}
+            {status === "completed" && (
+              <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E8F3EB] text-[#356E3B] border border-[#C1DFCD]/70">
+                Selesai
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {status === "overdue" ? (
+              <Clock className="w-3.5 h-3.5 text-[#DC2626] shrink-0" strokeWidth={2.5} />
+            ) : task.date ? (
+              <Calendar className={`w-3.5 h-3.5 shrink-0 ${task.completed ? "text-[#9CA3AF]" : "text-[#6EA874]"}`} strokeWidth={2.5} />
             ) : (
               <div className={`w-1.5 h-1.5 rounded-full ${task.completed ? "bg-[#D1D5DB]" : "bg-[#6EA874]"}`} />
             )}
-            <span className={`text-[11px] font-medium ${task.completed ? "text-[#D1D5DB]" : "text-[#6B7280]"}`}>
+            <span className={`text-[11px] font-medium ${
+              status === "overdue" ? "text-[#DC2626] font-semibold" : task.completed ? "text-[#9CA3AF]" : "text-[#6B7280]"
+            }`}>
               {task.date ? `${formatDate(task.date)}, ${task.time}` : `Pukul ${task.time}`}
+              {status === "overdue" && delayText ? ` • ${delayText}` : ""}
             </span>
 
             {task.assignees && task.assignees.length > 0 && (
-              <div className="flex items-center gap-1 ml-1.5 shrink-0">
+              <div className="flex items-center gap-1 ml-1 shrink-0">
                 <span className="text-[10px] text-gray-300 font-normal">•</span>
                 <div className="flex items-center -space-x-1.5">
                   {task.assignees.slice(0, 3).map((a, idx) => {

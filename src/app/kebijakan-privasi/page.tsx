@@ -207,12 +207,19 @@ function KebijakanPrivasiContent() {
     if (isSubmitting || (!authPayload.idToken && !authPayload.accessToken)) return;
 
     setIsSubmitting(true);
+    let isSuccessRedirecting = false;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     try {
       const res = await fetch(getApiUrl("/auth/google"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(authPayload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const contentType = res.headers.get("content-type");
       let data: any = null;
@@ -223,11 +230,11 @@ function KebijakanPrivasiContent() {
       if (!res.ok) {
         console.error("Login failed with status:", res.status, data);
         showToast(data?.message || `Gagal login (Error ${res.status})`, "error");
-        setIsSubmitting(false);
         return;
       }
 
       if (data?.success) {
+        isSuccessRedirecting = true;
         const user = data.data.user;
         const token = data.data.accessToken;
 
@@ -237,6 +244,8 @@ function KebijakanPrivasiContent() {
         // 2. Karena pengguna SUDAH menyetujui syarat & kebijakan sebelum klik login,
         // langsung catat persetujuan secara resmi ke backend (/auth/consent)
         try {
+          const consentController = new AbortController();
+          const consentTimeout = setTimeout(() => consentController.abort(), 6000);
           await fetch(getApiUrl("/auth/consent"), {
             method: "POST",
             headers: {
@@ -247,7 +256,9 @@ function KebijakanPrivasiContent() {
               consent_accepted: true,
               policy_version: "v1.0",
             }),
+            signal: consentController.signal,
           });
+          clearTimeout(consentTimeout);
 
           user.consent = {
             hasConsented: true,
@@ -260,8 +271,15 @@ function KebijakanPrivasiContent() {
           console.error("Gagal sinkronisasi catatan consent post-login:", consentErr);
         }
 
-        // 3. Muat data membership pengguna
-        await refreshMemberships();
+        // 3. Muat data membership pengguna secara non-blocking
+        try {
+          await Promise.race([
+            refreshMemberships(true),
+            new Promise((resolve) => setTimeout(resolve, 2500)),
+          ]);
+        } catch (mErr) {
+          console.warn("Background membership refresh deferred:", mErr);
+        }
 
         showToast("Login berhasil! Selamat datang di AbsenIN.", "success");
 
@@ -282,11 +300,18 @@ function KebijakanPrivasiContent() {
       } else {
         showToast(data?.message || "Login failed", "error");
       }
-    } catch (err) {
+    } catch (err: any) {
+      clearTimeout(timeoutId);
       console.error("Login error:", err);
-      showToast("Terjadi kesalahan jaringan saat login", "error");
+      if (err?.name === "AbortError") {
+        showToast("Proses login melebihi batas waktu (timeout). Silakan periksa koneksi Anda dan coba lagi.", "error");
+      } else {
+        showToast("Terjadi kesalahan jaringan saat login. Silakan coba lagi.", "error");
+      }
     } finally {
-      setIsSubmitting(false);
+      if (!isSuccessRedirecting) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -294,10 +319,16 @@ function KebijakanPrivasiContent() {
     onSuccess: (tokenResponse) => {
       handleGoogleSuccess({ accessToken: tokenResponse.access_token });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Google Login Error:", error);
       setIsSubmitting(false);
-      showToast("Gagal login dengan Google", "error");
+      if (error?.error !== "popup_closed_by_user") {
+        showToast("Gagal login dengan Google", "error");
+      }
+    },
+    onNonOAuthError: (error) => {
+      console.error("Google Non-OAuth Error:", error);
+      setIsSubmitting(false);
     },
     prompt: "select_account",
   });
@@ -541,23 +572,27 @@ function KebijakanPrivasiContent() {
                       </>
                     )}
                   </button>
+                ) : isSubmitting ? (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="w-full h-12 rounded-full bg-[#EBF3EC] text-[#1E4738] font-semibold text-[14px] flex items-center justify-center gap-2 border border-[#356E3B]/20"
+                  >
+                    <Loader2 className="w-5 h-5 animate-spin text-[#1E4738]" />
+                    <span>Menghubungkan akun Google...</span>
+                  </div>
                 ) : (
                   // Pengguna baru / belum login -> Tombol Sign In with Google
                   <button
                     id="btn-google-login-after-consent"
                     type="button"
                     onClick={() => loginWithGoogle()}
-                    disabled={isSubmitting}
-                    className="relative w-full h-12 bg-white border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#c6c8cc] active:bg-[#f1f3f4] text-[#3c4043] font-semibold text-[14px] rounded-full shadow-sm flex items-center justify-center transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                    className="relative w-full h-12 bg-white border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#c6c8cc] active:bg-[#f1f3f4] text-[#3c4043] font-semibold text-[14px] rounded-full shadow-sm flex items-center justify-center transition-all duration-150 cursor-pointer"
                   >
                     <div className="absolute left-4 w-5 h-5 flex items-center justify-center">
-                      {isSubmitting ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-[#356E3B]" />
-                      ) : (
-                        <GoogleIcon className="w-[18px] h-[18px]" />
-                      )}
+                      <GoogleIcon className="w-[18px] h-[18px]" />
                     </div>
-                    <span>{isSubmitting ? "Menghubungkan akun Google..." : "Sign in with Google"}</span>
+                    <span>Sign in with Google</span>
                   </button>
                 )}
               </div>

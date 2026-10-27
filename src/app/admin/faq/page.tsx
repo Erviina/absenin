@@ -20,10 +20,6 @@ import {
   ChevronDown,
   RotateCw,
   MoreVertical,
-  Users,
-  AlertTriangle,
-  Filter,
-  Check,
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
@@ -632,8 +628,8 @@ export default function AdminCompanyFaqPage() {
         {/* Daftar FAQ Cards */}
         <div className="flex flex-col gap-3">
           {isLoading ? (
-            <div className="bg-white rounded-[22px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-2">
-              <div className="w-7 h-7 border-3 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+            <div className="bg-white rounded-[22px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-2" role="status" aria-live="polite">
+              <Loader2 className="w-7 h-7 animate-spin text-[#1E4738]" />
               <span className="text-[12px] text-gray-500 font-medium">Memuat FAQ perusahaan...</span>
             </div>
           ) : sortedFaqs.length === 0 ? (

@@ -334,7 +334,7 @@ router.get("/", auth_1.authenticate, async (req, res) => {
         a.check_out_longitude,
         a.check_out_address,
         a.check_out_photo_url,
-        (CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time) 
+        (CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE(c.work_start_time, '08:00:00'::time) + interval '15 minutes') 
           AND (
             CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
@@ -465,7 +465,7 @@ router.get("/management/summary", auth_1.authenticate, async (req, res) => {
             END
           ) = ANY(COALESCE(NULLIF(c.work_days, '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
         THEN 1 ELSE 0 END) as hadir_count,
-        sum(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time) 
+        sum(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE(c.work_start_time, '08:00:00'::time) + interval '15 minutes') 
           AND (
             CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
@@ -594,7 +594,7 @@ router.get("/management/employees/:employeeId", auth_1.authenticate, async (req,
         a.id, a.work_mode, a.check_in_time, a.check_in_latitude, a.check_in_longitude, 
         a.check_in_address, a.check_in_photo_url, a.check_out_time, a.check_out_latitude, 
         a.check_out_longitude, a.check_out_address, a.check_out_photo_url,
-        (CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time) 
+        (CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE(c.work_start_time, '08:00:00'::time) + interval '15 minutes') 
           AND (
             CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
@@ -711,7 +711,7 @@ router.get("/:id", auth_1.authenticate, async (req, res) => {
         a.check_out_photo_url,
         a.created_at,
         a.updated_at,
-        (CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time) 
+        (CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE(c.work_start_time, '08:00:00'::time) + interval '15 minutes') 
           AND (
             CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'

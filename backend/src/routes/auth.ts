@@ -54,9 +54,10 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
       fullName = payload.name || "";
       avatarUrl = payload.picture || "";
     } else if (googleAccessToken) {
-      // Verify Google Access Token via Google userinfo endpoint
+      // Verify Google Access Token via Google userinfo endpoint (with 8s timeout)
       const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
         headers: { Authorization: `Bearer ${googleAccessToken}` },
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!userInfoRes.ok) {
@@ -177,12 +178,29 @@ router.post("/google", async (req: Request, res: Response): Promise<any> => {
     }
 
 
-    // Fetch active company — prioritaskan profile.company_id jika status aktif di company_members
+    // Fetch active company — prioritaskan x-company-id dari header jika merupakan member aktif yang sah
     let company = null;
     let targetCompanyId: string | null = null;
     let targetRole: string | null = null;
 
-    if (profile.company_id) {
+    const headerCompanyId = (req.headers["x-company-id"] as string | undefined)?.trim();
+    if (headerCompanyId && headerCompanyId !== "undefined" && headerCompanyId !== "null") {
+      const reqMemCheck = await db.execute(sql`
+        SELECT company_id, role
+        FROM company_members
+        WHERE profile_id = ${profile.id}
+          AND company_id = ${headerCompanyId}
+          AND status = 'active'
+          AND deleted_at IS NULL
+        LIMIT 1
+      `);
+      if (reqMemCheck.rows.length > 0) {
+        targetCompanyId = headerCompanyId;
+        targetRole = (reqMemCheck.rows[0].role as string || "member").toLowerCase();
+      }
+    }
+
+    if (!targetCompanyId && profile.company_id) {
       const currentMemCheck = await db.execute(sql`
         SELECT company_id, role
         FROM company_members

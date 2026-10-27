@@ -699,8 +699,8 @@ export default function PlatformAdminFaqPage() {
       {/* FAQ List Content */}
       <div className="flex flex-col gap-3">
         {isLoading ? (
-          <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-12 flex flex-col items-center justify-center gap-3 text-gray-500 shadow-2xs">
-            <div className="w-8 h-8 border-3 border-[#1E3F2B] border-t-transparent rounded-full animate-spin" />
+          <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-12 flex flex-col items-center justify-center gap-3 text-gray-500 shadow-2xs" role="status" aria-live="polite">
+            <Loader2 className="w-8 h-8 animate-spin text-[#1E3F2B]" />
             <p className="text-sm font-medium">Memuat data FAQ...</p>
           </div>
         ) : sortedFaqs.length === 0 ? (

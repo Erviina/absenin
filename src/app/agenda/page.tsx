@@ -17,7 +17,8 @@ import {
   ExternalLink,
   MoreVertical,
   Share2,
-  FileText
+  FileText,
+  Loader2
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
@@ -1443,7 +1444,11 @@ function AgendaPageContent({ isAdminMode = false }: { isAdminMode?: boolean }) {
 
 export default function AgendaPage({ isAdminMode = false }: { isAdminMode?: boolean }) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={
+      <div className="flex min-h-[100dvh] w-full bg-[#fbfdfc] items-center justify-center" role="status" aria-live="polite">
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+      </div>
+    }>
       <AgendaPageContent isAdminMode={isAdminMode} />
     </Suspense>
   );
