@@ -101,6 +101,8 @@ export default function PlatformAdminFaqPage() {
     needs_review: boolean;
     sop_title: string;
     sop_url: string;
+    video_title: string;
+    video_url: string;
     is_published: boolean;
     order_index: number;
   }>({
@@ -115,6 +117,8 @@ export default function PlatformAdminFaqPage() {
     needs_review: false,
     sop_title: "",
     sop_url: "",
+    video_title: "",
+    video_url: "",
     is_published: true,
     order_index: 0,
   });
@@ -145,10 +149,10 @@ export default function PlatformAdminFaqPage() {
       });
       setFaqs(data);
     } catch (err: any) {
-      console.error("Gagal memuat FAQ:", err);
+      console.error("Gagal memuat Konten Bantuan:", err);
       showAlert({
-        title: "Gagal Memuat FAQ",
-        message: err.message || "Terjadi kesalahan saat memuat data FAQ manajemen.",
+        title: "Gagal Memuat Konten Bantuan",
+        message: err.message || "Terjadi kesalahan saat memuat data Pusat Bantuan manajemen.",
         type: "error",
       });
     } finally {
@@ -201,6 +205,8 @@ export default function PlatformAdminFaqPage() {
       needs_review: false,
       sop_title: "",
       sop_url: "",
+      video_title: "",
+      video_url: "",
       is_published: true,
       order_index: faqs.length,
     });
@@ -235,6 +241,8 @@ export default function PlatformAdminFaqPage() {
       needs_review: faq.needs_review ?? false,
       sop_title: faq.sop_title || "",
       sop_url: faq.sop_url || "",
+      video_title: faq.video_title || "",
+      video_url: faq.video_url || "",
       is_published: faq.is_published,
       order_index: faq.order_index || 0,
     });
@@ -253,7 +261,7 @@ export default function PlatformAdminFaqPage() {
     } catch (err: any) {
       showAlert({
         title: "Gagal Mengubah Status",
-        message: err.message || "Gagal mengubah status publikasi FAQ.",
+        message: err.message || "Gagal mengubah status publikasi konten.",
         type: "error",
       });
     }
@@ -283,11 +291,11 @@ export default function PlatformAdminFaqPage() {
     }
   };
 
-  // Hapus FAQ
+  // Hapus Konten
   const handleDelete = async (faq: FaqItem) => {
     const confirmed = await showConfirm({
-      title: "Hapus FAQ Platform",
-      message: `Apakah Anda yakin ingin menghapus pertanyaan "${faq.question}"? Tindakan ini akan menghapus FAQ dari Pusat Bantuan pengguna.`,
+      title: "Hapus Konten Bantuan",
+      message: `Apakah Anda yakin ingin menghapus "${faq.question}"? Tindakan ini akan menghapusnya dari Pusat Bantuan pengguna.`,
       confirmText: "Hapus",
       cancelText: "Batal",
       type: "danger",
@@ -300,13 +308,13 @@ export default function PlatformAdminFaqPage() {
       setFaqs((prev) => prev.filter((item) => item.id !== faq.id));
       showAlert({
         title: "Berhasil Dihapus",
-        message: "FAQ berhasil dihapus.",
+        message: "Konten berhasil dihapus dari Pusat Bantuan.",
         type: "success",
       });
     } catch (err: any) {
       showAlert({
         title: "Gagal Menghapus",
-        message: err.message || "Terjadi kesalahan saat menghapus FAQ.",
+        message: err.message || "Terjadi kesalahan saat menghapus konten.",
         type: "error",
       });
     }
@@ -334,10 +342,21 @@ export default function PlatformAdminFaqPage() {
       try {
         const parsed = new URL(formData.sop_url.trim());
         if (!["http:", "https:"].includes(parsed.protocol)) {
-          errors.sop_url = "URL harus diawali dengan http:// atau https://";
+          errors.sop_url = "URL dokumen harus diawali dengan http:// atau https://";
         }
       } catch {
-        errors.sop_url = "Format URL SOP tidak valid (contoh: https://drive.google.com/...)";
+        errors.sop_url = "Format URL Dokumen tidak valid (contoh: https://drive.google.com/...)";
+      }
+    }
+
+    if (formData.video_url && formData.video_url.trim()) {
+      try {
+        const parsed = new URL(formData.video_url.trim());
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+          errors.video_url = "URL video harus diawali dengan http:// atau https://";
+        }
+      } catch {
+        errors.video_url = "Format URL Video tidak valid (contoh: https://youtube.com/watch?v=...)";
       }
     }
 
@@ -348,6 +367,8 @@ export default function PlatformAdminFaqPage() {
 
     setFormErrors({});
     setIsSubmitting(true);
+
+    const isAutoPublished = !formData.needs_review;
 
     const payload: FaqPayload = {
       question: formData.question.trim(),
@@ -361,7 +382,9 @@ export default function PlatformAdminFaqPage() {
       needs_review: formData.needs_review,
       sop_title: formData.sop_title.trim() || null,
       sop_url: formData.sop_url.trim() || null,
-      is_published: formData.is_published,
+      video_title: formData.video_title.trim() || null,
+      video_url: formData.video_url.trim() || null,
+      is_published: isAutoPublished,
       order_index: Number(formData.order_index) || 0,
     };
 
@@ -371,15 +394,15 @@ export default function PlatformAdminFaqPage() {
         setFaqs((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
         showAlert({
           title: "Berhasil Diperbarui",
-          message: "FAQ berhasil diperbarui.",
+          message: "Konten Pusat Bantuan berhasil diperbarui.",
           type: "success",
         });
       } else {
         const created = await createFaq(payload);
         setFaqs((prev) => [created, ...prev]);
         showAlert({
-          title: "Berhasil Dibuat",
-          message: "FAQ baru berhasil ditambahkan.",
+          title: "Berhasil Ditambahkan",
+          message: "Konten Pusat Bantuan baru berhasil ditambahkan.",
           type: "success",
         });
       }
@@ -387,8 +410,8 @@ export default function PlatformAdminFaqPage() {
       getFaqCategories().then(setCategories);
     } catch (err: any) {
       showAlert({
-        title: "Gagal Menyimpan FAQ",
-        message: err.message || "Terjadi kesalahan saat menyimpan FAQ.",
+        title: "Gagal Menyimpan Konten",
+        message: err.message || "Terjadi kesalahan saat menyimpan konten Pusat Bantuan.",
         type: "error",
       });
     } finally {
@@ -456,10 +479,10 @@ export default function PlatformAdminFaqPage() {
             <span>Pusat Bantuan & Knowledge Base</span>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">
-            Pengelolaan FAQ & SOP Platform
+            Pengelolaan Pusat Bantuan Platform
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Kelola bank pertanyaan, panduan troubleshooting, dan dokumen SOP global maupun internal platform.
+            Kelola panduan sistem, troubleshooting, video tutorial, dan dokumen SOP global maupun internal platform.
           </p>
         </div>
 
@@ -468,7 +491,7 @@ export default function PlatformAdminFaqPage() {
           className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1E3F2B] text-white rounded-xl text-sm font-semibold hover:bg-[#163021] active:scale-95 transition-all shadow-sm cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4 stroke-[3]" />
-          <span>Tambah Konten FAQ / SOP</span>
+          <span>Tambah Konten Bantuan</span>
         </button>
       </div>
 
@@ -479,7 +502,7 @@ export default function PlatformAdminFaqPage() {
             <HelpCircle className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-500">Total FAQ</p>
+            <p className="text-xs font-medium text-gray-500">Total Konten</p>
             <p className="text-xl font-bold text-gray-900">{stats.total}</p>
           </div>
         </div>
@@ -535,7 +558,7 @@ export default function PlatformAdminFaqPage() {
             }`}
           >
             <Globe className="w-4 h-4" />
-            <span>FAQ Global (Pengguna & Publik)</span>
+            <span>Konten Global (Pengguna & Publik)</span>
           </button>
 
           <button
@@ -547,7 +570,7 @@ export default function PlatformAdminFaqPage() {
             }`}
           >
             <Shield className="w-4 h-4" />
-            <span>FAQ Khusus Platform Admin</span>
+            <span>Konten Khusus Platform Admin</span>
           </button>
         </div>
 
@@ -555,7 +578,7 @@ export default function PlatformAdminFaqPage() {
           onClick={fetchFaqs}
           disabled={isLoading}
           className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
-          title="Muat ulang data FAQ"
+          title="Muat ulang data Pusat Bantuan"
         >
           <RotateCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-[#1E3F2B]" : ""}`} />
           <span>Segarkan</span>
@@ -700,9 +723,9 @@ export default function PlatformAdminFaqPage() {
       {/* FAQ List Content */}
       <div className="flex flex-col gap-3">
         {isLoading ? (
-          <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-12 flex flex-col items-center justify-center gap-3 text-gray-500 shadow-2xs" role="status" aria-live="polite">
-            <Loader2 className="w-8 h-8 animate-spin text-[#1E3F2B]" />
-            <p className="text-sm font-medium">Memuat data FAQ...</p>
+          <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-12 flex flex-col items-center justify-center gap-3 text-gray-500 shadow-2xs">
+            <div className="w-8 h-8 border-3 border-[#1E3F2B] border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-medium">Memuat data Pusat Bantuan...</p>
           </div>
         ) : sortedFaqs.length === 0 ? (
           <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-12 text-center flex flex-col items-center justify-center gap-3 shadow-2xs">
@@ -710,11 +733,11 @@ export default function PlatformAdminFaqPage() {
               <HelpCircle className="w-7 h-7" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-gray-900">Belum Ada FAQ Ditemukan</h3>
+              <h3 className="text-base font-bold text-gray-900">Belum Ada Konten Ditemukan</h3>
               <p className="text-sm text-gray-500 max-w-sm mt-0.5">
                 {hasActiveFilters
-                  ? "Tidak ada FAQ yang cocok dengan filter yang dipilih. Coba atur ulang pencarian atau filter metadata."
-                  : `Mulai dengan menambahkan FAQ baru untuk scope ${
+                  ? "Tidak ada panduan atau konten yang cocok dengan filter yang dipilih. Coba atur ulang pencarian atau filter metadata."
+                  : `Mulai dengan menambahkan panduan baru untuk scope ${
                       activeTab === "global" ? "Global" : "Platform Admin"
                     }.`}
               </p>
@@ -732,7 +755,7 @@ export default function PlatformAdminFaqPage() {
                 className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-[#1E3F2B] text-white rounded-xl text-sm font-semibold hover:bg-[#163021] transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Tambah FAQ Sekarang</span>
+                <span>Tambah Konten Sekarang</span>
               </button>
             )}
           </div>
@@ -823,8 +846,8 @@ export default function PlatformAdminFaqPage() {
                           setActiveMenuId(activeMenuId === faq.id ? null : faq.id);
                         }}
                         className="w-7 h-7 rounded-full hover:bg-gray-100 active:scale-95 text-gray-500 hover:text-gray-900 flex items-center justify-center transition-all cursor-pointer"
-                        aria-label="Opsi FAQ"
-                        title="Opsi FAQ"
+                        aria-label="Opsi Konten Pusat Bantuan"
+                        title="Opsi Konten Pusat Bantuan"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
@@ -905,7 +928,7 @@ export default function PlatformAdminFaqPage() {
                               className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[12px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors text-left cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              <span>Hapus FAQ</span>
+                              <span>Hapus Konten</span>
                             </button>
                           </div>
                         </>
@@ -940,20 +963,36 @@ export default function PlatformAdminFaqPage() {
                     </div>
                   )}
 
-                  {/* Dokumen SOP Link */}
-                  {faq.sop_url && (
-                    <div className="pt-0.5">
-                      <a
-                        href={faq.sop_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-100/70 px-2.5 py-1 rounded-lg transition-colors border border-blue-200"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-blue-600" />
-                        <span className="truncate max-w-xs">{faq.sop_title || "Lihat Dokumen SOP"}</span>
-                        <ExternalLink className="w-3 h-3 opacity-70" />
-                      </a>
+                  {/* Dokumen SOP & Video Tutorial Links */}
+                  {(faq.sop_url || faq.video_url) && (
+                    <div className="pt-0.5 flex items-center flex-wrap gap-2">
+                      {faq.sop_url && (
+                        <a
+                          href={faq.sop_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-100/70 px-2.5 py-1 rounded-lg transition-colors border border-blue-200"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-blue-600" />
+                          <span className="truncate max-w-xs">{faq.sop_title || "Lihat Dokumen SOP"}</span>
+                          <ExternalLink className="w-3 h-3 opacity-70" />
+                        </a>
+                      )}
+
+                      {faq.video_url && (
+                        <a
+                          href={faq.video_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100/80 px-2.5 py-1 rounded-lg transition-colors border border-rose-200"
+                        >
+                          <PlayCircle className="w-3.5 h-3.5 text-rose-600" />
+                          <span className="truncate max-w-xs">{faq.video_title || "Video Tutorial"}</span>
+                          <ExternalLink className="w-3 h-3 opacity-70" />
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -970,7 +1009,7 @@ export default function PlatformAdminFaqPage() {
         )}
       </div>
 
-      {/* Modal Tambah / Edit FAQ */}
+      {/* Modal Tambah / Edit Konten Pusat Bantuan */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-[28px] shadow-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -982,7 +1021,7 @@ export default function PlatformAdminFaqPage() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-gray-900">
-                    {editingFaq ? "Edit FAQ & SOP Platform" : "Tambah FAQ & SOP Baru"}
+                    {editingFaq ? "Edit Konten Pusat Bantuan" : "Tambah Konten Pusat Bantuan"}
                   </h2>
                   <p className="text-xs text-gray-500">
                     Konfigurasikan judul pertanyaan, panduan, dan metadata otorisasi
@@ -1208,47 +1247,84 @@ export default function PlatformAdminFaqPage() {
                 )}
               </div>
 
-              {/* Status Publikasi & Review Checkbox */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                {/* Status Publikasi Toggle */}
-                <label className="flex-1 flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100/70 transition-colors">
-                  <div>
-                    <span className="block text-xs font-bold text-gray-800">
-                      Terbitkan ke Publik
-                    </span>
-                    <span className="block text-[11px] text-gray-500">
-                      Tampil di Pusat Bantuan
-                    </span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={formData.is_published}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, is_published: e.target.checked }))
-                    }
-                    className="w-4 h-4 text-[#1E3F2B] rounded border-gray-300 focus:ring-[#1E3F2B]"
-                  />
-                </label>
+              {/* Video Tutorial Box (Opsional) */}
+              <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-3">
+                <div className="flex items-center gap-2">
+                  <PlayCircle className="w-4 h-4 text-rose-600" />
+                  <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                    Tautan Video Tutorial (Opsional)
+                  </span>
+                </div>
 
-                {/* Status Perlu Ditinjau Checkbox */}
-                <label className="flex-1 flex items-center justify-between p-3 rounded-xl bg-amber-50/60 border border-amber-200 cursor-pointer hover:bg-amber-100/50 transition-colors">
+                <div className="space-y-2">
                   <div>
-                    <span className="block text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                      Perlu Ditinjau Ulang
-                    </span>
-                    <span className="block text-[11px] text-amber-700/80">
-                      Tandai butuh review lanjutan
-                    </span>
+                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                      Judul Video Tutorial
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.video_title}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, video_title: e.target.value }))
+                      }
+                      placeholder="Contoh: Video Panduan Alur Presensi & Lokasi.mp4"
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
+                    />
                   </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                      URL Video (YouTube, Google Drive, Loom, Vimeo, dll.)
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.video_url}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, video_url: e.target.value }))
+                      }
+                      placeholder="https://www.youtube.com/watch?v=... atau https://drive.google.com/..."
+                      className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
+                    />
+                    {formErrors.video_url && (
+                      <p className="text-xs text-rose-600">{formErrors.video_url}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Publikasi & Tinjau Ulang: SATU Checkbox Tunggal */}
+              <div className="pt-1">
+                <label className={`flex items-start gap-3 p-3.5 rounded-2xl border transition-colors cursor-pointer select-none ${
+                  formData.needs_review
+                    ? "bg-amber-50/70 border-amber-300 hover:bg-amber-100/60"
+                    : "bg-emerald-50/60 border-emerald-300 hover:bg-emerald-100/50"
+                }`}>
                   <input
                     type="checkbox"
                     checked={formData.needs_review}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, needs_review: e.target.checked }))
-                    }
-                    className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500"
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData((prev) => ({
+                        ...prev,
+                        needs_review: checked,
+                        is_published: !checked,
+                      }));
+                    }}
+                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
                   />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle className={`w-3.5 h-3.5 ${formData.needs_review ? "text-amber-600" : "text-emerald-700"}`} />
+                      <span className={`text-xs font-bold ${formData.needs_review ? "text-amber-900" : "text-emerald-900"}`}>
+                        Tandai Perlu Ditinjau Ulang (Draft / Review)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">
+                      {formData.needs_review
+                        ? "Konten ditandai butuh review lanjutan dan tersimpan sebagai Draft (belum tampil di Pusat Bantuan publik)."
+                        : "Jika tidak dicentang, konten otomatis langsung diterbitkan ke Pusat Bantuan dan dapat diakses anggota."}
+                    </p>
+                  </div>
                 </label>
               </div>
 
@@ -1266,7 +1342,7 @@ export default function PlatformAdminFaqPage() {
                   disabled={isSubmitting}
                   className="px-5 py-2.5 rounded-xl bg-[#1E3F2B] text-white text-xs font-semibold hover:bg-[#163021] transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? "Menyimpan..." : editingFaq ? "Simpan Perubahan" : "Terbitkan FAQ"}
+                  {isSubmitting ? "Menyimpan..." : editingFaq ? "Simpan Perubahan" : "Terbitkan Konten"}
                 </button>
               </div>
             </form>

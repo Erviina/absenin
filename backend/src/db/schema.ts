@@ -218,6 +218,8 @@ export const faqs = pgTable("faqs", {
   answer: text("answer").notNull(),
   sop_title: varchar("sop_title", { length: 255 }),
   sop_url: text("sop_url"),
+  video_title: varchar("video_title", { length: 255 }),
+  video_url: text("video_url"),
   is_published: boolean("is_published").notNull().default(true),
   order_index: integer("order_index").notNull().default(0),
   content_scope: varchar("content_scope", { length: 50 }).notNull().default("company"), // 'platform' | 'company' | 'user'

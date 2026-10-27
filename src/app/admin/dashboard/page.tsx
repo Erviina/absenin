@@ -665,7 +665,7 @@ export default function AdminDashboardPage() {
             { icon: Users2, label: "Karyawan", path: "/admin/karyawan", badge: karyawanBadgeCount },
             { icon: FileText, label: "Laporan", path: "/admin/laporan-kehadiran" },
             { icon: Megaphone, label: "Berita", path: "/admin/berita" },
-            { icon: HelpCircle, label: "FAQ & SOP", path: "/admin/faq" },
+            { icon: HelpCircle, label: "Pusat Bantuan", path: "/admin/faq" },
           ].map((item, i) => (
             <button 
               key={i} 

@@ -16,11 +16,9 @@ import {
   Clock,
   FileText,
   Lock,
-  Compass,
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  Navigation,
   ExternalLink,
   Shield,
   FileCheck,
@@ -58,6 +56,8 @@ export interface FAQItem {
   icon: any;
   sop_title?: string | null;
   sop_url?: string | null;
+  video_title?: string | null;
+  video_url?: string | null;
   scope?: "global" | "company" | "platform_admin";
   content_scope?: ContentScope;
   target_roles?: TargetRole[];
@@ -67,8 +67,8 @@ export interface FAQItem {
   company_name?: string | null;
 }
 
-function getFaqIcon(item: { content_type?: string; category?: string; scope?: string; content_scope?: string; sop_url?: string | null; sop_title?: string | null }) {
-  if (isMediaVideo(item.sop_url, item.sop_title)) return Video;
+function getFaqIcon(item: { content_type?: string; category?: string; scope?: string; content_scope?: string; sop_url?: string | null; sop_title?: string | null; video_url?: string | null }) {
+  if (item.video_url || isMediaVideo(item.sop_url, item.sop_title)) return Video;
   if (item.content_type === "sop_guide") return FileCheck;
   if (item.content_type === "troubleshooting") return AlertTriangle;
   if (item.content_type === "tips_best_practice") return Sparkles;
@@ -82,6 +82,16 @@ function getFaqIcon(item: { content_type?: string; category?: string; scope?: st
   if (c.includes("akun") || c.includes("sandi") || c.includes("login") || c.includes("password")) return Lock;
   if (c.includes("tugas") || c.includes("agenda")) return CheckCircle2;
   return HelpCircle;
+}
+
+function getContentTypeLabel(type?: ContentType) {
+  switch (type) {
+    case "sop_guide": return "SOP & Panduan";
+    case "faq": return "FAQ (Tanya Jawab)";
+    case "troubleshooting": return "Kendala Teknis";
+    case "tips_best_practice": return "Tips & Praktik";
+    default: return "Semua Jenis";
+  }
 }
 
 function BantuanContent() {
@@ -139,20 +149,7 @@ function BantuanContent() {
   const [contentTypeFilter, setContentTypeFilter] = useState<"all" | ContentType>("all");
   const [scopeFilter, setScopeFilter] = useState<"all" | ContentScope>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-
-  // State untuk GPS Diagnostic Tool
-  const [isCheckingGPS, setIsCheckingGPS] = useState(false);
-  const [gpsDiagnostic, setGpsDiagnostic] = useState<{
-    status: "idle" | "success" | "error";
-    message: string;
-    accuracy?: number;
-    latitude?: number;
-    longitude?: number;
-    timestamp?: string;
-  }>({
-    status: "idle",
-    message: "Klik tombol di bawah untuk menguji keakuratan sinyal GPS pada perangkat Anda saat ini."
-  });
+  const [mediaFilter, setMediaFilter] = useState<"all" | "video" | "doc">("all");
 
   // Fungsi Fetch Data dari Backend
   const loadFaqsData = useCallback(async () => {
@@ -182,67 +179,6 @@ function BantuanContent() {
     loadFaqsData();
   }, [loadFaqsData]);
 
-  // Handle GPS Diagnostic Check
-  const handleTestGPS = () => {
-    if (typeof window === "undefined" || !("geolocation" in navigator)) {
-      setGpsDiagnostic({
-        status: "error",
-        message: "Perangkat atau browser Anda tidak mendukung fitur pendeteksian lokasi GPS."
-      });
-      return;
-    }
-
-    setIsCheckingGPS(true);
-    setGpsDiagnostic({
-      status: "idle",
-      message: "Sedang mengunci satelit GPS dan menghitung akurasi sinyal..."
-    });
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setIsCheckingGPS(false);
-        const acc = Math.round(pos.coords.accuracy);
-        let msg = "";
-        if (acc <= 20) {
-          msg = `Sinyal GPS sangat kuat (Akurasi ±${acc} meter). Sangat optimal untuk presensi di lokasi kantor.`;
-        } else if (acc <= 60) {
-          msg = `Sinyal GPS cukup baik (Akurasi ±${acc} meter). Dapat digunakan untuk absensi dalam radius geofencing standar.`;
-        } else {
-          msg = `Akurasi sinyal saat ini ±${acc} meter (lemah). Jika berada di dalam gedung, nyalakan Wi-Fi ponsel untuk meningkatkan presisi.`;
-        }
-
-        setGpsDiagnostic({
-          status: "success",
-          message: msg,
-          accuracy: acc,
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " WIB"
-        });
-      },
-      (err) => {
-        setIsCheckingGPS(false);
-        let errorMsg = "Gagal membaca lokasi perangkat.";
-        if (err.code === err.PERMISSION_DENIED) {
-          errorMsg = "Akses lokasi ditolak oleh browser. Mohon izinkan akses lokasi pada setelan browser Anda lalu muat ulang halaman.";
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          errorMsg = "Sinyal GPS tidak tersedia. Pastikan fitur Lokasi di ponsel Anda telah diaktifkan.";
-        } else if (err.code === err.TIMEOUT) {
-          errorMsg = "Waktu permintaan GPS habis sebelum koordinat didapatkan. Coba pindah ke dekat jendela atau luar ruangan.";
-        }
-        setGpsDiagnostic({
-          status: "error",
-          message: errorMsg
-        });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: 0
-      }
-    );
-  };
-
   // Konversi Dynamic FAQs ke FAQItem
   const allFAQs: FAQItem[] = useMemo(() => {
     const list: FAQItem[] = dynamicFaqs.map((item) => ({
@@ -254,6 +190,8 @@ function BantuanContent() {
       icon: getFaqIcon(item),
       sop_title: item.sop_title,
       sop_url: item.sop_url,
+      video_title: item.video_title,
+      video_url: item.video_url,
       scope: item.scope,
       content_scope: item.content_scope,
       target_roles: item.target_roles,
@@ -311,6 +249,10 @@ function BantuanContent() {
   const relevantCategories = useMemo(() => {
     const presentCategories = new Set<string>();
     roleAccessibleFAQs.forEach((f) => {
+      if (scopeFilter !== "all") {
+        const itemScope = f.content_scope || (f.scope === "platform_admin" ? "platform" : f.scope === "company" ? "company" : "user");
+        if (itemScope !== scopeFilter) return;
+      }
       if (f.category?.trim()) presentCategories.add(f.category.trim());
     });
 
@@ -322,9 +264,9 @@ function BantuanContent() {
     });
 
     return validCategories.sort((a, b) => a.localeCompare(b, "id"));
-  }, [roleAccessibleFAQs, backendCategories]);
+  }, [roleAccessibleFAQs, backendCategories, scopeFilter]);
 
-  // Filter FAQ Berdasarkan Search, Jenis Konten, Scope, dan Kategori
+  // Filter FAQ Berdasarkan Search, Jenis Konten, Scope, Topik, dan Materi
   const filteredFAQs = useMemo(() => {
     return roleAccessibleFAQs.filter((item) => {
       // 1. Filter Scope (Pasca-login)
@@ -344,7 +286,16 @@ function BantuanContent() {
         if (item.category?.toLowerCase() !== categoryFilter.toLowerCase()) return false;
       }
 
-      // 4. Filter Query Pencarian (Judul, Jawaban, Tags, SOP Title)
+      // 4. Filter Materi Pendukung (Video / Dokumen SOP)
+      if (!isLoginContext && mediaFilter !== "all") {
+        const effectiveVideoUrl = item.video_url || (isMediaVideo(item.sop_url, item.sop_title) ? item.sop_url : null);
+        const hasVideo = !!effectiveVideoUrl;
+        const hasDoc = !!item.sop_url && item.sop_url !== effectiveVideoUrl;
+        if (mediaFilter === "video" && !hasVideo) return false;
+        if (mediaFilter === "doc" && !hasDoc) return false;
+      }
+
+      // 5. Filter Query Pencarian (Judul, Jawaban, Kategori, SOP, Video, Perusahaan, Tags)
       if (!searchQuery.trim()) return true;
 
       const q = searchQuery.toLowerCase();
@@ -352,9 +303,11 @@ function BantuanContent() {
       const matchAnswer = item.answer.toLowerCase().includes(q);
       const matchCategory = item.category.toLowerCase().includes(q);
       const matchSopTitle = item.sop_title ? item.sop_title.toLowerCase().includes(q) : false;
+      const matchVideoTitle = item.video_title ? item.video_title.toLowerCase().includes(q) : false;
+      const matchCompanyName = item.company_name ? item.company_name.toLowerCase().includes(q) : false;
       const matchTags = item.tags.some((tag) => tag.toLowerCase().includes(q));
 
-      return matchQuestion || matchAnswer || matchCategory || matchSopTitle || matchTags;
+      return matchQuestion || matchAnswer || matchCategory || matchSopTitle || matchVideoTitle || matchCompanyName || matchTags;
     });
   }, [
     roleAccessibleFAQs, 
@@ -362,6 +315,7 @@ function BantuanContent() {
     scopeFilter, 
     contentTypeFilter, 
     categoryFilter, 
+    mediaFilter,
     searchQuery
   ]);
 
@@ -374,13 +328,15 @@ function BantuanContent() {
     setScopeFilter("all");
     setContentTypeFilter("all");
     setCategoryFilter("all");
+    setMediaFilter("all");
   };
 
   const hasActiveFilters = Boolean(
     searchQuery || 
     scopeFilter !== "all" || 
     contentTypeFilter !== "all" || 
-    categoryFilter !== "all"
+    categoryFilter !== "all" ||
+    mediaFilter !== "all"
   );
 
   return (
@@ -438,18 +394,18 @@ function BantuanContent() {
           )}
         </div>
 
-        {/* Filter Section: Jenis Konten, Scope, dan Topik/Kategori Dinamis (Hanya Pasca-Login) */}
+        {/* Filter Section: Efektif, Efisien, dan Kompak (Hanya Pasca-Login) */}
         {!isLoginContext && (
           <div className="flex flex-col gap-2.5">
-            {/* Filter Scope Pills */}
-            <div className="w-full bg-[#EEF4F0] p-1.5 rounded-[18px] border border-[#D5E2D8]/80 flex items-center gap-1 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-none">
+            {/* Segmented Control Scope: Semua | Perusahaan | Pengguna | (Platform) */}
+            <div className="w-full bg-[#EEF4F0] p-1 rounded-2xl border border-[#D5E2D8]/80 flex items-center gap-1 shadow-2xs">
               <button
                 type="button"
                 onClick={() => setScopeFilter("all")}
-                className={`flex-1 min-w-[75px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
                   scopeFilter === "all"
                     ? "bg-[#1E4738] text-white shadow-xs"
-                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
+                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/60"
                 }`}
               >
                 <Layers className="w-3.5 h-3.5 shrink-0" />
@@ -459,10 +415,10 @@ function BantuanContent() {
               <button
                 type="button"
                 onClick={() => setScopeFilter("company")}
-                className={`flex-1 min-w-[85px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
                   scopeFilter === "company"
                     ? "bg-[#1E4738] text-white shadow-xs"
-                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
+                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/60"
                 }`}
               >
                 <Building2 className="w-3.5 h-3.5 shrink-0" />
@@ -472,10 +428,10 @@ function BantuanContent() {
               <button
                 type="button"
                 onClick={() => setScopeFilter("user")}
-                className={`flex-1 min-w-[80px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
                   scopeFilter === "user"
                     ? "bg-[#1E4738] text-white shadow-xs"
-                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
+                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/60"
                 }`}
               >
                 <UserCheck className="w-3.5 h-3.5 shrink-0" />
@@ -486,10 +442,10 @@ function BantuanContent() {
                 <button
                   type="button"
                   onClick={() => setScopeFilter("platform")}
-                  className={`flex-1 min-w-[80px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
                     scopeFilter === "platform"
                       ? "bg-[#1E4738] text-white shadow-xs"
-                      : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
+                      : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/60"
                   }`}
                 >
                   <Shield className="w-3.5 h-3.5 shrink-0" />
@@ -498,133 +454,113 @@ function BantuanContent() {
               )}
             </div>
 
-            {/* Filter Jenis Konten Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none -mx-1 px-1">
+            {/* Dual Compact Dropdowns: Jenis Konten & Topik Kategori */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Dropdown 1: Jenis Konten */}
+              <div className="relative">
+                <div className={`flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all ${
+                  contentTypeFilter !== "all"
+                    ? "bg-[#1E4738] text-white border-[#1E4738] shadow-xs"
+                    : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 shadow-2xs"
+                }`}>
+                  <div className="flex items-center gap-1.5 truncate">
+                    <FileText className={`w-3.5 h-3.5 shrink-0 ${contentTypeFilter !== "all" ? "text-white" : "text-[#5C786C]"}`} />
+                    <span className="truncate">
+                      {contentTypeFilter === "all" ? "Semua Jenis" : getContentTypeLabel(contentTypeFilter)}
+                    </span>
+                  </div>
+                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 ${contentTypeFilter !== "all" ? "text-white/80" : "text-gray-400"}`} />
+                </div>
+                <select
+                  value={contentTypeFilter}
+                  onChange={(e) => setContentTypeFilter(e.target.value as any)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base"
+                  aria-label="Filter Jenis Konten"
+                >
+                  <option value="all">Semua Jenis Konten</option>
+                  <option value="sop_guide">📋 SOP & Panduan</option>
+                  <option value="faq">❓ FAQ (Tanya Jawab)</option>
+                  <option value="troubleshooting">⚠️ Kendala Teknis</option>
+                  <option value="tips_best_practice">💡 Tips & Praktik</option>
+                </select>
+              </div>
+
+              {/* Dropdown 2: Topik / Kategori Dinamis */}
+              <div className="relative">
+                <div className={`flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all ${
+                  categoryFilter !== "all"
+                    ? "bg-[#1E4738] text-white border-[#1E4738] shadow-xs"
+                    : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 shadow-2xs"
+                }`}>
+                  <div className="flex items-center gap-1.5 truncate">
+                    <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${categoryFilter !== "all" ? "text-white" : "text-[#5C786C]"}`} />
+                    <span className="truncate">
+                      {categoryFilter === "all" ? "Semua Topik" : categoryFilter}
+                    </span>
+                  </div>
+                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 ${categoryFilter !== "all" ? "text-white/80" : "text-gray-400"}`} />
+                </div>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base"
+                  aria-label="Filter Topik / Kategori"
+                >
+                  <option value="all">Semua Topik / Kategori</option>
+                  {relevantCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Quick Filter Materi: Video / Dokumen SOP */}
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-0.5">
+              <span className="text-[11px] font-semibold text-gray-400 shrink-0">Materi:</span>
               <button
                 type="button"
-                onClick={() => setContentTypeFilter("all")}
-                className={`px-3 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-                  contentTypeFilter === "all"
-                    ? "bg-[#1E4738] text-white shadow-xs"
-                    : "bg-white text-[#5C786C] border border-[#E5E7EB] hover:border-[#1E4738]/30"
+                onClick={() => setMediaFilter("all")}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
+                  mediaFilter === "all"
+                    ? "bg-gray-800 text-white"
+                    : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
                 }`}
               >
-                Semua Jenis
+                Semua
               </button>
-              {CONTENT_TYPE_OPTIONS.map((ct) => {
-                const isActive = contentTypeFilter === ct.value;
-                return (
-                  <button
-                    key={ct.value}
-                    type="button"
-                    onClick={() => setContentTypeFilter(ct.value)}
-                    className={`px-3 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-                      isActive
-                        ? "bg-[#1E4738] text-white shadow-xs"
-                        : "bg-white text-[#5C786C] border border-[#E5E7EB] hover:border-[#1E4738]/30"
-                    }`}
-                  >
-                    {ct.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Filter Topik / Kategori Dinamis dari Backend (Hanya yang memiliki konten relevan) */}
-            {relevantCategories.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none -mx-1 px-1">
-                <button
-                  type="button"
-                  onClick={() => setCategoryFilter("all")}
-                  className={`px-3 py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-                    categoryFilter === "all"
-                      ? "bg-[#356E3B] text-white shadow-xs"
-                      : "bg-white text-[#4B5563] border border-[#E5E7EB] hover:border-[#356E3B]/40"
-                  }`}
-                >
-                  Semua Topik
-                </button>
-                {relevantCategories.map((cat) => {
-                  const isActive = categoryFilter.toLowerCase() === cat.toLowerCase();
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setCategoryFilter(cat)}
-                      className={`px-3 py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-                        isActive
-                          ? "bg-[#356E3B] text-white shadow-xs"
-                          : "bg-white text-[#4B5563] border border-[#E5E7EB] hover:border-[#356E3B]/40"
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* GPS Diagnostic Tool (Hanya Pasca-Login saat topik Presensi/GPS atau Semua) */}
-        {!isLoginContext && (categoryFilter === "all" || categoryFilter.toLowerCase().includes("gps") || categoryFilter.toLowerCase().includes("presensi")) && (
-          <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-4.5 flex flex-col gap-3 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F]">
-                  <Compass className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-[#111827] text-[13.5px] font-bold">Uji Akurasi GPS Perangkat</h2>
-                  <p className="text-[#6B7280] text-[11.5px]">Periksa kekuatan sinyal lokasi sebelum check-in</p>
-                </div>
-              </div>
               <button
                 type="button"
-                onClick={handleTestGPS}
-                disabled={isCheckingGPS}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-xl text-[12px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs"
+                onClick={() => setMediaFilter(mediaFilter === "video" ? "all" : "video")}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
+                  mediaFilter === "video"
+                    ? "bg-rose-600 text-white shadow-2xs"
+                    : "bg-white text-rose-700 border border-rose-200 hover:bg-rose-50"
+                }`}
               >
-                {isCheckingGPS ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Navigation className="w-3.5 h-3.5" />
-                )}
-                <span>{isCheckingGPS ? "Menguji..." : "Uji GPS"}</span>
+                <PlayCircle className="w-3 h-3" />
+                <span>Ada Video</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMediaFilter(mediaFilter === "doc" ? "all" : "doc")}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
+                  mediaFilter === "doc"
+                    ? "bg-[#1E4738] text-white shadow-2xs"
+                    : "bg-white text-[#1E4738] border border-[#1E4738]/30 hover:bg-[#EEF4F0]"
+                }`}
+              >
+                <FileCheck className="w-3 h-3" />
+                <span>Ada Dokumen SOP</span>
               </button>
             </div>
-
-            {gpsDiagnostic.status !== "idle" && (
-              <div className={`p-3 rounded-xl text-[12px] flex flex-col gap-1.5 ${
-                gpsDiagnostic.status === "success" 
-                  ? "bg-emerald-50 text-emerald-900 border border-emerald-200"
-                  : "bg-rose-50 text-rose-900 border border-rose-200"
-              }`}>
-                <div className="flex items-start gap-2">
-                  {gpsDiagnostic.status === "success" ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  )}
-                  <div className="flex-1">
-                    <p className="font-medium leading-relaxed">{gpsDiagnostic.message}</p>
-                    {gpsDiagnostic.latitude && gpsDiagnostic.longitude && (
-                      <div className="mt-1.5 pt-1.5 border-t border-emerald-200/60 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-emerald-800">
-                        <span>Lat: {gpsDiagnostic.latitude.toFixed(6)}</span>
-                        <span>Long: {gpsDiagnostic.longitude.toFixed(6)}</span>
-                        <span>Waktu: {gpsDiagnostic.timestamp}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
         {/* Counter Info & Reset Filter */}
         <div className="flex items-center justify-between text-[12px] text-[#5C786C] px-1 font-medium mt-1">
-          <span>Menampilkan {filteredFAQs.length} panduan</span>
+          <span>Menampilkan <strong className="text-gray-900 font-bold">{filteredFAQs.length}</strong> panduan</span>
           {hasActiveFilters && (
             <button 
               type="button"
@@ -636,6 +572,52 @@ function BantuanContent() {
             </button>
           )}
         </div>
+
+        {/* Active Filter Chips (bisa ditutup secara individual) */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-1.5 px-0.5">
+            {searchQuery && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-gray-100 text-gray-700 border border-gray-200">
+                <span>Cari: &ldquo;{searchQuery}&rdquo;</span>
+                <button type="button" onClick={() => setSearchQuery("")} className="hover:text-black cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {scopeFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <span>Scope: {scopeFilter === "company" ? "Perusahaan" : scopeFilter === "user" ? "Pengguna" : "Platform"}</span>
+                <button type="button" onClick={() => setScopeFilter("all")} className="hover:text-emerald-950 cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {contentTypeFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-blue-50 text-blue-800 border border-blue-200">
+                <span>Jenis: {getContentTypeLabel(contentTypeFilter)}</span>
+                <button type="button" onClick={() => setContentTypeFilter("all")} className="hover:text-blue-950 cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {categoryFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-purple-50 text-purple-800 border border-purple-200">
+                <span>Topik: {categoryFilter}</span>
+                <button type="button" onClick={() => setCategoryFilter("all")} className="hover:text-purple-950 cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {mediaFilter !== "all" && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-amber-50 text-amber-800 border border-amber-200">
+                <span>Materi: {mediaFilter === "video" ? "Video" : "Dokumen SOP"}</span>
+                <button type="button" onClick={() => setMediaFilter("all")} className="hover:text-amber-950 cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+          </div>
+        )}
 
         {/* FAQ / SOP Cards List */}
         <div className="flex flex-col gap-2.5">
@@ -671,8 +653,11 @@ function BantuanContent() {
               const Icon = item.icon;
               const scopeBadge = getContentScopeBadge(item.content_scope);
               const typeBadge = getContentTypeBadge(item.content_type);
-              const hasVideo = isMediaVideo(item.sop_url, item.sop_title);
-              const ytThumb = hasVideo ? getYouTubeThumbnail(item.sop_url) : null;
+              const effectiveVideoUrl = item.video_url || (isMediaVideo(item.sop_url, item.sop_title) ? item.sop_url : null);
+              const effectiveVideoTitle = item.video_title || (item.video_url ? null : (isMediaVideo(item.sop_url, item.sop_title) ? item.sop_title : null));
+              const hasVideo = !!effectiveVideoUrl;
+              const ytThumb = hasVideo ? getYouTubeThumbnail(effectiveVideoUrl) : null;
+              const hasDoc = !!item.sop_url && item.sop_url !== effectiveVideoUrl;
 
               return (
                 <div
@@ -729,18 +714,21 @@ function BantuanContent() {
                             </span>
                           )}
 
-                          {/* Indikator Video Tutorial atau Dokumen */}
-                          {hasVideo ? (
+                          {/* Indikator Video Tutorial */}
+                          {hasVideo && (
                             <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
                               <PlayCircle className="w-3 h-3 text-rose-600" />
                               <span>Video</span>
                             </span>
-                          ) : item.sop_url ? (
+                          )}
+
+                          {/* Indikator Dokumen SOP */}
+                          {hasDoc && (
                             <span className="text-[10px] font-bold text-[#1E4738] bg-[#E8F3EB] px-2 py-0.5 rounded-full border border-[#356E3B]/20 flex items-center gap-1">
                               <FileCheck className="w-3 h-3" />
                               <span>Dokumen</span>
                             </span>
-                          ) : null}
+                          )}
                         </div>
                       </div>
                     </div>
@@ -760,10 +748,10 @@ function BantuanContent() {
                       {/* Jawaban / Prosedur SOP dengan format rapi */}
                       <FaqAnswerContent content={item.answer} className="mt-2 text-[#374151]" />
 
-                      {/* Box Materi Pendukung: Video Tutorial atau Dokumen SOP */}
-                      {item.sop_url && (
-                        <div className="mt-4 pt-3.5 border-t border-gray-100 flex flex-col gap-2">
-                          {hasVideo ? (
+                      {/* Box Materi Pendukung: Video Tutorial dan/atau Dokumen SOP */}
+                      {(hasVideo || hasDoc) && (
+                        <div className="mt-4 pt-3.5 border-t border-gray-100 flex flex-col gap-2.5">
+                          {hasVideo && (
                             /* Video Tutorial Card */
                             <div className="bg-white rounded-xl border border-rose-200/80 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                               <div className="flex items-center gap-2.5 min-w-0">
@@ -781,7 +769,7 @@ function BantuanContent() {
                                 )}
                                 <div className="min-w-0">
                                   <p className="text-[12.5px] font-bold text-[#111827] truncate">
-                                    {item.sop_title || "Video Tutorial Panduan"}
+                                    {effectiveVideoTitle || "Video Tutorial Panduan"}
                                   </p>
                                   <p className="text-[11px] text-gray-500">
                                     Materi panduan visual dan langkah praktik
@@ -789,7 +777,7 @@ function BantuanContent() {
                                 </div>
                               </div>
                               <a
-                                href={item.sop_url}
+                                href={effectiveVideoUrl!}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition-colors text-[11.5px] font-bold shrink-0 shadow-2xs"
@@ -799,7 +787,9 @@ function BantuanContent() {
                                 <ExternalLink className="w-3 h-3 ml-0.5 opacity-80" />
                               </a>
                             </div>
-                          ) : (
+                          )}
+
+                          {hasDoc && (
                             /* Dokumen SOP Card */
                             <div className="bg-white rounded-xl border border-emerald-200/80 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                               <div className="flex items-center gap-2.5 min-w-0">
@@ -816,7 +806,7 @@ function BantuanContent() {
                                 </div>
                               </div>
                               <a
-                                href={item.sop_url}
+                                href={item.sop_url!}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1E4738] hover:bg-[#2A582F] text-white transition-colors text-[11.5px] font-bold shrink-0 shadow-2xs"
