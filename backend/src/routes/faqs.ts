@@ -63,19 +63,54 @@ export function sanitizeFaqAnswer(raw: string): string {
   }).trim();
 }
 
+// Zod Enums untuk Metadata Pusat Bantuan
+export const contentScopeEnum = z.enum(["platform", "company", "user"]);
+export const targetRoleEnum = z.enum(["platform_admin", "company_owner_admin", "manager", "employee"]);
+export const contentTypeEnum = z.enum(["sop_guide", "faq", "troubleshooting", "tips_best_practice"]);
+export const displayContextEnum = z.enum(["login", "help_center", "both"]);
+
+// Kategori Standar Sistem
+export const STANDARD_CATEGORIES = [
+  "Akun",
+  "Perusahaan",
+  "Absensi",
+  "Persetujuan",
+  "Tugas",
+  "Laporan",
+  "Analitik",
+  "Sistem",
+  "Pengaturan",
+];
+
+// Kategori Legacy untuk backward-compatibility dengan data yang ada
+export const LEGACY_CATEGORIES = [
+  "Umum",
+  "Presensi",
+  "GPS & Lokasi",
+  "Izin & Cuti",
+  "Kebijakan Kantor",
+  "SOP Kerja",
+  "Platform Admin",
+];
+
 // Zod Schema untuk Validasi Input FAQ
-const createFaqSchema = z.object({
+export const createFaqSchema = z.object({
   question: z.string().min(3, "Pertanyaan minimal 3 karakter"),
   answer: z.string().min(5, "Jawaban minimal 5 karakter"),
-  category: z.string().min(1, "Kategori wajib diisi").default("Umum"),
-  scope: z.enum(["global", "company", "platform_admin"]),
+  category: z.string().min(1, "Kategori wajib diisi").max(100, "Kategori maksimal 100 karakter").default("Umum"),
+  scope: z.enum(["global", "company", "platform_admin"]).default("company"),
+  content_scope: contentScopeEnum.optional(),
+  target_roles: z.array(targetRoleEnum).optional().default([]),
+  content_type: contentTypeEnum.optional().default("faq"),
+  display_context: displayContextEnum.optional().default("help_center"),
+  needs_review: z.boolean().optional().default(false),
   sop_title: z.string().max(255).optional().nullable(),
   sop_url: z.string().url("URL SOP harus berupa tautan yang valid (http/https)").optional().nullable().or(z.literal("")),
   is_published: z.boolean().default(true),
   order_index: z.number().int().default(0),
 });
 
-const updateFaqSchema = createFaqSchema.partial();
+export const updateFaqSchema = createFaqSchema.partial();
 
 // Helper untuk memeriksa apakah user merupakan Platform Owner
 async function checkIsPlatformOwner(userId: string, email?: string): Promise<boolean> {
@@ -115,18 +150,43 @@ function optionalAuthenticate(req: Request, res: Response, next: NextFunction) {
 /**
  * GET /api/faqs/categories
  * Mengambil daftar kategori FAQ yang unik
+ * Menggabungkan kategori standar, legacy, dan kategori kustom yang ada di database
  */
 router.get("/categories", optionalAuthenticate, async (req: Request, res: Response): Promise<any> => {
   try {
+    const { content_scope, display_context } = req.query;
+
+    const user = (req as any).user;
+    let filterCondition = sql`deleted_at IS NULL AND is_published = true`;
+
+    if (!user?.id) {
+      // Pengunjung belum login: batasi kategori hanya dari konten global/publik login
+      filterCondition = sql`${filterCondition} AND scope = 'global' AND company_id IS NULL AND content_scope != 'platform' AND display_context IN ('login', 'both')`;
+    } else {
+      if (content_scope && typeof content_scope === "string") {
+        filterCondition = sql`${filterCondition} AND content_scope = ${content_scope.trim()}`;
+      }
+      if (display_context && typeof display_context === "string") {
+        const dc = display_context.trim();
+        if (dc === "login") {
+          filterCondition = sql`${filterCondition} AND display_context IN ('login', 'both')`;
+        } else if (dc === "help_center") {
+          filterCondition = sql`${filterCondition} AND display_context IN ('help_center', 'both')`;
+        } else {
+          filterCondition = sql`${filterCondition} AND display_context = ${dc}`;
+        }
+      }
+    }
+
     const categoriesRes = await db.execute(sql`
       SELECT DISTINCT category 
       FROM faqs 
-      WHERE deleted_at IS NULL AND is_published = true 
+      WHERE ${filterCondition}
       ORDER BY category ASC;
     `);
-    const defaultCategories = ["Umum", "Presensi", "GPS & Lokasi", "Izin & Cuti", "Tugas", "Kebijakan Kantor", "SOP Kerja"];
+
     const dbCategories = categoriesRes.rows.map((r: any) => r.category).filter(Boolean);
-    const combined = Array.from(new Set([...defaultCategories, ...dbCategories]));
+    const combined = Array.from(new Set([...STANDARD_CATEGORIES, ...LEGACY_CATEGORIES, ...dbCategories]));
 
     return res.status(200).json({
       success: true,
@@ -140,16 +200,34 @@ router.get("/categories", optionalAuthenticate, async (req: Request, res: Respon
 
 /**
  * GET /api/faqs
- * Mengambil daftar FAQ yang dipublikasikan untuk pengguna aplikasi (Profil -> Pusat Bantuan)
+ * Mengambil daftar FAQ yang dipublikasikan untuk pengguna aplikasi (Profil -> Pusat Bantuan, Login, dll.)
  * Sesuai hak akses:
  * - FAQ Global: Tampil untuk semua pengguna.
  * - FAQ Perusahaan: Tampil hanya untuk anggota perusahaan aktif pengguna.
  * - FAQ Platform Admin: Tampil HANYA untuk Platform Owner (isDeveloper === true).
+ * 
+ * Filter yang didukung:
+ * - search, category, scope
+ * - content_scope ('platform', 'company', 'user')
+ * - target_role ('platform_admin', 'company_owner_admin', 'manager', 'employee')
+ * - content_type ('sop_guide', 'faq', 'troubleshooting', 'tips_best_practice')
+ * - display_context ('login', 'help_center', 'both')
+ * - needs_review ('true', 'false')
  */
 router.get("/", optionalAuthenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
-    const { search, category, scope } = req.query;
+    const { 
+      search, 
+      category, 
+      scope, 
+      content_scope, 
+      target_role, 
+      role, 
+      content_type, 
+      display_context, 
+      needs_review 
+    } = req.query;
 
     let companyId: string | null = null;
     let isPlatformOwner = false;
@@ -162,17 +240,28 @@ router.get("/", optionalAuthenticate, async (req: Request, res: Response): Promi
       }
     }
 
-    // Bangun filter akses scope berdasarkan peran pengguna
-    let scopeAccessCondition = sql`f.scope = 'global'`;
-    if (companyId && isPlatformOwner) {
-      scopeAccessCondition = sql`(f.scope = 'global' OR (f.scope = 'company' AND f.company_id = ${companyId}) OR f.scope = 'platform_admin')`;
-    } else if (companyId) {
-      scopeAccessCondition = sql`(f.scope = 'global' OR (f.scope = 'company' AND f.company_id = ${companyId}))`;
-    } else if (isPlatformOwner) {
-      scopeAccessCondition = sql`(f.scope = 'global' OR f.scope = 'platform_admin')`;
+    const isLoginRequest = display_context === "login";
+
+    // Bangun filter akses scope otoritatif berdasarkan identitas pengguna dan konteks
+    let scopeAccessCondition = sql`f.scope = 'global' AND f.company_id IS NULL AND f.content_scope != 'platform'`;
+
+    if (isLoginRequest || !user?.id) {
+      // Konteks pra-login atau pengguna tamu: HANYA konten publik/global non-platform
+      scopeAccessCondition = sql`f.scope = 'global' AND f.company_id IS NULL AND f.content_scope != 'platform'`;
+    } else {
+      // Pengguna terautentikasi di Help Center
+      if (companyId && isPlatformOwner) {
+        scopeAccessCondition = sql`(f.scope = 'global' OR (f.scope = 'company' AND f.company_id = ${companyId}) OR f.scope = 'platform_admin')`;
+      } else if (companyId) {
+        scopeAccessCondition = sql`(f.scope = 'global' OR (f.scope = 'company' AND f.company_id = ${companyId}))`;
+      } else if (isPlatformOwner) {
+        scopeAccessCondition = sql`(f.scope = 'global' OR f.scope = 'platform_admin')`;
+      } else {
+        scopeAccessCondition = sql`f.scope = 'global' AND f.company_id IS NULL`;
+      }
     }
 
-    // Filter tambahan jika query eksplisit menentukan scope
+    // Filter eksplisit scope lama
     let explicitScopeCondition = sql``;
     if (scope && typeof scope === "string") {
       if (scope === "platform_admin" && !isPlatformOwner) {
@@ -184,7 +273,78 @@ router.get("/", optionalAuthenticate, async (req: Request, res: Response): Promi
       if (scope === "company" && !companyId) {
         return res.status(200).json({ success: true, data: [] });
       }
+      if (isLoginRequest && (scope === "company" || scope === "platform_admin")) {
+        return res.status(200).json({ success: true, data: [] });
+      }
       explicitScopeCondition = sql`AND f.scope = ${scope}`;
+    }
+
+    // Filter eksplisit content_scope baru
+    let contentScopeCondition = sql``;
+    if (content_scope && typeof content_scope === "string") {
+      const cleanContentScope = content_scope.trim();
+      if (cleanContentScope === "platform" && !isPlatformOwner) {
+        return res.status(403).json({
+          success: false,
+          message: "Akses ditolak: Konten tingkat platform hanya dapat diakses oleh Platform Owner.",
+        });
+      }
+      if (cleanContentScope === "company" && !companyId) {
+        return res.status(200).json({ success: true, data: [] });
+      }
+      if (isLoginRequest && (cleanContentScope === "company" || cleanContentScope === "platform")) {
+        return res.status(200).json({ success: true, data: [] });
+      }
+      contentScopeCondition = sql`AND f.content_scope = ${cleanContentScope}`;
+    }
+
+    // Filter target_role (mendukung target_role atau role alias)
+    let targetRoleCondition = sql``;
+    const requestedRole = (target_role || role) as string | undefined;
+    if (requestedRole && typeof requestedRole === "string" && requestedRole.trim()) {
+      const cleanRole = requestedRole.trim();
+      targetRoleCondition = sql`AND (${cleanRole} = ANY(f.target_roles) OR cardinality(f.target_roles) = 0)`;
+    }
+
+    // Filter content_type
+    let contentTypeCondition = sql``;
+    if (content_type && typeof content_type === "string" && content_type.trim()) {
+      contentTypeCondition = sql`AND f.content_type = ${content_type.trim()}`;
+    }
+
+    // Filter display_context
+    let displayContextCondition = sql``;
+    if (!user?.id) {
+      // Pengguna tamu (belum login): HANYA boleh mengakses konten login atau both
+      if (display_context && display_context === "help_center") {
+        return res.status(200).json({ success: true, data: [] });
+      }
+      displayContextCondition = sql`AND f.display_context IN ('login', 'both')`;
+    } else if (isLoginRequest) {
+      displayContextCondition = sql`AND f.display_context IN ('login', 'both')`;
+    } else if (display_context && typeof display_context === "string" && display_context.trim()) {
+      const dc = display_context.trim();
+      if (dc === "login") {
+        displayContextCondition = sql`AND f.display_context IN ('login', 'both')`;
+      } else if (dc === "help_center") {
+        displayContextCondition = sql`AND f.display_context IN ('help_center', 'both')`;
+      } else if (dc === "both") {
+        displayContextCondition = sql`AND f.display_context = 'both'`;
+      } else if (dc === "all") {
+        displayContextCondition = sql``;
+      } else {
+        displayContextCondition = sql`AND f.display_context = ${dc}`;
+      }
+    } else {
+      // Default untuk Help Center setelah login: tampilkan konten help_center dan both
+      displayContextCondition = sql`AND f.display_context IN ('help_center', 'both')`;
+    }
+
+    // Filter needs_review
+    let needsReviewCondition = sql``;
+    if (needs_review !== undefined && needs_review !== "") {
+      const isReview = String(needs_review).toLowerCase() === "true";
+      needsReviewCondition = sql`AND f.needs_review = ${isReview}`;
     }
 
     // Filter pencarian
@@ -206,6 +366,11 @@ router.get("/", optionalAuthenticate, async (req: Request, res: Response): Promi
         f.company_id,
         f.author_id,
         f.scope,
+        f.content_scope,
+        f.target_roles,
+        f.content_type,
+        f.display_context,
+        f.needs_review,
         f.category,
         f.question,
         f.answer,
@@ -224,6 +389,11 @@ router.get("/", optionalAuthenticate, async (req: Request, res: Response): Promi
         AND f.is_published = true
         AND ${scopeAccessCondition}
         ${explicitScopeCondition}
+        ${contentScopeCondition}
+        ${targetRoleCondition}
+        ${contentTypeCondition}
+        ${displayContextCondition}
+        ${needsReviewCondition}
         ${searchCondition}
         ${categoryCondition}
       ORDER BY LOWER(f.question) ASC, f.created_at DESC;
@@ -252,7 +422,18 @@ router.get("/", optionalAuthenticate, async (req: Request, res: Response): Promi
 router.get("/manage", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
     const user = (req as any).user;
-    const { scope, status, search, category } = req.query;
+    const { 
+      scope, 
+      content_scope,
+      status, 
+      search, 
+      category, 
+      target_role, 
+      role, 
+      content_type, 
+      display_context, 
+      needs_review 
+    } = req.query;
 
     const isPlatformOwner = await checkIsPlatformOwner(user.id, user.email);
     const tenant = await resolveTenant(req, user.id);
@@ -287,7 +468,7 @@ router.get("/manage", authenticate, async (req: Request, res: Response): Promise
       });
     }
 
-    // Filter kondisi query
+    // Filter kondisi scope otoritatif
     let scopeCondition = sql``;
     if (requestedScope === "global") {
       scopeCondition = sql`f.scope = 'global'`;
@@ -296,6 +477,19 @@ router.get("/manage", authenticate, async (req: Request, res: Response): Promise
     } else {
       // Isolasi ketat: hanya ambil data perusahaan aktif
       scopeCondition = sql`f.scope = 'company' AND f.company_id = ${tenant!.companyId}`;
+    }
+
+    // Filter tambahan content_scope
+    let contentScopeCondition = sql``;
+    if (content_scope && typeof content_scope === "string") {
+      const cleanContentScope = content_scope.trim();
+      if (cleanContentScope === "platform" && !isPlatformOwner) {
+        return res.status(403).json({
+          success: false,
+          message: "Akses ditolak: Hanya Platform Owner yang dapat mengakses data scope platform.",
+        });
+      }
+      contentScopeCondition = sql`AND f.content_scope = ${cleanContentScope}`;
     }
 
     // Filter status publikasi
@@ -319,12 +513,53 @@ router.get("/manage", authenticate, async (req: Request, res: Response): Promise
       categoryCondition = sql`AND f.category ILIKE ${category.trim()}`;
     }
 
+    // Filter target_role
+    let targetRoleCondition = sql``;
+    const requestedRole = (target_role || role) as string | undefined;
+    if (requestedRole && typeof requestedRole === "string" && requestedRole.trim()) {
+      const cleanRole = requestedRole.trim();
+      targetRoleCondition = sql`AND (${cleanRole} = ANY(f.target_roles) OR cardinality(f.target_roles) = 0)`;
+    }
+
+    // Filter content_type
+    let contentTypeCondition = sql``;
+    if (content_type && typeof content_type === "string" && content_type.trim()) {
+      contentTypeCondition = sql`AND f.content_type = ${content_type.trim()}`;
+    }
+
+    // Filter display_context
+    let displayContextCondition = sql``;
+    if (display_context && typeof display_context === "string" && display_context.trim()) {
+      const dc = display_context.trim();
+      if (dc === "login") {
+        displayContextCondition = sql`AND f.display_context IN ('login', 'both')`;
+      } else if (dc === "help_center") {
+        displayContextCondition = sql`AND f.display_context IN ('help_center', 'both')`;
+      } else if (dc === "both") {
+        displayContextCondition = sql`AND f.display_context = 'both'`;
+      } else {
+        displayContextCondition = sql`AND f.display_context = ${dc}`;
+      }
+    }
+
+    // Filter needs_review
+    let needsReviewCondition = sql``;
+    if (needs_review !== undefined && needs_review !== "") {
+      const isReview = String(needs_review).toLowerCase() === "true";
+      needsReviewCondition = sql`AND f.needs_review = ${isReview}`;
+    }
+
     const result = await db.execute(sql`
       SELECT 
         f.id,
         f.company_id,
         f.author_id,
         f.scope,
+        f.content_scope,
+        f.target_roles,
+        f.content_type,
+        f.display_context,
+        f.needs_review,
         f.category,
         f.question,
         f.answer,
@@ -341,9 +576,14 @@ router.get("/manage", authenticate, async (req: Request, res: Response): Promise
       LEFT JOIN profiles p ON f.author_id = p.id
       WHERE f.deleted_at IS NULL
         AND ${scopeCondition}
+        ${contentScopeCondition}
         ${statusCondition}
         ${searchCondition}
         ${categoryCondition}
+        ${targetRoleCondition}
+        ${contentTypeCondition}
+        ${displayContextCondition}
+        ${needsReviewCondition}
       ORDER BY LOWER(f.question) ASC, f.created_at DESC;
     `);
 
@@ -368,8 +608,88 @@ router.get("/manage", authenticate, async (req: Request, res: Response): Promise
 });
 
 /**
+ * GET /api/faqs/:id
+ * Mengambil detail satu FAQ berdasarkan ID
+ */
+router.get("/:id", optionalAuthenticate, async (req: Request, res: Response): Promise<any> => {
+  try {
+    const user = (req as any).user;
+    const id = req.params.id as string;
+
+    const result = await db.execute(sql`
+      SELECT 
+        f.id,
+        f.company_id,
+        f.author_id,
+        f.scope,
+        f.content_scope,
+        f.target_roles,
+        f.content_type,
+        f.display_context,
+        f.needs_review,
+        f.category,
+        f.question,
+        f.answer,
+        f.sop_title,
+        f.sop_url,
+        f.is_published,
+        f.order_index,
+        f.created_at,
+        f.updated_at,
+        c.name as company_name,
+        p.full_name as author_name
+      FROM faqs f
+      LEFT JOIN companies c ON f.company_id = c.id
+      LEFT JOIN profiles p ON f.author_id = p.id
+      WHERE f.id = ${id} AND f.deleted_at IS NULL
+      LIMIT 1;
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ tidak ditemukan",
+      });
+    }
+
+    const item: any = result.rows[0];
+
+    // Cek otorisasi jika scope bukan global
+    if (item.scope === "platform_admin" || item.content_scope === "platform") {
+      let isPlatformOwner = false;
+      if (user?.id) {
+        isPlatformOwner = await checkIsPlatformOwner(user.id, user.email);
+      }
+      if (!isPlatformOwner) {
+        return res.status(403).json({
+          success: false,
+          message: "Akses ditolak: Konten ini memerlukan hak akses Platform Owner.",
+        });
+      }
+    } else if (item.scope === "company") {
+      if (!user?.id) {
+        return res.status(401).json({ success: false, message: "Autentikasi diperlukan." });
+      }
+      const tenant = await resolveTenant(req, user.id);
+      const isPlatformOwner = await checkIsPlatformOwner(user.id, user.email);
+      if (!isPlatformOwner && tenant?.companyId !== item.company_id) {
+        return res.status(403).json({ success: false, message: "Akses ditolak: Konten perusahaan lain." });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: item,
+    });
+  } catch (err: any) {
+    console.error("Get FAQ detail error:", err);
+    return res.status(500).json({ success: false, message: "Gagal mengambil detail FAQ", errors: [err.message] });
+  }
+});
+
+/**
  * POST /api/faqs
- * Membuat FAQ baru
+ * Membuat FAQ baru dengan dukungan metadata lengkap
  */
 router.post("/", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
@@ -388,7 +708,24 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
     const isPlatformOwner = await checkIsPlatformOwner(user.id, user.email);
     let targetCompanyId: string | null = null;
 
-    if (data.scope === "global" || data.scope === "platform_admin") {
+    // Harmonisasikan scope lama dan content_scope baru
+    let finalScope = data.scope;
+    let finalContentScope = data.content_scope;
+
+    if (finalContentScope && !req.body.scope) {
+      if (finalContentScope === "platform") finalScope = "platform_admin";
+      else if (finalContentScope === "company") finalScope = "company";
+      else if (finalContentScope === "user") finalScope = "global";
+    } else if (finalScope && !finalContentScope) {
+      if (finalScope === "platform_admin") finalContentScope = "platform";
+      else if (finalScope === "company") finalContentScope = "company";
+      else if (finalScope === "global") finalContentScope = "company";
+    }
+    finalContentScope = finalContentScope || "company";
+    finalScope = finalScope || "company";
+
+    // Otorisasi role dan isolasi tenant
+    if (finalScope === "global" || finalScope === "platform_admin" || finalContentScope === "platform") {
       if (!isPlatformOwner) {
         return res.status(403).json({
           success: false,
@@ -396,7 +733,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
         });
       }
       targetCompanyId = null;
-    } else if (data.scope === "company") {
+    } else if (finalScope === "company" || finalContentScope === "company" || finalContentScope === "user") {
       const tenant = await resolveTenant(req, user.id);
       if (!tenant) {
         return res.status(404).json({
@@ -421,7 +758,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
       .values({
         company_id: targetCompanyId,
         author_id: user.id,
-        scope: data.scope,
+        scope: finalScope,
         category: data.category.trim(),
         question: data.question.trim(),
         answer: sanitizeFaqAnswer(data.answer),
@@ -429,6 +766,11 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
         sop_url: sopUrl,
         is_published: data.is_published,
         order_index: data.order_index,
+        content_scope: finalContentScope,
+        target_roles: data.target_roles || [],
+        content_type: data.content_type || "faq",
+        display_context: data.display_context || "help_center",
+        needs_review: data.needs_review ?? false,
       })
       .returning();
 
@@ -449,7 +791,7 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
 
 /**
  * PUT /api/faqs/:id
- * Memperbarui FAQ yang ada
+ * Memperbarui FAQ yang ada beserta metadata baru
  */
 router.put("/:id", authenticate, async (req: Request, res: Response): Promise<any> => {
   try {
@@ -465,7 +807,7 @@ router.put("/:id", authenticate, async (req: Request, res: Response): Promise<an
       });
     }
 
-    // Ambil FAQ lama untuk memeriksa kepemilikan
+    // Ambil FAQ lama untuk memeriksa kepemilikan dan integritas tenant
     const existingResult = await db
       .select()
       .from(faqs)
@@ -483,19 +825,19 @@ router.put("/:id", authenticate, async (req: Request, res: Response): Promise<an
     const isPlatformOwner = await checkIsPlatformOwner(user.id, user.email);
 
     // Otorisasi perubahan
-    if (existing.scope === "global" || existing.scope === "platform_admin") {
+    if (existing.scope === "global" || existing.scope === "platform_admin" || existing.content_scope === "platform") {
       if (!isPlatformOwner) {
         return res.status(403).json({
           success: false,
           message: "Akses ditolak: Hanya Platform Owner yang berwenang mengubah FAQ Global atau Platform Admin.",
         });
       }
-    } else if (existing.scope === "company") {
+    } else if (existing.scope === "company" || existing.content_scope === "company") {
       const tenant = await resolveTenant(req, user.id);
       if (!tenant) {
         return res.status(403).json({ success: false, message: "Akses ditolak: Konteks perusahaan tidak ditemukan." });
       }
-      if (tenant.companyId !== existing.company_id) {
+      if (tenant.companyId !== existing.company_id && !isPlatformOwner) {
         return res.status(403).json({
           success: false,
           message: "Akses ditolak: Anda tidak memiliki izin untuk mengubah FAQ perusahaan lain.",
@@ -521,6 +863,13 @@ router.put("/:id", authenticate, async (req: Request, res: Response): Promise<an
     if (data.order_index !== undefined) updateValues.order_index = data.order_index;
     if (data.sop_title !== undefined) updateValues.sop_title = data.sop_title ? data.sop_title.trim() : null;
     if (data.sop_url !== undefined) updateValues.sop_url = data.sop_url ? data.sop_url.trim() : null;
+
+    // Metadata baru
+    if (data.content_scope !== undefined) updateValues.content_scope = data.content_scope;
+    if (data.target_roles !== undefined) updateValues.target_roles = data.target_roles;
+    if (data.content_type !== undefined) updateValues.content_type = data.content_type;
+    if (data.display_context !== undefined) updateValues.display_context = data.display_context;
+    if (data.needs_review !== undefined) updateValues.needs_review = data.needs_review;
 
     // Platform Owner dapat mengubah scope jika diperlukan
     if (data.scope !== undefined && isPlatformOwner) {
@@ -576,19 +925,19 @@ router.delete("/:id", authenticate, async (req: Request, res: Response): Promise
     const existing = existingResult[0];
     const isPlatformOwner = await checkIsPlatformOwner(user.id, user.email);
 
-    if (existing.scope === "global" || existing.scope === "platform_admin") {
+    if (existing.scope === "global" || existing.scope === "platform_admin" || existing.content_scope === "platform") {
       if (!isPlatformOwner) {
         return res.status(403).json({
           success: false,
           message: "Akses ditolak: Hanya Platform Owner yang dapat menghapus FAQ Global atau Platform Admin.",
         });
       }
-    } else if (existing.scope === "company") {
+    } else if (existing.scope === "company" || existing.content_scope === "company") {
       const tenant = await resolveTenant(req, user.id);
       if (!tenant) {
         return res.status(403).json({ success: false, message: "Akses ditolak: Konteks perusahaan tidak ditemukan." });
       }
-      if (tenant.companyId !== existing.company_id) {
+      if (tenant.companyId !== existing.company_id && !isPlatformOwner) {
         return res.status(403).json({
           success: false,
           message: "Akses ditolak: Anda tidak dapat menghapus FAQ perusahaan lain.",

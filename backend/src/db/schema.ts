@@ -1,4 +1,5 @@
 import { pgTable, uuid, varchar, text, timestamp, numeric, index, pgEnum, date as pgDate, boolean, jsonb, integer } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const companies = pgTable("companies", {
   id: uuid("id").primaryKey(),
@@ -219,6 +220,11 @@ export const faqs = pgTable("faqs", {
   sop_url: text("sop_url"),
   is_published: boolean("is_published").notNull().default(true),
   order_index: integer("order_index").notNull().default(0),
+  content_scope: varchar("content_scope", { length: 50 }).notNull().default("company"), // 'platform' | 'company' | 'user'
+  target_roles: text("target_roles").array().notNull().default(sql`'{}'::text[]`), // 'platform_admin' | 'company_owner_admin' | 'manager' | 'employee'
+  content_type: varchar("content_type", { length: 50 }).notNull().default("faq"), // 'sop_guide' | 'faq' | 'troubleshooting' | 'tips_best_practice'
+  display_context: varchar("display_context", { length: 50 }).notNull().default("help_center"), // 'login' | 'help_center' | 'both'
+  needs_review: boolean("needs_review").notNull().default(false),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   deleted_at: timestamp("deleted_at", { withTimezone: true }),
@@ -229,6 +235,10 @@ export const faqs = pgTable("faqs", {
     index("faqs_published_idx").on(table.is_published),
     index("faqs_deleted_idx").on(table.deleted_at),
     index("faqs_category_idx").on(table.category),
+    index("faqs_content_scope_idx").on(table.content_scope),
+    index("faqs_content_type_idx").on(table.content_type),
+    index("faqs_display_context_idx").on(table.display_context),
+    index("faqs_needs_review_idx").on(table.needs_review),
   ];
 });
 

@@ -2,6 +2,7 @@
 
 import React, { Suspense, useState, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { TopBar } from "@/components/TopBar";
 import { 
   Search, 
@@ -15,8 +16,6 @@ import {
   MapPin,
   Clock,
   FileText,
-  QrCode,
-  Users,
   Lock,
   Compass,
   CheckCircle2,
@@ -25,19 +24,30 @@ import {
   Navigation,
   ExternalLink,
   Shield,
-  FileCheck
+  FileCheck,
+  Layers,
+  SlidersHorizontal,
+  ChevronRight
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
-import { getPublicFaqs, FaqItem as BackendFaqItem } from "@/lib/faqApi";
+import { 
+  getPublicFaqs, 
+  FaqItem as BackendFaqItem, 
+  ContentScope, 
+  TargetRole, 
+  ContentType, 
+  DisplayContext,
+  getContentScopeBadge, 
+  getContentTypeBadge,
+  CONTENT_SCOPE_OPTIONS,
+  CONTENT_TYPE_OPTIONS,
+  TARGET_ROLE_OPTIONS
+} from "@/lib/faqApi";
 import { FaqAnswerContent } from "@/components/FaqAnswerContent";
 
-export type FAQCategory = "karyawan" | "perusahaan" | "admin" | "platform_admin";
-export type TopicFilter = "semua" | "gps" | "presensi" | "izin" | "tugas" | "akun" | "sop";
-
-interface FAQItem {
+export interface FAQItem {
   id: string;
-  category: FAQCategory;
-  topic: TopicFilter;
+  category: string;
   question: string;
   answer: string;
   tags: string[];
@@ -45,264 +55,44 @@ interface FAQItem {
   sop_title?: string | null;
   sop_url?: string | null;
   scope?: "global" | "company" | "platform_admin";
+  content_scope?: ContentScope;
+  target_roles?: TargetRole[];
+  content_type?: ContentType;
+  display_context?: DisplayContext;
+  needs_review?: boolean;
   company_name?: string | null;
 }
 
-const FAQ_DATA: FAQItem[] = [
-  // ================= 0. PANDUAN LOGIN & AKSES AKUN =================
-  {
-    id: "login-cara-google",
-    category: "karyawan",
-    topic: "akun",
-    icon: Lock,
-    question: "Bagaimana cara masuk (login) ke AbsenIN menggunakan Akun Google?",
-    answer: "1. Buka aplikasi atau tautan resmi AbsenIN pada browser perangkat Anda.\n2. Di halaman login, klik tombol 'Sign in with Google'.\n3. Pilih akun Google yang terdaftar atau masukkan email dan kata sandi Google Anda.\n4. Berikan izin akses profil dasar dan email jika diminta oleh Google.\n5. Setelah verifikasi berhasil, Anda akan langsung diarahkan ke beranda aplikasi.",
-    tags: ["login", "masuk", "google", "sso", "akun", "cara login", "sign in"]
-  },
-  {
-    id: "login-kendala-sesi",
-    category: "karyawan",
-    topic: "akun",
-    icon: AlertTriangle,
-    question: "Mengapa muncul pesan 'Gagal verifikasi sesi' atau gagal login dengan Google?",
-    answer: "Kendala saat login Google umumnya disebabkan oleh:\n• Gangguan koneksi internet: Pastikan perangkat Anda terhubung ke internet yang stabil.\n• Sesi Google kedaluwarsa: Muat ulang (refresh) halaman login dan ketuk kembali 'Sign in with Google'.\n• Cache browser menumpuk: Bersihkan riwayat dan cache browser, atau coba buka melalui jendela penyamaran (Incognito Window).\n• Popup terblokir: Pastikan browser ponsel tidak memblokir jendela sembulan (pop-up) autentikasi Google.",
-    tags: ["gagal login", "verifikasi sesi", "error", "kendala login", "google gagal", "troubleshoot", "akses"]
-  },
-  {
-    id: "login-tanpa-password",
-    category: "karyawan",
-    topic: "akun",
-    icon: Lock,
-    question: "Apakah saya perlu membuat kata sandi (password) baru untuk akun AbsenIN?",
-    answer: "Tidak perlu. AbsenIN menggunakan sistem Single Sign-On (SSO) Google yang terenkripsi dan aman. Anda tidak perlu membuat atau mengingat kata sandi tambahan. Keamanan akun Anda sepenuhnya dilindungi oleh autentikasi dua faktor (2FA) dan standar keamanan akun Google Anda.",
-    tags: ["password", "kata sandi", "lupa password", "keamanan", "sso google", "login"]
-  },
-  {
-    id: "login-akun-baru",
-    category: "karyawan",
-    topic: "akun",
-    icon: FileText,
-    question: "Bagaimana alur persetujuan kebijakan bagi akun Google yang baru pertama kali mendaftar?",
-    answer: "Bagi akun Google yang baru pertama kali mendaftar, sistem akan menampilkan lembar persetujuan Syarat & Ketentuan serta Kebijakan Privasi PII secara transparan. Setelah Anda membaca dan menyetujui kedua dokumen tersebut, akun Anda akan langsung aktif untuk digunakan.",
-    tags: ["akun baru", "daftar", "persetujuan", "syarat ketentuan", "kebijakan privasi", "onboarding", "login"]
-  },
-  {
-    id: "login-gabung-perusahaan",
-    category: "karyawan",
-    topic: "akun",
-    icon: Building2,
-    question: "Bagaimana jika email saya belum terhubung ke perusahaan mana pun setelah login?",
-    answer: "Setelah berhasil login untuk pertama kali:\n• Jika Anda karyawan: Minta Kode Perusahaan atau QR Code pendaftaran kepada Admin/HR kantor Anda, lalu masukkan pada menu 'Gabung Perusahaan'.\n• Jika Anda pemilik usaha/HR: Anda dapat memilih 'Buat Perusahaan Baru' untuk mendaftarkan organisasi kantor Anda secara mandiri.",
-    tags: ["gabung perusahaan", "kode perusahaan", "kantor baru", "organisasi", "karyawan baru", "login", "akses"]
-  },
-  {
-    id: "login-multi-akun",
-    category: "karyawan",
-    topic: "akun",
-    icon: Users,
-    question: "Bisakah satu akun email Google digunakan di lebih dari satu perusahaan?",
-    answer: "Bisa. Satu akun Google dapat terhubung ke beberapa cabang atau perusahaan berbeda. Setelah login, Anda dapat beralih perusahaan kapan saja melalui fitur 'Ganti Perusahaan' di halaman Profil atau Company Switcher di bilah atas Beranda.",
-    tags: ["multi perusahaan", "pindah kantor", "cabang", "switch company", "akun", "login"]
-  },
-  {
-    id: "login-privasi-data",
-    category: "karyawan",
-    topic: "akun",
-    icon: ShieldCheck,
-    question: "Apakah data pribadi akun saya aman dan dilindungi di AbsenIN?",
-    answer: "AbsenIN menerapkan standar perlindungan data pribadi (PII) yang ketat. Informasi profil hanya digunakan untuk keperluan identifikasi presensi dan administrasi internal perusahaan Anda. Data lokasi GPS hanya diakses pada detik presensi dan tidak pernah dilacak secara latar belakang (24 jam).",
-    tags: ["privasi", "keamanan data", "pii", "perlindungan data", "gps", "akun", "login"]
-  },
-  // ================= 1. KARYAWAN =================
-  {
-    id: "absen-checkin",
-    category: "karyawan",
-    topic: "presensi",
-    icon: UserCheck,
-    question: "Bagaimana cara melakukan absensi masuk (Check-in) dan pulang (Check-out)?",
-    answer: "1. Buka halaman Beranda atau menu Kehadiran di AbsenIn.\n2. Klik tombol 'Masuk' atau 'Check In Sekarang'.\n3. Berikan izin akses lokasi jika diminta oleh browser ponsel Anda.\n4. Sistem akan memverifikasi koordinat GPS Anda secara otomatis terhadap radius kantor.\n5. Setelah sukses, status Anda menjadi 'Masuk'. Ketika jam kerja selesai, tombol akan otomatis beralih menjadi 'Keluar' untuk presensi pulang.",
-    tags: ["absen", "checkin", "checkout", "kehadiran", "karyawan", "masuk", "pulang", "cara absen"]
-  },
-  {
-    id: "gps-radius-error",
-    category: "karyawan",
-    topic: "gps",
-    icon: MapPin,
-    question: "Mengapa muncul notifikasi 'Di Luar Radius Kantor' saat ingin absen?",
-    answer: "Notifikasi ini muncul karena titik koordinat GPS perangkat Anda berada di luar batas jarak (misalnya > 50 meter) dari titik kantor yang ditentukan perusahaan.\n\nTips mengatasi:\n• Pastikan Anda sudah berada di area kantor fisik perusahaan.\n• Aktifkan fitur 'Akurasi Tinggi' (Google Location Accuracy) di pengaturan ponsel Anda.\n• Nyalakan Wi-Fi ponsel (tidak perlu tersambung ke jaringan), karena pemindaian sinyal Wi-Fi di sekitar sangat membantu GPS menentukan lokasi secara presisi hingga ±5-10 meter di dalam ruangan.\n• Gunakan alat 'Uji Akurasi GPS' pada bagian atas halaman bantuan ini untuk memeriksa koordinat perangkat Anda.",
-    tags: ["gps", "radius", "jarak", "lokasi", "gagal absen", "luar radius", "akurasi", "sinyal"]
-  },
-  {
-    id: "gps-izin-browser",
-    category: "karyawan",
-    topic: "gps",
-    icon: Navigation,
-    question: "Bagaimana cara mengaktifkan izin lokasi/GPS di Google Chrome atau Safari?",
-    answer: "Jika browser tidak sengaja memblokir akses lokasi:\n• Di Google Chrome Android: Ketuk ikon gembok / setelan di bilah alamat atas -> pilih 'Izin' (Permissions) -> pilih 'Lokasi' (Location) -> ubah ke 'Izinkan' (Allow).\n• Di Safari iOS (iPhone): Buka Pengaturan iPhone -> Privasi & Keamanan -> Layanan Lokasi -> Safari Websites -> ubah menjadi 'Saat Menggunakan App' dan aktifkan 'Lokasi Tepat'.\n• Muat ulang (Refresh) halaman AbsenIn setelah mengubah izin.",
-    tags: ["izin browser", "chrome", "safari", "iphone", "android", "aktifkan gps", "blokir lokasi"]
-  },
-  {
-    id: "fake-gps-detection",
-    category: "karyawan",
-    topic: "gps",
-    icon: AlertTriangle,
-    question: "Apakah aplikasi dapat mendeteksi aplikasi Fake GPS atau Mock Location?",
-    answer: "Ya. AbsenIn dilengkapi sistem keamanan deteksi Mock Location dan integritas perangkat. Jika terdeteksi penggunaan aplikasi pihak ketiga pengubah lokasi (Fake GPS / VPN Spoofing), sistem akan menolak transaksi absensi dan mencatat insiden keamanan tersebut pada log audit organisasi demi menjaga validitas data.",
-    tags: ["fake gps", "mock location", "kecurangan", "spoofing", "keamanan", "vpn"]
-  },
-  {
-    id: "lupa-checkout",
-    category: "karyawan",
-    topic: "presensi",
-    icon: Clock,
-    question: "Bagaimana jika saya lupa melakukan Check-out saat pulang kerja?",
-    answer: "Jika Anda lupa melakukan check-out hingga pergantian hari, status kehadiran hari tersebut akan tetap mencatat jam masuk Anda. Namun, untuk melengkapi jam pulang Anda dapat menghubungi Admin/HR perusahaan Anda agar mereka dapat memperbarui catatan kehadiran Anda secara manual melalui Dashboard Manajemen.",
-    tags: ["lupa checkout", "pulang", "lupa absen", "revisi kehadiran", "admin"]
-  },
-  {
-    id: "toleransi-keterlambatan",
-    category: "karyawan",
-    topic: "presensi",
-    icon: Clock,
-    question: "Berapa menit toleransi keterlambatan dan kapan status menjadi 'Terlambat'?",
-    answer: "Toleransi keterlambatan ditentukan oleh masing-masing perusahaan (umumnya 10 hingga 15 menit). Misalnya, jika jam masuk pukul 08:00 WIB dengan toleransi 15 menit, Anda masih dihitung 'Tepat Waktu' jika check-in sebelum pukul 08:15 WIB. Check-in pukul 08:16 WIB ke atas akan otomatis tercatat 'Terlambat'.",
-    tags: ["toleransi", "terlambat", "jam masuk", "jam kerja", "dispensasi", "tepat waktu"]
-  },
-  {
-    id: "pengajuan-izin-cuti",
-    category: "karyawan",
-    topic: "izin",
-    icon: FileText,
-    question: "Bagaimana alur pengajuan Izin, Cuti, atau Sakit?",
-    answer: "1. Buka menu 'Izin' dari navigasi bawah.\n2. Klik tombol 'Ajukan Izin Baru'.\n3. Pilih jenis pengajuan: Sakit, Cuti Tahunan, Keperluan Mendesak, atau Izin Khusus.\n4. Tentukan rentang tanggal awal dan tanggal akhir pengajuan.\n5. Tuliskan keterangan alasan dengan jelas.\n6. Unggah lampiran foto/dokumen pendukung (wajib melampirkan Surat Keterangan Dokter jika memilih izin Sakit).\n7. Klik 'Kirim Pengajuan'. Permohonan Anda akan diproses oleh HR/Admin.",
-    tags: ["izin", "cuti", "sakit", "surat dokter", "form izin", "pengajuan", "lampiran"]
-  },
-  {
-    id: "batal-revisi-izin",
-    category: "karyawan",
-    topic: "izin",
-    icon: FileText,
-    question: "Bisakah saya membatalkan atau merevisi permohonan izin yang sudah dikirim?",
-    answer: "Permohonan izin yang masih berstatus 'Menunggu Persetujuan' (Pending) dapat dibatalkan melalui menu riwayat izin Anda. Namun, jika izin sudah disetujui (Approved) oleh Admin, Anda perlu menginformasikan langsung kepada HR/Admin kantor untuk melakukan pembatalan dari panel manajemen.",
-    tags: ["batal izin", "revisi", "salah tanggal", "pending", "hapus izin"]
-  },
-  {
-    id: "pantau-tugas-agenda",
-    category: "karyawan",
-    topic: "tugas",
-    icon: Clock,
-    question: "Di mana saya bisa melihat tugas kerja dan jadwal agenda kantor?",
-    answer: "• Menu 'Tugas': Menampilkan daftar pekerjaan harian, tenggat waktu (deadline), checklist sub-tugas, dan tombol tandai selesai.\n• Menu 'Agenda': Berisi kalender kegiatan perusahaan, rapat internal, agenda evaluasi, serta jadwal hari libur bersama.",
-    tags: ["tugas", "agenda", "jadwal", "kegiatan", "rapat", "deadline", "checklist"]
-  },
-  {
-    id: "multi-perusahaan",
-    category: "karyawan",
-    topic: "akun",
-    icon: Building2,
-    question: "Bisakah satu akun email bergabung di lebih dari satu perusahaan?",
-    answer: "Bisa. Satu akun Google/Email dapat terdaftar pada beberapa organisasi atau cabang perusahaan berbeda. Anda dapat berpindah konteks organisasi secara mudah melalui 'Company Switcher' di bilah atas Beranda atau melalui menu 'Akses & Perusahaan' di halaman Profil.",
-    tags: ["ganti perusahaan", "multi perusahaan", "cabang", "pindah organisasi", "akun", "company switcher"]
-  },
-  {
-    id: "privasi-pelacakan-gps",
-    category: "karyawan",
-    topic: "akun",
-    icon: Lock,
-    question: "Apakah AbsenIn melacak lokasi GPS pengguna sepanjang hari (24 jam)?",
-    answer: "TIDAK SAMA SEKALI. Demi melindungi privasi data pribadi pengguna dan menghemat daya baterai ponsel, AbsenIn HANYA meminta koordinat lokasi pada detik Anda menekan tombol absensi (Check-in atau Check-out). Aplikasi tidak melakukan pemantauan lokasi latar belakang (background tracking) di luar sesi absensi.",
-    tags: ["privasi", "pelacakan", "gps 24 jam", "keamanan", "baterai", "pii", "kebijakan privasi"]
-  },
-  {
-    id: "lupa-kata-sandi",
-    category: "karyawan",
-    topic: "akun",
-    icon: Lock,
-    question: "Bagaimana cara mengganti foto profil atau mengamankan akun?",
-    answer: "Buka menu 'Profil' dari navigasi bawah:\n• Untuk foto profil: Ketuk ikon kamera pada avatar profil Anda untuk mengunggah foto baru.\n• Untuk keamanan akun: Di bagian Informasi Akun, Anda dapat memeriksa status email Google Anda dan opsi keamanan terkait.",
-    tags: ["password", "kata sandi", "foto profil", "ganti password", "profil", "avatar"]
-  },
+function getFaqIcon(item: { content_type?: string; category?: string; scope?: string; content_scope?: string }) {
+  if (item.content_type === "sop_guide") return FileCheck;
+  if (item.content_type === "troubleshooting") return AlertTriangle;
+  if (item.content_type === "tips_best_practice") return Sparkles;
+  if (item.scope === "platform_admin" || item.content_scope === "platform") return Shield;
+  if (item.scope === "company" || item.content_scope === "company") return Building2;
 
-  // ================= 2. PERUSAHAAN =================
-  {
-    id: "atur-lokasi-radius",
-    category: "perusahaan",
-    topic: "gps",
-    icon: MapPin,
-    question: "Bagaimana cara mengatur titik lokasi kantor dan radius absensi di peta?",
-    answer: "1. Masuk ke Dashboard Admin -> pilih menu 'Kelola Perusahaan'.\n2. Pada bagian 'Lokasi Kantor & Radius Geofencing', Anda akan melihat peta interaktif.\n3. Geser penanda (marker) pin ke lokasi tepat kantor Anda, atau gunakan tombol 'Gunakan Lokasi Saya Saat Ini'.\n4. Tentukan batas radius kehadiran (misalnya 50 meter atau 100 meter).\n5. Klik 'Simpan Lokasi Kantor'. Karyawan yang absen di luar lingkaran radius ini otomatis tertolak.",
-    tags: ["lokasi kantor", "koordinat", "geofencing", "radius", "peta", "leaflet", "perusahaan", "kelola lokasi"]
-  },
-  {
-    id: "atur-jam-kerja",
-    category: "perusahaan",
-    topic: "presensi",
-    icon: Clock,
-    question: "Bagaimana cara menyetel hari kerja, jam operasional, dan toleransi keterlambatan?",
-    answer: "Di halaman Kelola Perusahaan, buka bagian 'Jadwal & Jam Kerja Kantor':\n• Tentukan hari aktif kantor (misal: Senin s.d. Jumat).\n• Atur Jam Masuk (contoh: 08:00) dan Jam Pulang (contoh: 17:00).\n• Atur Toleransi Keterlambatan (misal: 15 menit).\nSistem akan otomatis menghitung status absensi karyawan secara real-time.",
-    tags: ["jam kerja", "jadwal", "shift", "toleransi", "terlambat", "jam masuk", "hari kerja", "perusahaan"]
-  },
-  {
-    id: "qr-code-karyawan",
-    category: "perusahaan",
-    topic: "akun",
-    icon: QrCode,
-    question: "Bagaimana cara membagikan QR Code dan Kode Bergabung Perusahaan?",
-    answer: "Setiap perusahaan yang terdaftar memiliki Kode Organisasi dan QR Code unik. Di halaman Kelola Perusahaan, buka bagian 'Kode & QR Perusahaan'. Anda dapat mengunduh gambar QR Code untuk dicetak dan ditempel di papan pengumuman kantor, atau menyalin kode perusahaan untuk dibagikan via grup WhatsApp karyawan.",
-    tags: ["undang", "tambah karyawan", "qr code", "kode perusahaan", "gabung", "perusahaan"]
-  },
-  {
-    id: "ubah-profil-kantor",
-    category: "perusahaan",
-    topic: "akun",
-    icon: Building2,
-    question: "Bagaimana cara memperbarui logo, nama resmi, atau alamat kantor?",
-    answer: "Di halaman Kelola Perusahaan, klik tombol 'Ubah Informasi Perusahaan' di bagian profil atas. Anda dapat memperbarui foto logo organisasi, nama perusahaan, serta alamat lengkap resmi.",
-    tags: ["logo perusahaan", "nama kantor", "alamat", "ubah profil perusahaan"]
-  },
-
-  // ================= 3. ADMIN =================
-  {
-    id: "approval-izin-admin",
-    category: "admin",
-    topic: "izin",
-    icon: FileText,
-    question: "Bagaimana alur persetujuan (Approval) atau penolakan izin karyawan oleh HR/Admin?",
-    answer: "1. Buka Dashboard Admin -> pilih tab 'Izin & Cuti'.\n2. Anda akan melihat daftar permohonan berstatus 'Menunggu'.\n3. Klik permohonan untuk meninjau alasan, tanggal cuti, dan berkas lampiran (surat dokter).\n4. Klik 'Setujui' untuk mengonfirmasi atau 'Tolak' dengan mencantumkan catatan alasan penolakan bagi karyawan.",
-    tags: ["approve", "approval", "persetujuan", "tolak izin", "verifikasi izin", "admin", "surat dokter"]
-  },
-  {
-    id: "rekap-laporan-kehadiran",
-    category: "admin",
-    topic: "presensi",
-    icon: Users,
-    question: "Bagaimana cara mengunduh laporan rekapitulasi kehadiran ke Excel (.xlsx) atau PDF?",
-    answer: "Di Dashboard Admin, pilih menu 'Laporan Kehadiran'. Tentukan filter periode (bulan atau rentang tanggal kustom) dan departemen. Klik tombol 'Ekspor Data' lalu pilih format yang diinginkan (Excel untuk analisis data payroll atau PDF untuk format laporan cetak resmi).",
-    tags: ["laporan", "rekap", "export", "excel", "pdf", "kehadiran", "unduh data", "admin", "payroll"]
-  },
-  {
-    id: "peran-role-hirarki",
-    category: "admin",
-    topic: "akun",
-    icon: ShieldCheck,
-    question: "Apa perbedaan hak wewenang antara Owner, Admin, Manager, dan Karyawan?",
-    answer: "• Owner (Pemilik): Memiliki kendali tertinggi atas organisasi, profil perusahaan, billing langganan, dan manajemen role pengguna.\n• Admin: Mengelola operasional harian, radius lokasi kantor, jadwal jam kerja, approval izin, dan laporan rekap.\n• Manager: Mengawasi kehadiran tim, memonitor absensi divisi, dan memberikan checklist tugas harian.\n• Karyawan: Melakukan absensi GPS, mengajukan izin/cuti, dan menyelesaikan tugas kerja.",
-    tags: ["role", "peran", "owner", "admin", "manager", "karyawan", "hak akses", "wewenang"]
-  }
-];
+  const c = item.category?.toLowerCase() || "";
+  if (c.includes("gps") || c.includes("lokasi") || c.includes("radius")) return MapPin;
+  if (c.includes("presensi") || c.includes("absen") || c.includes("hadir")) return Clock;
+  if (c.includes("izin") || c.includes("cuti") || c.includes("sakit")) return FileText;
+  if (c.includes("akun") || c.includes("sandi") || c.includes("login") || c.includes("password")) return Lock;
+  if (c.includes("tugas") || c.includes("agenda")) return CheckCircle2;
+  return HelpCircle;
+}
 
 function BantuanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { activeRole, isManagement: isCompanyManagement, currentUser } = useCompany();
-  const [savedRole, setSavedRole] = useState<string | null>(null);
+  const { currentUser, activeRole, isManagement } = useCompany();
+
   const [hasLocalAuth, setHasLocalAuth] = useState<boolean | null>(null);
+  const [savedRole, setSavedRole] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       const savedUserStr = localStorage.getItem("user");
       const token = localStorage.getItem("accessToken");
-      setHasLocalAuth(Boolean(savedUserStr && token));
+      const hasAuth = Boolean(savedUserStr && token);
+      setHasLocalAuth(hasAuth);
       if (savedUserStr) {
         const parsed = JSON.parse(savedUserStr);
         if (parsed.activeRole) setSavedRole(parsed.activeRole);
@@ -313,14 +103,12 @@ function BantuanContent() {
   }, []);
 
   const isFromLogin = searchParams.get("from") === "login";
-  // Konteks pra-login: dibuka dengan parameter ?from=login ATAU jika pengguna belum login
+  // Konteks login: eksplisit via ?from=login ATAU jika pengguna belum terautentikasi sama sekali
   const isLoginContext = isFromLogin || (hasLocalAuth === false && !currentUser?.id);
 
-  const isFromAdmin = searchParams.get("from") === "admin";
-  
-  // Deteksi wewenang manajemen (Owner, Admin, Manager)
+  // Wewenang manajemen (Owner, Admin, Manager)
   const hasManagementRole = Boolean(
-    isCompanyManagement || 
+    isManagement || 
     activeRole === "owner" || 
     activeRole === "admin" || 
     currentUser?.roles?.includes("Admin") || 
@@ -328,18 +116,33 @@ function BantuanContent() {
     savedRole === "admin"
   );
 
-  const isManagementMode = !isLoginContext && isFromAdmin && hasManagementRole;
-
-  const [activeCategory, setActiveCategory] = useState<FAQCategory>(
-    isManagementMode ? "perusahaan" : "karyawan"
+  const isPlatformOwner = Boolean(
+    currentUser?.is_developer ||
+    currentUser?.isDeveloper ||
+    (currentUser?.email && ["absenin.my.id@gmail.com"].includes(currentUser.email.toLowerCase()))
   );
-  const [activeTopic, setActiveTopic] = useState<TopicFilter>("semua");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // User Mapped Role untuk filter target_roles pasca-login
+  const userMappedRole: TargetRole = useMemo(() => {
+    if (isPlatformOwner) return "platform_admin";
+    if (activeRole === "owner" || activeRole === "admin" || currentUser?.roles?.includes("Admin") || savedRole === "owner" || savedRole === "admin") {
+      return "company_owner_admin";
+    }
+    if (activeRole === "manager" || savedRole === "manager") return "manager";
+    return "employee";
+  }, [isPlatformOwner, activeRole, currentUser, savedRole]);
 
   // State FAQ Dinamis dari Backend
   const [dynamicFaqs, setDynamicFaqs] = useState<BackendFaqItem[]>([]);
   const [isLoadingFaqs, setIsLoadingFaqs] = useState(true);
+
+  // State Pencarian & Filter Metadata
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [scopeFilter, setScopeFilter] = useState<"all" | ContentScope>("all");
+  const [targetRoleFilter, setTargetRoleFilter] = useState<"all" | TargetRole>("all");
+  const [contentTypeFilter, setContentTypeFilter] = useState<"all" | ContentType>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   // State untuk GPS Diagnostic Tool
   const [isCheckingGPS, setIsCheckingGPS] = useState(false);
@@ -355,38 +158,28 @@ function BantuanContent() {
     message: "Klik tombol di bawah untuk menguji keakuratan sinyal GPS pada perangkat Anda saat ini."
   });
 
+  // Fetch FAQ Publik dari Backend sesuai Konteks Tampilan
   useEffect(() => {
     let isMounted = true;
-    getPublicFaqs().then((data) => {
-      if (isMounted) {
-        setDynamicFaqs(data);
-        setIsLoadingFaqs(false);
-      }
-    }).catch((e) => {
-      console.warn("Gagal mengambil FAQ publik backend:", e);
-      if (isMounted) setIsLoadingFaqs(false);
-    });
+    setIsLoadingFaqs(true);
+
+    const contextParam = isLoginContext ? "login" : "help_center";
+    getPublicFaqs({ display_context: contextParam })
+      .then((data) => {
+        if (isMounted) {
+          setDynamicFaqs(data);
+          setIsLoadingFaqs(false);
+        }
+      })
+      .catch((e) => {
+        console.warn("Gagal mengambil FAQ publik backend:", e);
+        if (isMounted) setIsLoadingFaqs(false);
+      });
+
     return () => {
       isMounted = false;
     };
-  }, []);
-
-  const hasCompanyFaqs = dynamicFaqs.some(f => f.scope === "company");
-  const hasPlatformAdminFaqs = dynamicFaqs.some(f => f.scope === "platform_admin");
-  const isPlatformOwner = Boolean(
-    currentUser?.is_developer ||
-    currentUser?.isDeveloper ||
-    (currentUser?.email && ["absenin.my.id@gmail.com"].includes(currentUser.email.toLowerCase())) ||
-    hasPlatformAdminFaqs
-  );
-
-  useEffect(() => {
-    if (isManagementMode) {
-      setActiveCategory("perusahaan");
-    } else {
-      setActiveCategory("karyawan");
-    }
-  }, [isManagementMode]);
+  }, [isLoginContext]);
 
   // Handle GPS Diagnostic Check
   const handleTestGPS = () => {
@@ -449,56 +242,27 @@ function BantuanContent() {
     );
   };
 
+  // Konversi Dynamic FAQs ke FAQItem
   const allFAQs: FAQItem[] = useMemo(() => {
-    const list: FAQItem[] = [...FAQ_DATA];
+    const list: FAQItem[] = dynamicFaqs.map((item) => ({
+      id: item.id,
+      category: item.category || "Umum",
+      question: item.question,
+      answer: item.answer,
+      tags: [item.category, item.scope, item.content_scope || "", ...(item.sop_title ? [item.sop_title] : [])].filter(Boolean),
+      icon: getFaqIcon(item),
+      sop_title: item.sop_title,
+      sop_url: item.sop_url,
+      scope: item.scope,
+      content_scope: item.content_scope,
+      target_roles: item.target_roles,
+      content_type: item.content_type,
+      display_context: item.display_context,
+      needs_review: item.needs_review,
+      company_name: item.company_name,
+    }));
 
-    dynamicFaqs.forEach((item) => {
-      let cat: FAQCategory = "karyawan";
-      if (item.scope === "company") {
-        cat = "perusahaan";
-      } else if (item.scope === "platform_admin") {
-        cat = "platform_admin";
-      } else if (item.category?.toLowerCase().includes("admin") || item.category?.toLowerCase().includes("wewenang")) {
-        cat = "admin";
-      } else if (item.category?.toLowerCase().includes("perusahaan") || item.category?.toLowerCase().includes("kantor")) {
-        cat = "perusahaan";
-      }
-
-      let top: TopicFilter = "semua";
-      const c = item.category?.toLowerCase() || "";
-      if (c.includes("gps") || c.includes("lokasi") || c.includes("radius")) top = "gps";
-      else if (c.includes("presensi") || c.includes("hadir") || c.includes("absen")) top = "presensi";
-      else if (c.includes("izin") || c.includes("cuti") || c.includes("sakit")) top = "izin";
-      else if (c.includes("tugas") || c.includes("agenda")) top = "tugas";
-      else if (c.includes("sop") || c.includes("kebijakan")) top = "sop";
-      else if (c.includes("akun") || c.includes("profil") || c.includes("peran")) top = "akun";
-
-      const existingIdx = list.findIndex(
-        (x) => x.question.toLowerCase().trim() === item.question.toLowerCase().trim()
-      );
-
-      const mappedItem: FAQItem = {
-        id: item.id,
-        category: cat,
-        topic: top,
-        icon: cat === "platform_admin" ? Shield : cat === "perusahaan" ? Building2 : cat === "admin" ? ShieldCheck : HelpCircle,
-        question: item.question,
-        answer: item.answer,
-        tags: [item.category, item.scope, ...(item.sop_title ? [item.sop_title] : [])],
-        sop_title: item.sop_title,
-        sop_url: item.sop_url,
-        scope: item.scope,
-        company_name: item.company_name,
-      };
-
-      if (existingIdx >= 0) {
-        list[existingIdx] = mappedItem;
-      } else {
-        list.push(mappedItem);
-      }
-    });
-
-    // Urutkan seluruh FAQ gabungan secara alfabetis (A-Z) berdasarkan judul pertanyaan
+    // Urutkan secara alfabetis (A-Z) berdasarkan judul pertanyaan
     list.sort((a, b) => {
       const cmp = a.question.localeCompare(b.question, "id", { sensitivity: "base" });
       if (cmp !== 0) return cmp;
@@ -508,98 +272,118 @@ function BantuanContent() {
     return list;
   }, [dynamicFaqs]);
 
+  // Daftar Kategori Unik yang Tersedia
+  const availableCategories = useMemo(() => {
+    const set = new Set<string>();
+    dynamicFaqs.forEach((f) => {
+      if (f.category?.trim()) set.add(f.category.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "id"));
+  }, [dynamicFaqs]);
+
+  // Filter FAQ Berdasarkan Konteks, Role Target, Scope, Jenis Konten, Kategori, dan Search
   const filteredFAQs = useMemo(() => {
     return allFAQs.filter((item) => {
-      // 1. Jika dalam konteks pra-login (?from=login atau belum login)
+      // 1. Konteks Pra-Login
       if (isLoginContext) {
-        // Tampilkan hanya FAQ terkait Login, Google, Akun, dan Akses
-        const isAccountTopic = item.topic === "akun";
-        const hasLoginKeyword = item.tags?.some((tag) => {
-          const t = tag.toLowerCase();
-          return (
-            t.includes("login") ||
-            t.includes("google") ||
-            t.includes("akun") ||
-            t.includes("sesi") ||
-            t.includes("masuk") ||
-            t.includes("sso") ||
-            t.includes("akses")
-          );
-        });
-        const isQuestionRelated =
-          item.question.toLowerCase().includes("login") ||
-          item.question.toLowerCase().includes("masuk") ||
-          item.question.toLowerCase().includes("google") ||
-          item.question.toLowerCase().includes("akun") ||
-          item.question.toLowerCase().includes("sandi") ||
-          item.question.toLowerCase().includes("password") ||
-          item.question.toLowerCase().includes("sesi");
-
-        if (!isAccountTopic && !hasLoginKeyword && !isQuestionRelated) {
+        // Hanya tampilkan konten yang ditandai untuk login atau both
+        const dc = item.display_context;
+        if (dc !== "login" && dc !== "both") {
           return false;
         }
-
-        // Jangan pernah tampilkan FAQ operasional presensi, gps radius, izin, tugas saat belum login
-        if (
-          item.topic === "presensi" ||
-          item.topic === "gps" ||
-          item.topic === "izin" ||
-          item.topic === "tugas"
-        ) {
+        // Jangan pernah menampilkan konten perusahaan privat atau platform admin di login
+        if (item.scope === "company" || item.scope === "platform_admin" || item.content_scope === "platform") {
           return false;
         }
       } else {
-        // Mode normal pasca-login:
-        // Filter kategori wewenang
-        if (item.category !== activeCategory) {
-          return false;
+        // 2. Konteks Pasca-Login (Pusat Bantuan)
+        // a. Otorisasi role target:
+        // Konten tanpa pembatasan role (target_roles kosong / undefined) tampil untuk semua
+        if (item.target_roles && item.target_roles.length > 0) {
+          if (!isPlatformOwner) {
+            if (userMappedRole === "employee") {
+              if (!item.target_roles.includes("employee")) return false;
+            } else if (userMappedRole === "manager") {
+              if (!item.target_roles.includes("manager") && !item.target_roles.includes("employee")) return false;
+            } else if (userMappedRole === "company_owner_admin") {
+              if (
+                !item.target_roles.includes("company_owner_admin") &&
+                !item.target_roles.includes("manager") &&
+                !item.target_roles.includes("employee")
+              ) {
+                return false;
+              }
+            }
+          }
         }
 
-        // Filter topik
-        if (activeTopic !== "semua" && item.topic !== activeTopic) {
-          return false;
+        // b. Filter Target Role eksplisit (jika dipilih)
+        if (targetRoleFilter !== "all") {
+          if (item.target_roles && item.target_roles.length > 0) {
+            if (!item.target_roles.includes(targetRoleFilter)) return false;
+          }
+        }
+
+        // c. Filter Scope
+        if (scopeFilter !== "all") {
+          const itemScope = item.content_scope || (item.scope === "platform_admin" ? "platform" : item.scope === "company" ? "company" : "user");
+          if (itemScope !== scopeFilter) return false;
+        }
+
+        // d. Filter Jenis Konten
+        if (contentTypeFilter !== "all") {
+          const itemType = item.content_type || "faq";
+          if (itemType !== contentTypeFilter) return false;
+        }
+
+        // e. Filter Kategori/Topik
+        if (categoryFilter !== "all") {
+          if (item.category?.toLowerCase() !== categoryFilter.toLowerCase()) return false;
         }
       }
 
-      // Filter query search
+      // 3. Filter Query Pencarian
       if (!searchQuery.trim()) return true;
 
       const q = searchQuery.toLowerCase();
       const matchQuestion = item.question.toLowerCase().includes(q);
       const matchAnswer = item.answer.toLowerCase().includes(q);
       const matchTags = item.tags.some((tag) => tag.toLowerCase().includes(q));
+      const matchCategory = item.category.toLowerCase().includes(q);
 
-      return matchQuestion || matchAnswer || matchTags;
+      return matchQuestion || matchAnswer || matchTags || matchCategory;
     });
-  }, [allFAQs, isLoginContext, activeCategory, activeTopic, searchQuery]);
+  }, [
+    allFAQs, 
+    isLoginContext, 
+    userMappedRole, 
+    isPlatformOwner, 
+    targetRoleFilter, 
+    scopeFilter, 
+    contentTypeFilter, 
+    categoryFilter, 
+    searchQuery
+  ]);
 
   const toggleExpand = (id: string) => {
-    setExpandedId(prev => (prev === id ? null : id));
+    setExpandedId((prev) => (prev === id ? null : id));
   };
 
-  const getCategoryTitle = () => {
-    if (activeCategory === "platform_admin") return "Panduan Platform Owner";
-    if (activeCategory === "perusahaan") return "Panduan Perusahaan & SOP";
-    if (activeCategory === "admin") return "Panduan Administrator & Approval";
-    return "Panduan Karyawan & Akun";
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setScopeFilter("all");
+    setTargetRoleFilter("all");
+    setContentTypeFilter("all");
+    setCategoryFilter("all");
   };
 
-  const getCategoryDesc = () => {
-    if (activeCategory === "platform_admin") return "Petunjuk pengoperasian platform admin, manajemen lisensi, dan pemeliharaan sistem.";
-    if (activeCategory === "perusahaan") return "Tata tertib kantor, SOP resmi perusahaan, pengaturan radius absensi, dan jam kerja.";
-    if (activeCategory === "admin") return "Persetujuan izin/cuti karyawan, ekspor laporan rekapitulasi, dan hierarki wewenang.";
-    return "Temukan jawaban lengkap seputar absensi GPS, geofencing, izin cuti, dan solusi kendala.";
-  };
-
-  const TOPIC_BADGES = [
-    { key: "semua" as TopicFilter, label: "Semua Topik" },
-    { key: "presensi" as TopicFilter, label: "Presensi" },
-    { key: "gps" as TopicFilter, label: "GPS & Lokasi" },
-    { key: "izin" as TopicFilter, label: "Izin & Cuti" },
-    { key: "tugas" as TopicFilter, label: "Tugas & Agenda" },
-    { key: "sop" as TopicFilter, label: "SOP & Panduan" },
-    { key: "akun" as TopicFilter, label: "Akun & Akses" },
-  ];
+  const hasActiveFilters = Boolean(
+    searchQuery || 
+    scopeFilter !== "all" || 
+    targetRoleFilter !== "all" || 
+    contentTypeFilter !== "all" || 
+    categoryFilter !== "all"
+  );
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-20">
@@ -615,7 +399,7 @@ function BantuanContent() {
           <div className="relative z-10 flex flex-col gap-1.5">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-xs text-[11px] font-semibold text-white/90 w-fit">
               <Sparkles className="w-3.5 h-3.5 text-[#7FAF8B]" />
-              {isLoginContext ? "Panduan Akun & Akses Masuk" : getCategoryTitle()}
+              {isLoginContext ? "Panduan Akun & Akses Masuk" : "Pusat Bantuan AbsenIN"}
             </div>
             <h1 className="text-[19px] font-extrabold tracking-tight mt-1">
               {isLoginContext ? "Bantuan Login & Akses Akun" : "Ada yang bisa kami bantu?"}
@@ -623,7 +407,7 @@ function BantuanContent() {
             <p className="text-white/80 text-[12.5px] leading-relaxed">
               {isLoginContext
                 ? "Temukan petunjuk tata cara masuk menggunakan Akun Google, verifikasi sesi, serta panduan akun baru."
-                : getCategoryDesc()}
+                : "Temukan jawaban lengkap seputar presensi GPS, perizinan, SOP perusahaan, dan solusi kendala teknis."}
             </p>
           </div>
           <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full pointer-events-none blur-sm" />
@@ -641,7 +425,7 @@ function BantuanContent() {
             placeholder={
               isLoginContext
                 ? "Cari kendala: login Google, sesi, akun baru..."
-                : "Cari topik: GPS, checkin, izin, SOP, dll..."
+                : "Cari pertanyaan, SOP, kendala, atau tips..."
             }
             className="w-full bg-white rounded-2xl pl-10 pr-10 py-3.5 text-[13px] border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#356E3B]/30 focus:border-[#356E3B] transition-all text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.02)] placeholder:text-[#9CA3AF]"
           />
@@ -656,101 +440,136 @@ function BantuanContent() {
           )}
         </div>
 
-        {/* Role & Scope Tabs (Hanya setelah login) */}
-        {!isLoginContext && (isManagementMode || hasCompanyFaqs || isPlatformOwner) && (
-          <div className="w-full bg-[#EEF4F0] p-1.5 rounded-[18px] border border-[#D5E2D8]/80 flex items-center justify-between gap-1 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-none">
-            <button
-              onClick={() => {
-                setActiveCategory("karyawan");
-                setActiveTopic("semua");
-              }}
-              className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
-                activeCategory === "karyawan"
-                  ? "bg-[#1E4738] text-white shadow-sm"
-                  : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5 shrink-0" />
-              <span>Karyawan</span>
-            </button>
-
-            {(hasCompanyFaqs || isManagementMode || activeRole) && (
+        {/* Filter Section (Hanya Pasca-Login) */}
+        {!isLoginContext && (
+          <div className="flex flex-col gap-2.5">
+            {/* Filter Scope Pills */}
+            <div className="w-full bg-[#EEF4F0] p-1.5 rounded-[18px] border border-[#D5E2D8]/80 flex items-center gap-1 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-x-auto scrollbar-none">
               <button
-                onClick={() => {
-                  setActiveCategory("perusahaan");
-                  setActiveTopic("semua");
-                }}
-                className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
-                  activeCategory === "perusahaan"
-                    ? "bg-[#1E4738] text-white shadow-sm"
-                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
+                type="button"
+                onClick={() => setScopeFilter("all")}
+                className={`flex-1 min-w-[80px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                  scopeFilter === "all"
+                    ? "bg-[#1E4738] text-white shadow-xs"
+                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 shrink-0" />
+                <span>Semua</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setScopeFilter("company")}
+                className={`flex-1 min-w-[90px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                  scopeFilter === "company"
+                    ? "bg-[#1E4738] text-white shadow-xs"
+                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
                 }`}
               >
                 <Building2 className="w-3.5 h-3.5 shrink-0" />
                 <span>Perusahaan</span>
               </button>
-            )}
 
-            {hasManagementRole && (
               <button
-                onClick={() => {
-                  setActiveCategory("admin");
-                  setActiveTopic("semua");
-                }}
-                className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
-                  activeCategory === "admin"
-                    ? "bg-[#1E4738] text-white shadow-sm"
-                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
+                type="button"
+                onClick={() => setScopeFilter("user")}
+                className={`flex-1 min-w-[85px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                  scopeFilter === "user"
+                    ? "bg-[#1E4738] text-white shadow-xs"
+                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
                 }`}
               >
-                <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                <span>Admin</span>
+                <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                <span>Pengguna</span>
               </button>
-            )}
 
-            {isPlatformOwner && (
-              <button
-                onClick={() => {
-                  setActiveCategory("platform_admin");
-                  setActiveTopic("semua");
-                }}
-                className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
-                  activeCategory === "platform_admin"
-                    ? "bg-[#1E4738] text-white shadow-sm"
-                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70 active:scale-95"
-                }`}
-              >
-                <Shield className="w-3.5 h-3.5 shrink-0" />
-                <span>Platform Owner</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Quick Topic Filter Chips (Hanya setelah login) */}
-        {!isLoginContext && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-            {TOPIC_BADGES.map((badge) => {
-              const isActive = activeTopic === badge.key;
-              return (
+              {isPlatformOwner && (
                 <button
-                  key={badge.key}
-                  onClick={() => setActiveTopic(badge.key)}
-                  className={`px-3 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-                    isActive
+                  type="button"
+                  onClick={() => setScopeFilter("platform")}
+                  className={`flex-1 min-w-[85px] flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
+                    scopeFilter === "platform"
                       ? "bg-[#1E4738] text-white shadow-xs"
-                      : "bg-white text-[#5C786C] border border-[#E5E7EB] hover:border-[#1E4738]/30 hover:text-[#1E4738]"
+                      : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/70"
                   }`}
                 >
-                  {badge.label}
+                  <Shield className="w-3.5 h-3.5 shrink-0" />
+                  <span>Platform</span>
                 </button>
-              );
-            })}
+              )}
+            </div>
+
+            {/* Filter Jenis Konten Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none -mx-1 px-1">
+              <button
+                type="button"
+                onClick={() => setContentTypeFilter("all")}
+                className={`px-3 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                  contentTypeFilter === "all"
+                    ? "bg-[#1E4738] text-white shadow-xs"
+                    : "bg-white text-[#5C786C] border border-[#E5E7EB] hover:border-[#1E4738]/30"
+                }`}
+              >
+                Semua Jenis
+              </button>
+              {CONTENT_TYPE_OPTIONS.map((ct) => {
+                const isActive = contentTypeFilter === ct.value;
+                return (
+                  <button
+                    key={ct.value}
+                    type="button"
+                    onClick={() => setContentTypeFilter(ct.value)}
+                    className={`px-3 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                      isActive
+                        ? "bg-[#1E4738] text-white shadow-xs"
+                        : "bg-white text-[#5C786C] border border-[#E5E7EB] hover:border-[#1E4738]/30"
+                    }`}
+                  >
+                    {ct.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Filter Kategori Chips */}
+            {availableCategories.length > 0 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none -mx-1 px-1">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilter("all")}
+                  className={`px-3 py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                    categoryFilter === "all"
+                      ? "bg-[#356E3B] text-white shadow-xs"
+                      : "bg-white text-[#4B5563] border border-[#E5E7EB] hover:border-[#356E3B]/40"
+                  }`}
+                >
+                  Semua Topik
+                </button>
+                {availableCategories.map((cat) => {
+                  const isActive = categoryFilter.toLowerCase() === cat.toLowerCase();
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setCategoryFilter(cat)}
+                      className={`px-3 py-1.5 rounded-full text-[11.5px] font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                        isActive
+                          ? "bg-[#356E3B] text-white shadow-xs"
+                          : "bg-white text-[#4B5563] border border-[#E5E7EB] hover:border-[#356E3B]/40"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
-        {/* GPS Diagnostic Tool (Hanya ditampilkan setelah login saat topik presensi/gps atau semua) */}
-        {!isLoginContext && (activeTopic === "semua" || activeTopic === "gps") && (
+        {/* GPS Diagnostic Tool (Hanya ditampilkan setelah login saat topik relevan) */}
+        {!isLoginContext && (categoryFilter === "all" || categoryFilter.toLowerCase().includes("gps") || categoryFilter.toLowerCase().includes("presensi")) && (
           <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-4.5 flex flex-col gap-3 shadow-2xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -805,23 +624,21 @@ function BantuanContent() {
           </div>
         )}
 
-        {/* Counter Info */}
+        {/* Counter Info & Reset Filter */}
         <div className="flex items-center justify-between text-[12px] text-[#5C786C] px-1 font-medium mt-1">
           <span>Menampilkan {filteredFAQs.length} pertanyaan</span>
-          {(searchQuery || (!isLoginContext && activeTopic !== "semua")) && (
+          {hasActiveFilters && (
             <button 
-              onClick={() => {
-                setSearchQuery("");
-                setActiveTopic("semua");
-              }}
-              className="text-[#356E3B] font-bold hover:underline"
+              type="button"
+              onClick={handleResetFilters}
+              className="text-[#356E3B] font-bold hover:underline cursor-pointer"
             >
               Reset filter
             </button>
           )}
         </div>
 
-        {/* FAQ Accordion List */}
+        {/* FAQ List */}
         <div className="flex flex-col gap-2.5">
           {isLoadingFaqs && dynamicFaqs.length === 0 ? (
             <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-2">
@@ -832,6 +649,8 @@ function BantuanContent() {
             filteredFAQs.map((item) => {
               const isExpanded = expandedId === item.id;
               const Icon = item.icon;
+              const scopeBadge = getContentScopeBadge(item.content_scope);
+              const typeBadge = getContentTypeBadge(item.content_type);
 
               return (
                 <div
@@ -839,52 +658,65 @@ function BantuanContent() {
                   className="bg-white rounded-[20px] border border-[#E5E7EB] shadow-xs overflow-hidden transition-all duration-200"
                 >
                   <button
+                    type="button"
                     onClick={() => toggleExpand(item.id)}
-                    className="w-full text-left p-4.5 flex items-start gap-3.5 justify-between hover:bg-gray-50/70 transition-colors select-none"
+                    className="w-full text-left p-4.5 flex items-start gap-3.5 justify-between hover:bg-gray-50/70 transition-colors select-none cursor-pointer"
                     aria-expanded={isExpanded}
                   >
                     <div className="flex items-start gap-3.5 flex-1 min-w-0">
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                        item.category === "admin" || item.category === "platform_admin"
+                        item.content_scope === "platform" || item.scope === "platform_admin"
                           ? "bg-[#FEF3C7] text-[#92400E]" 
-                          : item.category === "perusahaan"
+                          : item.content_scope === "company" || item.scope === "company"
                           ? "bg-[#E8F3EB] text-[#2D5A3F]"
                           : "bg-[#EAF3FD] text-[#2563EB]"
                       }`}>
                         <Icon className="w-4 h-4" strokeWidth={2.2} />
                       </div>
-                      <div className="flex flex-col flex-1">
+                      <div className="flex flex-col flex-1 min-w-0">
                         <span className="text-[#111827] text-[14px] font-bold leading-snug">
                           {item.question}
                         </span>
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                            item.topic === "gps" 
-                              ? "bg-emerald-50 text-emerald-700"
-                              : item.topic === "presensi"
-                              ? "bg-blue-50 text-blue-700"
-                              : item.topic === "izin"
-                              ? "bg-purple-50 text-purple-700"
-                              : item.topic === "tugas"
-                              ? "bg-amber-50 text-amber-700"
-                              : item.topic === "sop"
-                              ? "bg-emerald-50 text-emerald-800 font-bold"
-                              : "bg-gray-100 text-gray-700"
-                          }`}>
-                            {item.topic}
+                        
+                        {/* Metadata Badges */}
+                        <div className="flex items-center flex-wrap gap-1.5 mt-2">
+                          {/* Kategori Badge */}
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                            {item.category}
                           </span>
+
+                          {/* Jenis Konten Badge */}
+                          {item.content_type && (
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${typeBadge.className}`}>
+                              {typeBadge.label}
+                            </span>
+                          )}
+
+                          {/* Scope Badge (Pasca-Login) */}
+                          {!isLoginContext && (
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${scopeBadge.className}`}>
+                              {scopeBadge.label}
+                            </span>
+                          )}
+
+                          {/* Nama Perusahaan jika spesifik tenant */}
                           {item.company_name && (
                             <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                               {item.company_name}
                             </span>
                           )}
-                          <span className="text-[10px] font-medium text-gray-400 capitalize">
-                            • {item.category}
-                          </span>
+
+                          {/* Dokumen SOP Indicator */}
+                          {item.sop_url && (
+                            <span className="text-[10px] font-bold text-[#1E4738] bg-[#E8F3EB] px-2 py-0.5 rounded-full border border-[#356E3B]/20 flex items-center gap-1">
+                              <FileCheck className="w-3 h-3" />
+                              <span>SOP</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
-                    <div className="shrink-0 pt-0.5">
+                    <div className="shrink-0 pt-0.5 pl-2">
                       <ChevronDown 
                         className={`w-5 h-5 text-[#9CA3AF] transition-transform duration-200 ${
                           isExpanded ? "rotate-180 text-[#1E4738]" : ""
@@ -919,37 +751,64 @@ function BantuanContent() {
                 </div>
               );
             })
+          ) : isLoginContext ? (
+            /* Empty State Khusus Halaman Login */
+            <div className="bg-white rounded-[24px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-3 shadow-2xs">
+              <div className="w-14 h-14 rounded-full bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F]">
+                <HelpCircle className="w-7 h-7" />
+              </div>
+              <h3 className="text-[#111827] text-[16px] font-bold">
+                {searchQuery ? "Tidak ada panduan yang cocok" : "Belum Ada Panduan Bantuan Login"}
+              </h3>
+              <p className="text-[#6B7280] text-[13px] max-w-[280px] leading-relaxed">
+                {searchQuery
+                  ? "Coba gunakan kata kunci lain seputar login, akun, atau sesi."
+                  : "Saat ini belum ada artikel bantuan untuk akses masuk yang dipublikasikan. Silakan kembali ke halaman login atau hubungi administrator kantor Anda."}
+              </p>
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="mt-2 px-4 py-2 rounded-full bg-[#356E3B] text-white text-[12px] font-bold hover:bg-[#2A582F] transition-colors cursor-pointer"
+                >
+                  Reset Pencarian
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  className="mt-2 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-[#1E4738] hover:bg-[#2D5A3F] text-white text-[13px] font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  Kembali ke Halaman Login
+                </Link>
+              )}
+            </div>
           ) : (
-            <div className="bg-white rounded-[24px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-2.5">
+            /* Empty State Pasca-Login */
+            <div className="bg-white rounded-[24px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-2.5 shadow-2xs">
               <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
                 <Search className="w-6 h-6" />
               </div>
               <h3 className="text-[#111827] text-[15px] font-bold">
                 Tidak ada pertanyaan yang sesuai
               </h3>
-              <p className="text-[#6B7280] text-[12.5px] max-w-[260px]">
-                {isManagementMode 
-                  ? "Coba gunakan kata kunci pencarian yang lain atau pilih kategori tab lainnya."
-                  : "Coba gunakan kata kunci pencarian yang lain atau ubah topik."}
+              <p className="text-[#6B7280] text-[12.5px] max-w-[280px] leading-relaxed">
+                Coba sesuaikan kata kunci pencarian atau reset filter scope, jenis konten, dan topik.
               </p>
               <button
-                onClick={() => {
-                  setSearchQuery("");
-                  setActiveTopic("semua");
-                }}
+                type="button"
+                onClick={handleResetFilters}
                 className="mt-2 px-4 py-2 rounded-full bg-[#356E3B] text-white text-[12px] font-bold hover:bg-[#2A582F] transition-colors cursor-pointer"
               >
-                Reset Pencarian
+                Reset Semua Filter
               </button>
             </div>
           )}
         </div>
 
-        {/* SOP Document Banner Ringkas (Hanya setelah login) */}
+        {/* SOP Document Banner Ringkas (Hanya setelah login jika tersedia) */}
         {!isLoginContext && (() => {
           const latestSop = allFAQs.find((f) => Boolean(f.sop_url));
-          const docUrl = latestSop?.sop_url || "https://absenin.my.id/document/SOP-Absenin.pdf";
-          const docTitle = latestSop?.sop_title || "Dokumen SOP Resmi AbsenIN";
+          if (!latestSop?.sop_url) return null;
 
           return (
             <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs mt-1">
@@ -959,7 +818,7 @@ function BantuanContent() {
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-[#111827] text-[13px] font-bold truncate">
-                    {docTitle}
+                    {latestSop.sop_title || "Dokumen SOP Resmi AbsenIN"}
                   </h2>
                   <p className="text-[#6B7280] text-[11.5px] truncate">
                     Panduan operasional dan SOP resmi AbsenIN
@@ -967,7 +826,7 @@ function BantuanContent() {
                 </div>
               </div>
               <a
-                href={docUrl}
+                href={latestSop.sop_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#356E3B] hover:bg-[#2A582F] text-white rounded-xl text-[12px] font-bold transition-all shadow-xs shrink-0 cursor-pointer"

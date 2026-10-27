@@ -20,31 +20,55 @@ import {
   ChevronDown,
   RotateCw,
   MoreVertical,
+  Users,
+  AlertTriangle,
+  Filter,
+  Check,
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import {
   FaqItem,
   FaqPayload,
+  ContentScope,
+  TargetRole,
+  ContentType,
+  DisplayContext,
   getManageFaqs,
   createFaq,
   updateFaq,
   deleteFaq,
   getFaqCategories,
+  CONTENT_SCOPE_OPTIONS,
+  TARGET_ROLE_OPTIONS,
+  CONTENT_TYPE_OPTIONS,
+  DISPLAY_CONTEXT_OPTIONS,
+  getContentScopeBadge,
+  getContentTypeBadge,
+  getDisplayContextBadge,
 } from "@/lib/faqApi";
 import { FaqRichEditor } from "@/components/FaqRichEditor";
 import { FaqAnswerContent } from "@/components/FaqAnswerContent";
+import { FaqCategoryCombobox } from "@/components/FaqCategoryCombobox";
 
 export default function AdminCompanyFaqPage() {
   const router = useRouter();
-  const { activeCompany, isManagement, isLoading: isCompanyLoading } = useCompany();
+  const { activeCompany } = useCompany();
   const { showConfirm, showAlert } = useDialog();
 
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  
+  // Filter States
+  const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("Semua");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
-  const [search, setSearch] = useState("");
+  const [contentScopeFilter, setContentScopeFilter] = useState<ContentScope | "all">("all");
+  const [targetRoleFilter, setTargetRoleFilter] = useState<TargetRole | "all">("all");
+  const [contentTypeFilter, setContentTypeFilter] = useState<ContentType | "all">("all");
+  const [displayContextFilter, setDisplayContextFilter] = useState<DisplayContext | "all">("all");
+  const [needsReviewFilter, setNeedsReviewFilter] = useState<"all" | "true" | "false">("all");
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -70,7 +94,11 @@ export default function AdminCompanyFaqPage() {
     question: string;
     answer: string;
     category: string;
-    customCategory: string;
+    content_scope: ContentScope;
+    target_roles: TargetRole[];
+    content_type: ContentType;
+    display_context: DisplayContext;
+    needs_review: boolean;
     sop_title: string;
     sop_url: string;
     is_published: boolean;
@@ -78,8 +106,12 @@ export default function AdminCompanyFaqPage() {
   }>({
     question: "",
     answer: "",
-    category: "Kebijakan Kantor",
-    customCategory: "",
+    category: "Absensi",
+    content_scope: "company",
+    target_roles: ["company_owner_admin", "manager", "employee"],
+    content_type: "faq",
+    display_context: "help_center",
+    needs_review: false,
     sop_title: "",
     sop_url: "",
     is_published: true,
@@ -105,6 +137,11 @@ export default function AdminCompanyFaqPage() {
         status: statusFilter,
         search: search.trim() || undefined,
         category: selectedCategory !== "Semua" ? selectedCategory : undefined,
+        content_scope: contentScopeFilter !== "all" ? contentScopeFilter : undefined,
+        target_role: targetRoleFilter !== "all" ? targetRoleFilter : undefined,
+        content_type: contentTypeFilter !== "all" ? contentTypeFilter : undefined,
+        display_context: displayContextFilter !== "all" ? displayContextFilter : undefined,
+        needs_review: needsReviewFilter !== "all" ? needsReviewFilter : undefined,
       });
       setFaqs(data);
     } catch (err: any) {
@@ -117,7 +154,18 @@ export default function AdminCompanyFaqPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeCompany?.id, statusFilter, search, selectedCategory, showAlert]);
+  }, [
+    activeCompany?.id,
+    statusFilter,
+    search,
+    selectedCategory,
+    contentScopeFilter,
+    targetRoleFilter,
+    contentTypeFilter,
+    displayContextFilter,
+    needsReviewFilter,
+    showAlert,
+  ]);
 
   useEffect(() => {
     fetchFaqs();
@@ -138,8 +186,12 @@ export default function AdminCompanyFaqPage() {
     setFormData({
       question: "",
       answer: "",
-      category: categories.includes("Kebijakan Kantor") ? "Kebijakan Kantor" : categories[0] || "Umum",
-      customCategory: "",
+      category: categories.includes("Absensi") ? "Absensi" : categories[0] || "Umum",
+      content_scope: "company",
+      target_roles: ["company_owner_admin", "manager", "employee"],
+      content_type: "faq",
+      display_context: "help_center",
+      needs_review: false,
       sop_title: "",
       sop_url: "",
       is_published: true,
@@ -152,12 +204,22 @@ export default function AdminCompanyFaqPage() {
   // Buka Modal Edit
   const handleOpenEdit = (faq: FaqItem) => {
     setEditingFaq(faq);
-    const isStandardCat = categories.includes(faq.category);
+    
+    // Fallback konservatif untuk data lama yang belum terklasifikasi
+    const defaultRoles: TargetRole[] =
+      faq.target_roles && faq.target_roles.length > 0
+        ? faq.target_roles
+        : ["company_owner_admin", "manager", "employee"];
+
     setFormData({
       question: faq.question,
       answer: faq.answer,
-      category: isStandardCat ? faq.category : "Lainnya",
-      customCategory: isStandardCat ? "" : faq.category,
+      category: faq.category || "Umum",
+      content_scope: faq.content_scope || "company",
+      target_roles: defaultRoles,
+      content_type: faq.content_type || (faq.sop_url ? "sop_guide" : "faq"),
+      display_context: faq.display_context || "help_center",
+      needs_review: faq.needs_review ?? false,
       sop_title: faq.sop_title || "",
       sop_url: faq.sop_url || "",
       is_published: faq.is_published,
@@ -179,6 +241,30 @@ export default function AdminCompanyFaqPage() {
       showAlert({
         title: "Gagal Mengubah Status",
         message: err.message || "Gagal memperbarui status publikasi FAQ.",
+        type: "error",
+      });
+    }
+  };
+
+  // Toggle Status Perlu Ditinjau
+  const handleToggleNeedsReview = async (faq: FaqItem) => {
+    const newReview = !faq.needs_review;
+    try {
+      await updateFaq(faq.id, { needs_review: newReview });
+      setFaqs((prev) =>
+        prev.map((item) => (item.id === faq.id ? { ...item, needs_review: newReview } : item))
+      );
+      showAlert({
+        title: newReview ? "Ditandai Perlu Ditinjau" : "Selesai Ditinjau",
+        message: newReview
+          ? "Konten ini berhasil ditandai memerlukan peninjauan admin."
+          : "Status peninjauan konten berhasil diselesaikan.",
+        type: "success",
+      });
+    } catch (err: any) {
+      showAlert({
+        title: "Gagal Memperbarui",
+        message: err.message || "Gagal mengubah status peninjauan.",
         type: "error",
       });
     }
@@ -224,14 +310,11 @@ export default function AdminCompanyFaqPage() {
     if (!formData.answer.trim() || formData.answer.trim().length < 5) {
       errors.answer = "Jawaban wajib diisi minimal 5 karakter";
     }
-
-    const effectiveCategory =
-      formData.category === "Lainnya"
-        ? formData.customCategory.trim()
-        : formData.category.trim();
-
-    if (!effectiveCategory) {
-      errors.category = "Kategori wajib diisi atau dipilih";
+    if (!formData.category.trim()) {
+      errors.category = "Kategori / Topik wajib dipilih";
+    }
+    if (formData.target_roles.length === 0) {
+      errors.target_roles = "Pilih minimal satu role target";
     }
 
     if (formData.sop_url && formData.sop_url.trim()) {
@@ -256,8 +339,13 @@ export default function AdminCompanyFaqPage() {
     const payload: FaqPayload = {
       question: formData.question.trim(),
       answer: formData.answer.trim(),
-      category: effectiveCategory,
+      category: formData.category.trim(),
       scope: "company",
+      content_scope: formData.content_scope,
+      target_roles: formData.target_roles,
+      content_type: formData.content_type,
+      display_context: formData.display_context,
+      needs_review: formData.needs_review,
       sop_title: formData.sop_title.trim() || null,
       sop_url: formData.sop_url.trim() || null,
       is_published: formData.is_published,
@@ -295,12 +383,54 @@ export default function AdminCompanyFaqPage() {
     }
   };
 
+  // Toggle role helper
+  const handleToggleRole = (role: TargetRole) => {
+    setFormData((prev) => {
+      const exists = prev.target_roles.includes(role);
+      const nextRoles = exists
+        ? prev.target_roles.filter((r) => r !== role)
+        : [...prev.target_roles, role];
+      return { ...prev, target_roles: nextRoles };
+    });
+  };
+
+  const handleSelectAllRoles = () => {
+    const companyRoles: TargetRole[] = ["company_owner_admin", "manager", "employee"];
+    const allSelected = companyRoles.every((r) => formData.target_roles.includes(r));
+    setFormData((prev) => ({
+      ...prev,
+      target_roles: allSelected ? ["employee"] : companyRoles,
+    }));
+  };
+
   const stats = useMemo(() => {
     const total = faqs.length;
     const published = faqs.filter((f) => f.is_published).length;
     const drafts = total - published;
-    return { total, published, drafts };
+    const needsReview = faqs.filter((f) => f.needs_review).length;
+    return { total, published, drafts, needsReview };
   }, [faqs]);
+
+  const hasActiveFilters =
+    search !== "" ||
+    selectedCategory !== "Semua" ||
+    statusFilter !== "all" ||
+    contentScopeFilter !== "all" ||
+    targetRoleFilter !== "all" ||
+    contentTypeFilter !== "all" ||
+    displayContextFilter !== "all" ||
+    needsReviewFilter !== "all";
+
+  const handleResetFilters = () => {
+    setSearch("");
+    setSelectedCategory("Semua");
+    setStatusFilter("all");
+    setContentScopeFilter("all");
+    setTargetRoleFilter("all");
+    setContentTypeFilter("all");
+    setDisplayContextFilter("all");
+    setNeedsReviewFilter("all");
+  };
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-20">
@@ -319,10 +449,10 @@ export default function AdminCompanyFaqPage() {
               {activeCompany?.name || "Perusahaan"}
             </div>
             <h1 className="text-[19px] font-extrabold tracking-tight mt-1">
-              Pusat Panduan Internal
+              Pusat Panduan & FAQ
             </h1>
             <p className="text-white/80 text-[12px] leading-relaxed">
-              Buat panduan khusus, tata tertib kantor, serta tautan dokumen SOP untuk seluruh anggota perusahaan Anda.
+              Kelola tata tertib, solusi troubleshooting, dan dokumen SOP operasional untuk anggota perusahaan Anda.
             </p>
 
             <button
@@ -330,25 +460,40 @@ export default function AdminCompanyFaqPage() {
               className="mt-2 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-[#1E4738] font-bold text-[13px] rounded-xl hover:bg-white/90 active:scale-95 transition-all shadow-sm w-full cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Tambah FAQ / SOP Perusahaan</span>
+              <span>Tambah Konten FAQ / SOP</span>
             </button>
           </div>
           <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full pointer-events-none blur-sm" />
         </div>
 
         {/* Ringkasan Status */}
-        <div className="grid grid-cols-3 gap-2.5">
-          <div className="bg-white rounded-[18px] p-3 border border-[#E5E7EB] text-center shadow-2xs">
-            <span className="text-[11px] text-[#6B7280] font-medium block">Total FAQ</span>
-            <span className="text-[17px] font-extrabold text-[#111827]">{stats.total}</span>
+        <div className="grid grid-cols-4 gap-2">
+          <div className="bg-white rounded-[16px] p-2.5 border border-[#E5E7EB] text-center shadow-2xs">
+            <span className="text-[10px] text-[#6B7280] font-medium block">Total</span>
+            <span className="text-[16px] font-extrabold text-[#111827]">{stats.total}</span>
           </div>
-          <div className="bg-white rounded-[18px] p-3 border border-[#E5E7EB] text-center shadow-2xs">
-            <span className="text-[11px] text-[#166534] font-medium block">Terbit</span>
-            <span className="text-[17px] font-extrabold text-[#166534]">{stats.published}</span>
+          <div className="bg-white rounded-[16px] p-2.5 border border-[#E5E7EB] text-center shadow-2xs">
+            <span className="text-[10px] text-[#166534] font-medium block">Terbit</span>
+            <span className="text-[16px] font-extrabold text-[#166534]">{stats.published}</span>
           </div>
-          <div className="bg-white rounded-[18px] p-3 border border-[#E5E7EB] text-center shadow-2xs">
-            <span className="text-[11px] text-[#B45309] font-medium block">Draft</span>
-            <span className="text-[17px] font-extrabold text-[#B45309]">{stats.drafts}</span>
+          <div className="bg-white rounded-[16px] p-2.5 border border-[#E5E7EB] text-center shadow-2xs">
+            <span className="text-[10px] text-[#B45309] font-medium block">Draft</span>
+            <span className="text-[16px] font-extrabold text-[#B45309]">{stats.drafts}</span>
+          </div>
+          <div 
+            onClick={() => setNeedsReviewFilter((prev) => (prev === "true" ? "all" : "true"))}
+            className={`rounded-[16px] p-2.5 border text-center shadow-2xs cursor-pointer transition-all ${
+              needsReviewFilter === "true"
+                ? "bg-amber-100 border-amber-300 ring-2 ring-amber-400"
+                : "bg-white border-[#E5E7EB] hover:bg-amber-50/50"
+            }`}
+            title="Klik untuk filter konten yang perlu ditinjau"
+          >
+            <span className="text-[10px] text-amber-700 font-semibold block flex items-center justify-center gap-0.5">
+              <AlertTriangle className="w-2.5 h-2.5" />
+              <span>Tinjau</span>
+            </span>
+            <span className="text-[16px] font-extrabold text-amber-700">{stats.needsReview}</span>
           </div>
         </div>
 
@@ -359,55 +504,132 @@ export default function AdminCompanyFaqPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari FAQ atau judul dokumen SOP..."
+            placeholder="Cari pertanyaan, isi panduan, atau SOP..."
             className="w-full bg-white rounded-2xl pl-10 pr-10 py-3 text-[13px] border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#356E3B]/30 focus:border-[#356E3B] transition-all text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.02)] placeholder:text-[#9CA3AF]"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Category & Status Filter Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-xl text-[12px] font-bold text-[#374151] focus:outline-none"
-          >
-            <option value="Semua">Semua Kategori</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+        {/* Filter Controls Bar */}
+        <div className="flex flex-col gap-2 bg-white p-3 rounded-2xl border border-[#E5E7EB] shadow-2xs">
+          <div className="flex items-center justify-between text-[11px] font-bold text-gray-700">
+            <span className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-[#356E3B]" />
+              Filter Metadata
+            </span>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="text-xs text-[#356E3B] hover:underline font-semibold cursor-pointer"
+              >
+                Reset Filter
+              </button>
+            )}
+          </div>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-xl text-[12px] font-bold text-[#374151] focus:outline-none"
-          >
-            <option value="all">Semua Status</option>
-            <option value="published">Terbit (Publik)</option>
-            <option value="draft">Draft (Tersimpan)</option>
-          </select>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {/* Filter Kategori */}
+            <div>
+              <label className="block text-[10px] text-gray-500 font-medium mb-1">Kategori / Topik</label>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+              >
+                <option value="Semua">Semua Kategori</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <button
-            onClick={fetchFaqs}
-            disabled={isLoading}
-            className="p-2 bg-white border border-[#E5E7EB] rounded-xl text-[#374151] hover:bg-gray-50 shrink-0"
-            title="Muat ulang FAQ"
-          >
-            <RotateCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-[#356E3B]" : ""}`} />
-          </button>
+            {/* Filter Status */}
+            <div>
+              <label className="block text-[10px] text-gray-500 font-medium mb-1">Status Publikasi</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+              >
+                <option value="all">Semua Status</option>
+                <option value="published">Terbit (Publik)</option>
+                <option value="draft">Draft (Tersimpan)</option>
+              </select>
+            </div>
+
+            {/* Filter Jenis Konten */}
+            <div>
+              <label className="block text-[10px] text-gray-500 font-medium mb-1">Jenis Konten</label>
+              <select
+                value={contentTypeFilter}
+                onChange={(e) => setContentTypeFilter(e.target.value as any)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+              >
+                <option value="all">Semua Jenis</option>
+                <option value="faq">FAQ</option>
+                <option value="sop_guide">SOP & Panduan</option>
+                <option value="troubleshooting">Troubleshooting</option>
+                <option value="tips_best_practice">Tips & Praktik</option>
+              </select>
+            </div>
+
+            {/* Filter Role Target */}
+            <div>
+              <label className="block text-[10px] text-gray-500 font-medium mb-1">Role Target</label>
+              <select
+                value={targetRoleFilter}
+                onChange={(e) => setTargetRoleFilter(e.target.value as any)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+              >
+                <option value="all">Semua Role</option>
+                <option value="employee">Karyawan</option>
+                <option value="manager">Manager</option>
+                <option value="company_owner_admin">Owner / Admin</option>
+              </select>
+            </div>
+
+            {/* Filter Display Context */}
+            <div>
+              <label className="block text-[10px] text-gray-500 font-medium mb-1">Display Context</label>
+              <select
+                value={displayContextFilter}
+                onChange={(e) => setDisplayContextFilter(e.target.value as any)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+              >
+                <option value="all">Semua Tampilan</option>
+                <option value="help_center">Help Center</option>
+                <option value="login">Halaman Login</option>
+                <option value="both">Keduanya (Login & Help)</option>
+              </select>
+            </div>
+
+            {/* Filter Scope */}
+            <div>
+              <label className="block text-[10px] text-gray-500 font-medium mb-1">Scope Konten</label>
+              <select
+                value={contentScopeFilter}
+                onChange={(e) => setContentScopeFilter(e.target.value as any)}
+                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+              >
+                <option value="all">Semua Scope</option>
+                <option value="company">Perusahaan</option>
+                <option value="user">Pengguna</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        {/* Daftar FAQ List */}
+        {/* Daftar FAQ Cards */}
         <div className="flex flex-col gap-3">
           {isLoading ? (
             <div className="bg-white rounded-[22px] border border-[#E5E7EB] p-8 text-center flex flex-col items-center justify-center gap-2">
@@ -420,22 +642,36 @@ export default function AdminCompanyFaqPage() {
                 <HelpCircle className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-[14px] font-bold text-[#111827]">Belum Ada FAQ Perusahaan</h3>
+                <h3 className="text-[14px] font-bold text-[#111827]">Tidak Ada Konten FAQ yang Cocok</h3>
                 <p className="text-[12px] text-gray-500 max-w-[240px] mt-1">
-                  Tambahkan pertanyaan umum dan panduan SOP untuk membantu karyawan Anda bekerja lebih teratur.
+                  {hasActiveFilters
+                    ? "Coba ubah kata pencarian atau atur ulang filter metadata Anda."
+                    : "Tambahkan pertanyaan umum dan panduan SOP untuk membantu karyawan Anda bekerja lebih teratur."}
                 </p>
               </div>
-              <button
-                onClick={handleOpenAdd}
-                className="mt-1 px-4 py-2 bg-[#356E3B] text-white text-[12px] font-bold rounded-xl hover:bg-[#2A582F] transition-colors"
-              >
-                Tambah FAQ Sekarang
-              </button>
+              {hasActiveFilters ? (
+                <button
+                  onClick={handleResetFilters}
+                  className="mt-1 px-4 py-2 bg-gray-100 text-gray-700 text-[12px] font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer"
+                >
+                  Reset Filter
+                </button>
+              ) : (
+                <button
+                  onClick={handleOpenAdd}
+                  className="mt-1 px-4 py-2 bg-[#356E3B] text-white text-[12px] font-bold rounded-xl hover:bg-[#2A582F] transition-colors cursor-pointer"
+                >
+                  Tambah FAQ Sekarang
+                </button>
+              )}
             </div>
           ) : (
             sortedFaqs.map((faq, index) => {
               const isExpanded = expandedId === faq.id;
               const isNearBottom = index >= sortedFaqs.length - 2 && sortedFaqs.length > 2;
+              const typeBadge = getContentTypeBadge(faq.content_type);
+              const scopeBadge = getContentScopeBadge(faq.content_scope);
+              const dcBadge = getDisplayContextBadge(faq.display_context);
 
               return (
                 <div
@@ -448,10 +684,24 @@ export default function AdminCompanyFaqPage() {
                     {/* Header Badges & MoreVertical */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Kategori Badge */}
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EEF5F0] text-[#1E4738] border border-[#1E4738]/10">
                           {faq.category}
                         </span>
 
+                        {/* Jenis Konten Badge */}
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${typeBadge.className}`}>
+                          {typeBadge.label}
+                        </span>
+
+                        {/* Display Context Badge jika login atau both */}
+                        {faq.display_context && faq.display_context !== "help_center" && (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${dcBadge.className}`}>
+                            {dcBadge.label}
+                          </span>
+                        )}
+
+                        {/* Status Terbit/Draft */}
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${
                             faq.is_published
@@ -471,6 +721,14 @@ export default function AdminCompanyFaqPage() {
                             </>
                           )}
                         </span>
+
+                        {/* Needs Review Badge */}
+                        {faq.needs_review && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1 animate-pulse">
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            <span>Perlu Ditinjau</span>
+                          </span>
+                        )}
 
                         {faq.sop_url && (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1">
@@ -509,7 +767,7 @@ export default function AdminCompanyFaqPage() {
                               onClick={(e) => e.stopPropagation()}
                               className={`absolute right-0 ${
                                 isNearBottom ? "bottom-full mb-1" : "top-full mt-1"
-                              } w-44 bg-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.18),0_8px_10px_-6px_rgba(0,0,0,0.1)] border border-[#E5E7EB] py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150`}
+                              } w-48 bg-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.18),0_8px_10px_-6px_rgba(0,0,0,0.1)] border border-[#E5E7EB] py-1.5 z-40 animate-in fade-in zoom-in-95 duration-150`}
                             >
                               <button
                                 type="button"
@@ -518,17 +776,17 @@ export default function AdminCompanyFaqPage() {
                                   setActiveMenuId(null);
                                   handleTogglePublish(faq);
                                 }}
-                                className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors text-left cursor-pointer"
                               >
                                 {faq.is_published ? (
                                   <>
-                                    <EyeOff className="w-4 h-4 text-amber-600" />
+                                    <EyeOff className="w-3.5 h-3.5 text-amber-600" />
                                     <span>Jadikan Draft</span>
                                   </>
                                 ) : (
                                   <>
-                                    <Eye className="w-4 h-4 text-emerald-600" />
-                                    <span>Terbitkan FAQ</span>
+                                    <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Terbitkan ke Publik</span>
                                   </>
                                 )}
                               </button>
@@ -538,15 +796,28 @@ export default function AdminCompanyFaqPage() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setActiveMenuId(null);
-                                  handleOpenEdit(faq);
+                                  handleToggleNeedsReview(faq);
                                 }}
-                                className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-gray-700 hover:bg-[#F4F9F6] hover:text-[#356E3B] flex items-center gap-2.5 transition-colors cursor-pointer"
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors text-left cursor-pointer"
                               >
-                                <Edit3 className="w-4 h-4 text-gray-500" />
-                                <span>Edit FAQ</span>
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                                <span>{faq.needs_review ? "Tandai Selesai Ditinjau" : "Tandai Perlu Ditinjau"}</span>
                               </button>
 
-                              <div className="h-[1px] bg-gray-100 mx-3 my-0.5" />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuId(null);
+                                  handleOpenEdit(faq);
+                                }}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 transition-colors text-left cursor-pointer"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Edit Konten & Metadata</span>
+                              </button>
+
+                              <div className="h-[1px] bg-gray-100 my-1" />
 
                               <button
                                 type="button"
@@ -555,9 +826,9 @@ export default function AdminCompanyFaqPage() {
                                   setActiveMenuId(null);
                                   handleDelete(faq);
                                 }}
-                                className="w-full px-3.5 py-2 text-left text-[12.5px] font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[12px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors text-left cursor-pointer"
                               >
-                                <Trash2 className="w-4 h-4 text-rose-500" />
+                                <Trash2 className="w-3.5 h-3.5" />
                                 <span>Hapus FAQ</span>
                               </button>
                             </div>
@@ -566,40 +837,54 @@ export default function AdminCompanyFaqPage() {
                       </div>
                     </div>
 
-                    {/* Question Title & Accordion Toggle */}
+                    {/* Judul Pertanyaan (Elemen Utama) */}
                     <div
                       onClick={() => setExpandedId(isExpanded ? null : faq.id)}
-                      className="cursor-pointer flex items-start justify-between gap-2 select-none group"
+                      className="cursor-pointer group flex items-start justify-between gap-2"
                     >
-                      <h3 className="text-[#111827] group-hover:text-[#356E3B] text-[13.5px] font-bold leading-snug transition-colors">
+                      <h3 className="text-[14px] font-bold text-[#111827] group-hover:text-[#1E4738] transition-colors leading-snug">
                         {faq.question}
                       </h3>
-                      <ChevronDown
-                        className={`w-4 h-4 text-gray-400 shrink-0 transition-transform mt-0.5 ${
-                          isExpanded ? "rotate-180 text-[#1E4738]" : ""
-                        }`}
-                      />
+                      <button
+                        type="button"
+                        className="text-gray-400 group-hover:text-gray-600 p-0.5 shrink-0 mt-0.5"
+                        aria-label="Lihat detail jawaban"
+                      >
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                      </button>
                     </div>
 
-                    {/* Expanded Detail (Answer & SOP Document) - Hanya tampil saat dibuka */}
-                    {isExpanded && (
-                      <div className="pt-2 border-t border-[#F3F4F6] flex flex-col gap-2.5 animate-in fade-in duration-150">
-                        <FaqAnswerContent content={faq.answer} className="text-[#4B5563] text-[12.5px]" />
+                    {/* Target Roles Mini Info */}
+                    {faq.target_roles && faq.target_roles.length > 0 && (
+                      <div className="flex items-center gap-1 text-[10.5px] text-gray-500">
+                        <Users className="w-3 h-3 text-gray-400 shrink-0" />
+                        <span className="truncate">
+                          Target: {faq.target_roles.map((r) => TARGET_ROLE_OPTIONS.find((opt) => opt.value === r)?.label || r).join(", ")}
+                        </span>
+                      </div>
+                    )}
 
-                        {faq.sop_url && (
-                          <div className="pt-1">
-                            <a
-                              href={faq.sop_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-[11px] font-bold border border-emerald-200 transition-colors"
-                            >
-                              <FileCheck className="w-3.5 h-3.5 text-emerald-700" />
-                              <span>Dokumen SOP: {faq.sop_title || "Lihat SOP"}</span>
-                              <ExternalLink className="w-3 h-3 text-emerald-600" />
-                            </a>
-                          </div>
-                        )}
+                    {/* Dokumen SOP Link */}
+                    {faq.sop_url && (
+                      <div className="pt-0.5">
+                        <a
+                          href={faq.sop_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1E4738] bg-[#EEF5F0] hover:bg-[#1E4738]/10 px-2.5 py-1 rounded-lg transition-colors border border-[#1E4738]/15"
+                        >
+                          <FileText className="w-3 h-3 text-[#356E3B]" />
+                          <span className="truncate max-w-[200px]">{faq.sop_title || "Lihat Dokumen SOP"}</span>
+                          <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Jawaban yang Diperluas */}
+                    {isExpanded && (
+                      <div className="pt-2 mt-1 border-t border-gray-100 text-[#4B5563] text-[12.5px] animate-in fade-in duration-200">
+                        <FaqAnswerContent content={faq.answer} className="text-[#4B5563] text-[12.5px]" />
                       </div>
                     )}
                   </div>
@@ -610,19 +895,19 @@ export default function AdminCompanyFaqPage() {
         </div>
       </div>
 
-      {/* MODAL TAMBAH / EDIT FAQ PERUSAHAAN */}
+      {/* Modal Tambah / Edit FAQ */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100 my-auto">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[28px] shadow-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-[#EEF5F0] text-[#1E4738] flex items-center justify-center">
                   <Building2 className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-[15px] font-bold text-gray-900">
-                    {editingFaq ? "Edit FAQ Perusahaan" : "Tambah FAQ Perusahaan"}
+                    {editingFaq ? "Edit FAQ & SOP Perusahaan" : "Tambah FAQ & SOP Perusahaan"}
                   </h2>
                   <p className="text-[11px] text-gray-500">
                     {activeCompany?.name || "Perusahaan"}
@@ -632,59 +917,18 @@ export default function AdminCompanyFaqPage() {
 
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              {/* Kategori */}
-              <div>
-                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                  Kategori FAQ *
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, category: e.target.value }))
-                  }
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-                >
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                  <option value="Lainnya">+ Kategori Kustom Baru</option>
-                </select>
-              </div>
-
-              {formData.category === "Lainnya" && (
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Nama Kategori Baru *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.customCategory}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, customCategory: e.target.value }))
-                    }
-                    placeholder="Contoh: Shift Lapangan, Perlengkapan Kerja"
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-                  />
-                  {formErrors.category && (
-                    <p className="text-[11px] text-rose-600 mt-1">{formErrors.category}</p>
-                  )}
-                </div>
-              )}
-
+            <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto max-h-[calc(92vh-130px)] scrollbar-thin">
               {/* Pertanyaan */}
               <div>
                 <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                  Pertanyaan *
+                  Judul Pertanyaan / Topik *
                 </label>
                 <input
                   type="text"
@@ -692,18 +936,145 @@ export default function AdminCompanyFaqPage() {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, question: e.target.value }))
                   }
-                  placeholder="Contoh: Apa yang harus dilakukan bila dinas di luar kantor?"
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+                  placeholder="Contoh: Apa yang harus dilakukan jika GPS di luar radius kantor?"
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#356E3B]/20 focus:border-[#356E3B]"
                 />
                 {formErrors.question && (
                   <p className="text-[11px] text-rose-600 mt-1">{formErrors.question}</p>
                 )}
               </div>
 
+              {/* Kategori / Topik Combobox dengan Pencarian & Tambah Baru */}
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Topik / Kategori *
+                </label>
+                <FaqCategoryCombobox
+                  categories={categories}
+                  selectedCategory={formData.category}
+                  onSelectCategory={(cat) => setFormData((prev) => ({ ...prev, category: cat }))}
+                />
+                {formErrors.category && (
+                  <p className="text-[11px] text-rose-600 mt-1">{formErrors.category}</p>
+                )}
+              </div>
+
+              {/* Grid Metadata: Scope, Jenis Konten, Display Context */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-gray-50/70 border border-gray-200/80 rounded-2xl">
+                {/* Scope */}
+                <div>
+                  <label className="block text-[10.5px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Scope Konten
+                  </label>
+                  <select
+                    value={formData.content_scope}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, content_scope: e.target.value as ContentScope }))
+                    }
+                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+                  >
+                    <option value="company">Perusahaan (Internal)</option>
+                    <option value="user">Pengguna (Aplikasi)</option>
+                  </select>
+                </div>
+
+                {/* Jenis Konten */}
+                <div>
+                  <label className="block text-[10.5px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Jenis Konten
+                  </label>
+                  <select
+                    value={formData.content_type}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, content_type: e.target.value as ContentType }))
+                    }
+                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+                  >
+                    {CONTENT_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Display Context */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[10.5px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Konteks Tampilan (Display Context)
+                  </label>
+                  <select
+                    value={formData.display_context}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, display_context: e.target.value as DisplayContext }))
+                    }
+                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
+                  >
+                    {DISPLAY_CONTEXT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Role Target (Multi-Select) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider">
+                    Role Target Anggota *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllRoles}
+                    className="text-[11px] font-semibold text-[#356E3B] hover:underline cursor-pointer"
+                  >
+                    Pilih Semua
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { role: "company_owner_admin" as TargetRole, label: "Owner / Admin" },
+                    { role: "manager" as TargetRole, label: "Manager" },
+                    { role: "employee" as TargetRole, label: "Karyawan" },
+                  ].map((item) => {
+                    const isChecked = formData.target_roles.includes(item.role);
+                    return (
+                      <button
+                        key={item.role}
+                        type="button"
+                        onClick={() => handleToggleRole(item.role)}
+                        className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                          isChecked
+                            ? "bg-[#EEF5F0] border-[#356E3B] text-[#1E4738] shadow-2xs"
+                            : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        <div
+                          className={`w-3.5 h-3.5 rounded-md flex items-center justify-center border ${
+                            isChecked
+                              ? "bg-[#356E3B] border-[#356E3B] text-white"
+                              : "border-gray-300 bg-white"
+                          }`}
+                        >
+                          {isChecked && <Check className="w-2.5 h-2.5" />}
+                        </div>
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {formErrors.target_roles && (
+                  <p className="text-[11px] text-rose-600 mt-1">{formErrors.target_roles}</p>
+                )}
+              </div>
+
               {/* Jawaban Lengkap (TipTap Rich-Text Editor) */}
               <div>
                 <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                  Jawaban Lengkap *
+                  Isi Jawaban / Panduan Lengkap *
                 </label>
                 <FaqRichEditor
                   value={formData.answer}
@@ -720,7 +1091,7 @@ export default function AdminCompanyFaqPage() {
                 <div className="flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-[#1E4738]" />
                   <span className="text-[11px] font-bold text-gray-800 uppercase tracking-wider">
-                    Dokumen SOP (Opsional)
+                    Tautan Dokumen SOP (Opsional)
                   </span>
                 </div>
 
@@ -741,7 +1112,7 @@ export default function AdminCompanyFaqPage() {
 
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-600 mb-0.5">
-                    URL PDF / Google Drive
+                    URL Dokumen (Google Drive / Cloud PDF)
                   </label>
                   <input
                     type="url"
@@ -749,7 +1120,7 @@ export default function AdminCompanyFaqPage() {
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, sop_url: e.target.value }))
                     }
-                    placeholder="https://drive.google.com/file/d/..."
+                    placeholder="https://drive.google.com/..."
                     className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
                   />
                   {formErrors.sop_url && (
@@ -758,50 +1129,73 @@ export default function AdminCompanyFaqPage() {
                 </div>
               </div>
 
-              {/* Status Publikasi */}
-              <div className="flex items-center justify-between pt-1">
-                <div className="flex items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormData((prev) => ({ ...prev, is_published: !prev.is_published }))
-                    }
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      formData.is_published ? "bg-[#356E3B]" : "bg-gray-300"
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                        formData.is_published ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                  <div className="text-xs">
-                    <span className="font-bold text-gray-900">
-                      {formData.is_published ? "Status: Terbit" : "Status: Draft"}
+              {/* Status Publikasi & Review Checkbox */}
+              <div className="flex flex-col gap-2 pt-1">
+                {/* Status Publikasi Toggle */}
+                <label className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-200 cursor-pointer hover:bg-gray-100/70 transition-colors">
+                  <div>
+                    <span className="block text-xs font-bold text-gray-800">
+                      Terbitkan Langsung ke Publik
                     </span>
-                    <p className="text-[10px] text-gray-500">
-                      {formData.is_published ? "Tampil di Pusat Bantuan" : "Hanya disimpan"}
-                    </p>
+                    <span className="block text-[11px] text-gray-500">
+                      Jika aktif, FAQ akan langsung dapat dibaca oleh karyawan perusahaan.
+                    </span>
                   </div>
-                </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.is_published}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, is_published: e.target.checked }))
+                    }
+                    className="w-4 h-4 text-[#356E3B] rounded border-gray-300 focus:ring-[#356E3B]"
+                  />
+                </label>
+
+                {/* Status Perlu Ditinjau Checkbox */}
+                <label className="flex items-center justify-between p-3 rounded-xl bg-amber-50/60 border border-amber-200 cursor-pointer hover:bg-amber-100/50 transition-colors">
+                  <div>
+                    <span className="block text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      Tandai Perlu Ditinjau Ulang (Review)
+                    </span>
+                    <span className="block text-[11px] text-amber-700/80">
+                      Beri tanda khusus jika konten atau metadata masih memerlukan peninjauan lanjutan oleh admin.
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={formData.needs_review}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, needs_review: e.target.checked }))
+                    }
+                    className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500"
+                  />
+                </label>
               </div>
 
-              {/* Actions */}
-              <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2.5">
+              {/* Form Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
+
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 rounded-xl bg-[#356E3B] text-white text-xs font-bold hover:bg-[#2A582F] transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#356E3B] text-white hover:bg-[#2A582F] active:scale-95 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  {isSubmitting ? "Menyimpan..." : editingFaq ? "Simpan Perubahan" : "Buat FAQ"}
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <span>{editingFaq ? "Simpan Perubahan" : "Terbitkan FAQ"}</span>
+                  )}
                 </button>
               </div>
             </form>
