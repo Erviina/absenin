@@ -6,25 +6,14 @@ import { authenticate } from "../middleware/auth";
 import { resolveTenant } from "../utils/tenant";
 import { isPlatformOwnerEmail } from "../middleware/platformAuth";
 import jwt from "jsonwebtoken";
-import sanitizeHtmlModule from "sanitize-html";
 import { z } from "zod";
 
-const router = Router();
+// Gunakan require secara langsung tanpa import ESM untuk kompatibilitas runtime CJS sanitize-html
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sanitizeHtmlPkg = require("sanitize-html");
+const sanitizeHtml = typeof sanitizeHtmlPkg === "function" ? sanitizeHtmlPkg : (sanitizeHtmlPkg?.default || ((s: string) => s));
 
-/**
- * Resolusi aman CJS / ESM interop untuk sanitize-html agar kompatibel di semua loader/bundler
- */
-function getSanitizer(): any {
-  if (typeof sanitizeHtmlModule === "function") return sanitizeHtmlModule;
-  if (typeof (sanitizeHtmlModule as any)?.default === "function") return (sanitizeHtmlModule as any).default;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const req = require("sanitize-html");
-    if (typeof req === "function") return req;
-    if (typeof req?.default === "function") return req.default;
-  } catch {}
-  return (str: string) => str;
-}
+const router = Router();
 
 /**
  * Sanitasi HTML aman untuk jawaban FAQ pada sisi server.
@@ -38,11 +27,11 @@ export function sanitizeFaqAnswer(raw: string): string {
     return raw.trim();
   }
 
-  const clean = getSanitizer();
-  return clean(raw, {
-    allowedTags: [
-      "p",
-      "br",
+  try {
+    return sanitizeHtml(raw, {
+      allowedTags: [
+        "p",
+        "br",
       "strong",
       "b",
       "em",
@@ -65,7 +54,7 @@ export function sanitizeFaqAnswer(raw: string): string {
     },
     allowedSchemes: ["http", "https", "mailto", "tel"],
     transformTags: {
-      a: (tagName, attribs) => {
+      a: (tagName: string, attribs: Record<string, string>) => {
         return {
           tagName: "a",
           attribs: {
@@ -77,6 +66,10 @@ export function sanitizeFaqAnswer(raw: string): string {
       },
     },
   }).trim();
+  } catch (err) {
+    console.error("Sanitize FAQ answer error:", err);
+    return raw.trim();
+  }
 }
 
 // Zod Enums untuk Metadata Pusat Bantuan
@@ -122,6 +115,8 @@ export const createFaqSchema = z.object({
   needs_review: z.boolean().optional().default(false),
   sop_title: z.string().max(255).optional().nullable(),
   sop_url: z.string().url("URL SOP harus berupa tautan yang valid (http/https)").optional().nullable().or(z.literal("")),
+  video_title: z.string().max(255).optional().nullable(),
+  video_url: z.string().url("URL Video harus berupa tautan yang valid (http/https)").optional().nullable().or(z.literal("")),
   is_published: z.boolean().default(true),
   order_index: z.number().int().default(0),
 });
@@ -399,7 +394,7 @@ router.get("/", optionalAuthenticate, async (req: Request, res: Response): Promi
     let searchCondition = sql``;
     if (search && typeof search === "string" && search.trim()) {
       const q = `%${search.trim()}%`;
-      searchCondition = sql`AND (f.question ILIKE ${q} OR f.answer ILIKE ${q} OR f.category ILIKE ${q} OR COALESCE(f.sop_title, '') ILIKE ${q})`;
+      searchCondition = sql`AND (f.question ILIKE ${q} OR f.answer ILIKE ${q} OR f.category ILIKE ${q} OR COALESCE(f.sop_title, '') ILIKE ${q} OR COALESCE(f.video_title, '') ILIKE ${q})`;
     }
 
     // Filter kategori
@@ -424,6 +419,8 @@ router.get("/", optionalAuthenticate, async (req: Request, res: Response): Promi
         f.answer,
         f.sop_title,
         f.sop_url,
+        f.video_title,
+        f.video_url,
         f.is_published,
         f.order_index,
         f.created_at,
@@ -552,7 +549,7 @@ router.get("/manage", authenticate, async (req: Request, res: Response): Promise
     let searchCondition = sql``;
     if (search && typeof search === "string" && search.trim()) {
       const q = `%${search.trim()}%`;
-      searchCondition = sql`AND (f.question ILIKE ${q} OR f.answer ILIKE ${q} OR f.category ILIKE ${q} OR COALESCE(f.sop_title, '') ILIKE ${q})`;
+      searchCondition = sql`AND (f.question ILIKE ${q} OR f.answer ILIKE ${q} OR f.category ILIKE ${q} OR COALESCE(f.sop_title, '') ILIKE ${q} OR COALESCE(f.video_title, '') ILIKE ${q})`;
     }
 
     // Filter kategori
@@ -613,6 +610,8 @@ router.get("/manage", authenticate, async (req: Request, res: Response): Promise
         f.answer,
         f.sop_title,
         f.sop_url,
+        f.video_title,
+        f.video_url,
         f.is_published,
         f.order_index,
         f.created_at,
@@ -680,6 +679,8 @@ router.get("/:id", optionalAuthenticate, async (req: Request, res: Response): Pr
         f.answer,
         f.sop_title,
         f.sop_url,
+        f.video_title,
+        f.video_url,
         f.is_published,
         f.order_index,
         f.created_at,
@@ -800,6 +801,19 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
 
     const sopUrl = data.sop_url && data.sop_url.trim().length > 0 ? data.sop_url.trim() : null;
     const sopTitle = data.sop_title && data.sop_title.trim().length > 0 ? data.sop_title.trim() : null;
+    const videoUrl = data.video_url && data.video_url.trim().length > 0 ? data.video_url.trim() : null;
+    const videoTitle = data.video_title && data.video_title.trim().length > 0 ? data.video_title.trim() : null;
+
+    // Logika Publikasi & Review:
+    // Jika needs_review tidak dicentang (false), otomatis langsung dipublikasikan.
+    // Jika needs_review dicentang (true), masuk ke draft/review.
+    const needsReview = data.needs_review ?? false;
+    let isPublished = data.is_published;
+    if (req.body.is_published === undefined) {
+      isPublished = !needsReview;
+    } else if (needsReview) {
+      isPublished = false;
+    }
 
     const inserted = await db
       .insert(faqs)
@@ -812,13 +826,15 @@ router.post("/", authenticate, async (req: Request, res: Response): Promise<any>
         answer: sanitizeFaqAnswer(data.answer),
         sop_title: sopTitle,
         sop_url: sopUrl,
-        is_published: data.is_published,
+        video_title: videoTitle,
+        video_url: videoUrl,
+        is_published: isPublished,
         order_index: data.order_index,
         content_scope: finalContentScope,
         target_roles: data.target_roles || [],
         content_type: data.content_type || "faq",
         display_context: data.display_context || "help_center",
-        needs_review: data.needs_review ?? false,
+        needs_review: needsReview,
       })
       .returning();
 
@@ -911,13 +927,22 @@ router.put("/:id", authenticate, async (req: Request, res: Response): Promise<an
     if (data.order_index !== undefined) updateValues.order_index = data.order_index;
     if (data.sop_title !== undefined) updateValues.sop_title = data.sop_title ? data.sop_title.trim() : null;
     if (data.sop_url !== undefined) updateValues.sop_url = data.sop_url ? data.sop_url.trim() : null;
+    if (data.video_title !== undefined) updateValues.video_title = data.video_title ? data.video_title.trim() : null;
+    if (data.video_url !== undefined) updateValues.video_url = data.video_url ? data.video_url.trim() : null;
 
     // Metadata baru
     if (data.content_scope !== undefined) updateValues.content_scope = data.content_scope;
     if (data.target_roles !== undefined) updateValues.target_roles = data.target_roles;
     if (data.content_type !== undefined) updateValues.content_type = data.content_type;
     if (data.display_context !== undefined) updateValues.display_context = data.display_context;
-    if (data.needs_review !== undefined) updateValues.needs_review = data.needs_review;
+    if (data.needs_review !== undefined) {
+      updateValues.needs_review = data.needs_review;
+      if (req.body.is_published === undefined) {
+        updateValues.is_published = !data.needs_review;
+      } else if (data.needs_review) {
+        updateValues.is_published = false;
+      }
+    }
 
     // Platform Owner dapat mengubah scope jika diperlukan
     if (data.scope !== undefined && isPlatformOwner) {

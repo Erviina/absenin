@@ -63,7 +63,7 @@ const NAV_ITEMS = [
     icon: ShieldCheck,
   },
   {
-    title: "Manajemen FAQ",
+    title: "Pusat Bantuan",
     href: "/platform-admin/faq",
     icon: HelpCircle,
   },

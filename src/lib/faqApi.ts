@@ -17,6 +17,8 @@ export interface FaqItem {
   answer: string;
   sop_title: string | null;
   sop_url: string | null;
+  video_title?: string | null;
+  video_url?: string | null;
   is_published: boolean;
   order_index: number;
   content_scope?: ContentScope;
@@ -40,6 +42,8 @@ export interface FaqPayload {
   needs_review?: boolean;
   sop_title?: string | null;
   sop_url?: string | null;
+  video_title?: string | null;
+  video_url?: string | null;
   is_published?: boolean;
   order_index?: number;
 }
@@ -61,7 +65,7 @@ export const TARGET_ROLE_OPTIONS: { value: TargetRole; label: string }[] = [
 export const CONTENT_TYPE_OPTIONS: { value: ContentType; label: string }[] = [
   { value: "faq", label: "FAQ (Tanya Jawab)" },
   { value: "sop_guide", label: "SOP & Panduan" },
-  { value: "troubleshooting", label: "Troubleshooting (Solusi Kendala)" },
+  { value: "troubleshooting", label: "Kendala Teknis" },
   { value: "tips_best_practice", label: "Tips & Best Practice" },
 ];
 
