@@ -152,6 +152,11 @@ export function getSafeInternalRedirect(redirect: string | null | undefined): st
       return null;
     }
 
+    // Tolak redirect kembali ke halaman login itu sendiri untuk mencegah loop redirect
+    if (parsed.pathname === "/login" || parsed.pathname.startsWith("/login/")) {
+      return null;
+    }
+
     return parsed.pathname + parsed.search + parsed.hash;
   } catch {
     return null;

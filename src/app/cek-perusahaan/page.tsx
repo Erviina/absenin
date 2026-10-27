@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Plus, Hourglass, ChevronLeft, AlertCircle, RefreshCw } from "lucide-react";
+import { Building2, Plus, Hourglass, ChevronLeft, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useCallback } from "react";
 import { setPersonalModePreference } from "@/lib/personalMode";
@@ -12,7 +12,7 @@ function CekPerusahaanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get("from");
-  const { isCompanyLoading, memberships, activeCompanyId, companyError, refreshMemberships, currentUser } = useCompany();
+  const { isCompanyLoading, memberships, activeCompanyId, companyError, refreshMemberships, currentUser, switchCompany } = useCompany();
 
   const [status, setStatus] = useState<'checking' | 'idle' | 'pending' | 'error'>('checking');
   const [companyName, setCompanyName] = useState("");
@@ -72,6 +72,7 @@ function CekPerusahaanContent() {
       if (from !== "profil") {
         if (!activeCompanyId && memberships[0]?.company_id) {
           setActiveCompanyId(memberships[0].company_id);
+          switchCompany(memberships[0].company_id);
         }
         router.replace("/dashboard");
         return;
@@ -106,8 +107,9 @@ function CekPerusahaanContent() {
           }
           if (data.data.company_id) {
             setActiveCompanyId(data.data.company_id);
+            switchCompany(data.data.company_id);
           }
-          await refreshMemberships();
+          await refreshMemberships(true, data.data.company_id);
           router.replace("/dashboard");
           return;
         }
@@ -118,7 +120,7 @@ function CekPerusahaanContent() {
       setStatus('error');
       setErrorMsg("Terjadi kesalahan jaringan saat memvalidasi status keanggotaan.");
     }
-  }, [isCompanyLoading, companyError, memberships, activeCompanyId, from, router, refreshMemberships]);
+  }, [isCompanyLoading, companyError, memberships, activeCompanyId, from, router, refreshMemberships, switchCompany]);
 
   useEffect(() => {
     verifyStatus();
@@ -150,8 +152,8 @@ function CekPerusahaanContent() {
 
   if (status === 'checking') {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1E4738]"></div>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]" role="status" aria-live="polite">
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
       </div>
     );
   }
@@ -316,8 +318,8 @@ function CekPerusahaanContent() {
 export default function CekPerusahaanPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1E4738]"></div>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]" role="status" aria-live="polite">
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
       </div>
     }>
       <CekPerusahaanContent />

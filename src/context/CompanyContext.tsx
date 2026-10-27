@@ -46,8 +46,8 @@ interface CompanyContextType {
   isLoading: boolean;
   isCompanyLoading: boolean;
   companyError: string | null;
-  switchCompany: (companyId: string) => void;
-  refreshMemberships: (silent?: boolean) => Promise<void>;
+  switchCompany: (companyId: string, fallbackCompany?: CompanyDetails) => void;
+  refreshMemberships: (silent?: boolean, preferredCompanyId?: string | null) => Promise<void>;
   canCreate: (feature: "agendas" | "news") => boolean;
   clearCacheAndRefresh: () => void;
   currentUser: any | null;
@@ -60,6 +60,7 @@ const MEMBERSHIPS_CACHE_KEY = "companyMemberships";
 
 export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [memberships, setMemberships] = useState<CompanyMembership[]>([]);
+  const membershipsRef = useRef<CompanyMembership[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(getActiveCompanyId);
   const activeCompanyIdRef = useRef<string | null>(getActiveCompanyId());
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -72,6 +73,10 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     activeCompanyIdRef.current = activeCompanyId;
   }, [activeCompanyId]);
+
+  useEffect(() => {
+    membershipsRef.current = memberships;
+  }, [memberships]);
 
   const updateCurrentUser = useCallback((user: any) => {
     setCurrentUser(user);
@@ -146,10 +151,11 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, []);
 
-  const fetchMemberships = useCallback(async (silent: boolean = false) => {
+  const fetchMemberships = useCallback(async (silent: boolean = false, preferredCompanyId?: string | null) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
     if (!token) {
       setMemberships([]);
+      membershipsRef.current = [];
       setActiveCompanyId(null);
       setCurrentUser(null);
       setIsLoading(false);
@@ -348,10 +354,11 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         }
 
         setMemberships(activeList);
+        membershipsRef.current = activeList;
 
         // Validasi activeCompanyId terhadap membership yang benar-benar aktif.
-        // Utamakan getActiveCompanyId() dan activeCompanyIdRef agar state atau respons lama tidak menimpa switch terbaru.
-        const storedId = getActiveCompanyId() || activeCompanyIdRef.current || activeCompanyId;
+        // Utamakan preferredCompanyId, getActiveCompanyId(), dan activeCompanyIdRef agar state atau respons lama tidak menimpa switch terbaru.
+        const storedId = preferredCompanyId || getActiveCompanyId() || activeCompanyIdRef.current || activeCompanyId;
         let matched = storedId ? activeList.find((m) => m.company_id === storedId) : null;
 
         // Jika storedId tidak cocok dengan membership user saat ini (misal sisa sesi akun lain),
@@ -380,6 +387,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         if (matched) {
           // Perusahaan aktif valid dan dikonfirmasi oleh server
           const matchedId = matched.company_id;
+          const wasDifferent = activeCompanyIdRef.current !== matchedId || activeCompanyId !== matchedId;
           activeCompanyIdRef.current = matchedId;
           setActiveCompanyId(matchedId);
           setActiveCompanyIdStorage(matchedId);
@@ -397,6 +405,10 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
               setCurrentUser(u);
             }
           } catch {}
+
+          if (wasDifferent || preferredCompanyId) {
+            window.dispatchEvent(new CustomEvent("companyChanged", { detail: { companyId: matchedId } }));
+          }
         } else if (storedId && !matched) {
           // Perusahaan yang tersimpan sudah TIDAK AKTIF dan user memiliki multi-perusahaan tanpa pilihan pasti
           console.warn(`Perusahaan tersimpan ${storedId} tidak lagi aktif untuk user.`);
@@ -573,14 +585,11 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Handle company switch
-  const switchCompany = useCallback((companyId: string) => {
-    if (companyId === activeCompanyId) return;
+  const switchCompany = useCallback((companyId: string, fallbackCompany?: CompanyDetails) => {
+    if (!companyId) return;
 
-    const target = memberships.find((m) => m.company_id === companyId && m.status === "active");
-    if (!target) {
-      console.warn(`Cannot switch to company ${companyId}: Not an active member.`);
-      return;
-    }
+    const currentMemberships = membershipsRef.current.length > 0 ? membershipsRef.current : memberships;
+    const target = currentMemberships.find((m) => m.company_id === companyId && m.status === "active");
 
     if (typeof window !== "undefined") {
       activeCompanyIdRef.current = companyId;
@@ -592,12 +601,19 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         const userStr = localStorage.getItem("user");
         if (userStr) {
           const u = JSON.parse(userStr);
-          u.company = target.company;
-          u.activeRole = target.role;
-          u.isManagement = ["owner", "admin", "manager"].includes((target.role || "").toLowerCase());
-          u.roles = u.isManagement
-            ? [target.role.charAt(0).toUpperCase() + target.role.slice(1), "Employee"]
-            : ["Employee"];
+          if (target) {
+            u.company = target.company;
+            u.activeRole = target.role;
+            u.isManagement = ["owner", "admin", "manager"].includes((target.role || "").toLowerCase());
+            u.roles = u.isManagement
+              ? [target.role.charAt(0).toUpperCase() + target.role.slice(1), "Employee"]
+              : ["Employee"];
+          } else if (fallbackCompany) {
+            u.company = fallbackCompany;
+            u.activeRole = "owner";
+            u.isManagement = true;
+            u.roles = ["Owner", "Admin", "Employee"];
+          }
           localStorage.setItem("user", JSON.stringify(u));
           setCurrentUser(u);
         }
@@ -605,15 +621,17 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
       window.dispatchEvent(new CustomEvent("companyChanged", { detail: { companyId } }));
 
-      const isTargetManagement = ["owner", "admin", "manager"].includes((target.role || "").toLowerCase());
-      const currentPath = window.location.pathname;
+      if (target) {
+        const isTargetManagement = ["owner", "admin", "manager"].includes((target.role || "").toLowerCase());
+        const currentPath = window.location.pathname;
 
-      if (currentPath.startsWith("/admin") && !isTargetManagement) {
-        window.location.replace("/dashboard");
-        return;
+        if (currentPath.startsWith("/admin") && !isTargetManagement) {
+          window.location.replace("/dashboard");
+          return;
+        }
       }
     }
-  }, [memberships, activeCompanyId]);
+  }, [memberships, setCurrentUser]);
 
   // Realtime subscription management on activeCompanyId change
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, PlusCircle, Image as ImageIcon, CheckCircle2, Eye, X, Calendar, User } from "lucide-react";
+import { ChevronLeft, PlusCircle, Image as ImageIcon, CheckCircle2, Eye, X, Calendar, User, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -453,7 +453,11 @@ function BuatBeritaForm() {
 
 export default function BuatBeritaPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={
+      <div className="min-h-[100dvh] w-full bg-[#FAFCF9] flex items-center justify-center" role="status" aria-live="polite">
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+      </div>
+    }>
       <BuatBeritaForm />
     </Suspense>
   );

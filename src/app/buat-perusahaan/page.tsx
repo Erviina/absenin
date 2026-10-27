@@ -9,7 +9,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useCompany } from "@/context/CompanyContext";
 import { useDialog } from "@/context/DialogContext";
 import { CompanyQRCodeCard } from "@/components/CompanyQRCodeCard";
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, setActiveCompanyId as setActiveCompanyIdStorage } from "@/lib/api";
 
 export default function BuatPerusahaanPage() {
   const router = useRouter();
@@ -184,12 +184,21 @@ export default function BuatPerusahaanPage() {
 
       const data = await res.json();
       if (data.success) {
-        setJoinCode(data.data.join_code);
+        const newCompany = data.data;
+        const newCompanyId = newCompany?.id;
+        setJoinCode(newCompany.join_code);
         setIsSuccess(true);
-        // Refresh memberships and switch to new company
-        await refreshMemberships();
-        if (data.data?.id) {
-          switchCompany(data.data.id);
+        // Tetapkan langsung sebagai perusahaan aktif di storage dan context
+        if (newCompanyId) {
+          setActiveCompanyIdStorage(newCompanyId);
+          await refreshMemberships(true, newCompanyId);
+          switchCompany(newCompanyId, {
+            id: newCompany.id,
+            name: newCompany.name,
+            category_id: newCompany.category_id,
+          });
+        } else {
+          await refreshMemberships(true);
         }
       } else {
         showToast(data.message || "Gagal membuat perusahaan", "error");
@@ -260,7 +269,7 @@ export default function BuatPerusahaanPage() {
         <div className="w-full max-w-[340px] pb-6">
           <button 
             type="button"
-            onClick={() => router.push("/admin/dashboard")}
+            onClick={() => router.push("/dashboard")}
             className="w-full bg-[#2D5A3F] hover:bg-[#234731] text-white py-3.5 rounded-full text-[14px] font-bold transition-all shadow-sm active:scale-[0.98]"
           >
             Mulai ke Beranda

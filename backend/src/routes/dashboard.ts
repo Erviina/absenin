@@ -66,7 +66,7 @@ router.get("/attendance-stats", authenticate, async (req: Request, res: Response
         SELECT 
           a.profile_id,
           (
-            CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(c.work_start_time, '08:00:00'::time)
+            CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE(c.work_start_time, '08:00:00'::time) + interval '15 minutes')
               AND (
                 CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
                   WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
@@ -109,7 +109,7 @@ router.get("/attendance-stats", authenticate, async (req: Request, res: Response
     const monthlyAttRes = await db.execute(sql`
       SELECT 
         count(a.id) as total_hadir,
-        count(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > ${workStartTime}::time 
+        count(CASE WHEN (a.check_in_time AT TIME ZONE 'Asia/Jakarta')::time > (${workStartTime}::time + interval '15 minutes') 
           AND (
             CASE EXTRACT(ISODOW FROM a.check_in_time AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'

@@ -9,6 +9,7 @@ import {
   isPlatformAdminPath, 
   isInvalidRoute 
 } from "@/lib/routeUtils";
+import { Loader2 } from "lucide-react";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -109,8 +110,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <div 
         className="min-h-[100dvh] w-full bg-[#FAFCF9] flex items-center justify-center" 
-        aria-busy="true"
-      />
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+      </div>
     );
   }
 
@@ -120,8 +124,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <div 
         className="min-h-[100dvh] w-full bg-[#FAFCF9] flex items-center justify-center" 
-        aria-busy="true"
-      />
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+      </div>
     );
   }
 
@@ -140,8 +147,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <div 
         className="min-h-[100dvh] w-full bg-[#FAFCF9] flex items-center justify-center" 
-        aria-busy="true"
-      />
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+      </div>
     );
   }
 

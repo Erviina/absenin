@@ -2,6 +2,7 @@
 
 import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 function FAQRedirectContent() {
   const router = useRouter();
@@ -14,15 +15,19 @@ function FAQRedirectContent() {
   }, [router, searchParams]);
 
   return (
-    <div className="min-h-screen bg-[#fbfdfc] flex items-center justify-center">
-      <div className="w-8 h-8 border-3 border-[#356E3B] border-t-transparent rounded-full animate-spin" />
+    <div className="min-h-[100dvh] w-full bg-[#FAFCF9] flex items-center justify-center" role="status" aria-live="polite">
+      <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
     </div>
   );
 }
 
 export default function FAQRedirectPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={
+      <div className="min-h-[100dvh] w-full bg-[#FAFCF9] flex items-center justify-center" role="status" aria-live="polite">
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+      </div>
+    }>
       <FAQRedirectContent />
     </Suspense>
   );

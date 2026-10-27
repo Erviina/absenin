@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { UnauthorizedView } from "@/components/UnauthorizedView";
 import { PlatformAdminErrorView } from "@/components/platform-admin/PlatformAdminErrorView";
 
@@ -21,7 +22,11 @@ function UnauthorizedContent() {
 
 export default function UnauthorizedPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#FAFCF9]" />}>
+    <Suspense fallback={
+      <div className="min-h-[100dvh] w-full bg-[#FAFCF9] flex items-center justify-center" role="status" aria-live="polite">
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+      </div>
+    }>
       <UnauthorizedContent />
     </Suspense>
   );

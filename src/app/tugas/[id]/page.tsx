@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { TopBar } from "@/components/TopBar";
-import { Clock, CheckCircle2, AlignLeft, Calendar, Users, Share2, RotateCcw } from "lucide-react";
-import { formatDate } from "@/lib/dateUtils";
+import { Clock, CheckCircle2, AlignLeft, Calendar, Users, Share2, RotateCcw, Loader2 } from "lucide-react";
+import { formatDate, getTaskDeadlineStatus } from "@/lib/dateUtils";
 import { useDialog } from "@/context/DialogContext";
 import { shareContent } from "@/lib/shareUtils";
 import { Badge } from "@/components/Badge";
 import { getApiUrl } from "@/lib/api";
+import { invalidateCache } from "@/lib/clientCache";
 
 export default function TugasDetailPage() {
   const router = useRouter();
@@ -27,6 +28,8 @@ export default function TugasDetailPage() {
     setIsToggling(true);
     // Optimistic update
     setTask((prev: any) => ({ ...prev, completed: nextCompleted }));
+    invalidateCache("tasks");
+    invalidateCache("dashboard_tasks");
 
     try {
       const token = localStorage.getItem("accessToken");
@@ -50,6 +53,8 @@ export default function TugasDetailPage() {
       } else {
         // Revert on failure
         setTask((prev: any) => ({ ...prev, completed: !nextCompleted }));
+        invalidateCache("tasks");
+        invalidateCache("dashboard_tasks");
         showToast("Gagal memperbarui status tugas.", "error");
       }
     } catch (err) {
@@ -165,13 +170,35 @@ export default function TugasDetailPage() {
             <h1 className={`text-[18px] font-bold leading-snug ${task.completed ? "text-[#6B7280] line-through" : "text-[#111827]"}`}>
               {task.title}
             </h1>
-            <Badge 
-              variant={task.completed ? "success" : "neutral"} 
-              size="sm"
-              dot
-            >
-              {task.completed ? "Sudah Selesai" : "Belum Selesai"}
-            </Badge>
+            {(() => {
+              const status = getTaskDeadlineStatus(task.date, task.time, task.completed);
+              if (task.completed) {
+                return (
+                  <Badge variant="success" size="sm" dot>
+                    Sudah Selesai
+                  </Badge>
+                );
+              }
+              if (status === "overdue") {
+                return (
+                  <Badge variant="danger" size="sm" dot>
+                    Terlambat
+                  </Badge>
+                );
+              }
+              if (status === "today") {
+                return (
+                  <Badge variant="warning" size="sm" dot>
+                    Hari ini
+                  </Badge>
+                );
+              }
+              return (
+                <Badge variant="info" size="sm" dot>
+                  Mendatang
+                </Badge>
+              );
+            })()}
           </div>
         </div>
 
@@ -289,7 +316,7 @@ export default function TugasDetailPage() {
           >
             {isToggling ? (
               <>
-                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin shrink-0" />
+                <Loader2 className="w-5 h-5 animate-spin text-current shrink-0" />
                 <span>{task.completed ? "Membatalkan..." : "Menyelesaikan..."}</span>
               </>
             ) : task.completed ? (

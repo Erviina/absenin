@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { ChevronLeft, Plus, User, Users, Calendar, Clock, CheckCircle2, Check, AtSign, X } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { ChevronLeft, Plus, User, Users, Calendar, Clock, CheckCircle2, Check, AtSign, X, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { SwipeableTaskItem } from "@/components/SwipeableTaskItem";
 import { TopBar } from "@/components/TopBar";
 import { CustomDatePicker } from "@/components/CustomDatePicker";
 import { CustomTimePicker } from "@/components/CustomTimePicker";
+import { CustomSelect } from "@/components/CustomSelect";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Badge } from "@/components/Badge";
 import { ViewAllButton } from "@/components/ViewAllButton";
@@ -17,6 +18,7 @@ import { useDialog } from "@/context/DialogContext";
 import { getActiveCompanyId, getApiUrl } from "@/lib/api";
 import { CardListSkeleton } from "@/components/CardSkeleton";
 import { buildCacheKey, getCachedData, setCachedData, invalidateCache } from "@/lib/clientCache";
+import { getLocalDateString, getTaskDeadline, getTaskDeadlineStatus, getTaskDeadlineCategory } from "@/lib/dateUtils";
 
 export default function TugasPage() {
   const router = useRouter();
@@ -25,14 +27,30 @@ export default function TugasPage() {
   
   const [activeTab, setActiveTab] = useState<"personal" | "group">("personal");
   const [isAddingTask, setIsAddingTask] = useState(false);
-  const [isViewingUpcoming, setIsViewingUpcoming] = useState(false);
+  const [isViewingAllTasks, setIsViewingAllTasks] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Search & Category filter states for Semua Tugas
+  const [allTasksSearch, setAllTasksSearch] = useState("");
+  const [allTasksCategory, setAllTasksCategory] = useState("all");
+
+  // Helper for initial default future deadline
+  const getDefaultInitialDeadline = () => {
+    const current = new Date();
+    const nextHour = new Date(current.getTime() + 60 * 60 * 1000);
+    const nextHourStr = `${String(nextHour.getHours()).padStart(2, "0")}:00`;
+    const isStillToday = nextHour.getDate() === current.getDate();
+    return {
+      date: getLocalDateString(current),
+      time: isStillToday ? nextHourStr : "23:59",
+    };
+  };
+
   // Form states
   const [taskTitle, setTaskTitle] = useState("");
-  const [taskDate, setTaskDate] = useState(new Date().toISOString().split("T")[0]);
-  const [taskTime, setTaskTime] = useState("10:00");
+  const [taskDate, setTaskDate] = useState(() => getDefaultInitialDeadline().date);
+  const [taskTime, setTaskTime] = useState(() => getDefaultInitialDeadline().time);
   const [noteText, setNoteText] = useState("");
 
   // Group task mention / assignees states
@@ -211,10 +229,11 @@ export default function TugasPage() {
       showToast("Silakan bergabung atau pilih perusahaan terlebih dahulu untuk membuat tugas.", "warning");
       return;
     }
+    const initial = getDefaultInitialDeadline();
     setEditingTaskId(null);
     setTaskTitle("");
-    setTaskDate(new Date().toISOString().split("T")[0]);
-    setTaskTime("10:00");
+    setTaskDate(initial.date);
+    setTaskTime(initial.time);
     setNoteText("");
     setSelectedAssignees([]);
     setSearchMember("");
@@ -308,6 +327,18 @@ export default function TugasPage() {
     }
   };
 
+  const todayStr = getLocalDateString();
+  const now = new Date();
+  const currentHour = String(now.getHours()).padStart(2, "0");
+  const currentMinute = String(now.getMinutes()).padStart(2, "0");
+  const minTimeForToday = `${currentHour}:${currentMinute}`;
+
+  const isDeadlinePast = (() => {
+    const deadline = getTaskDeadline(taskDate, taskTime);
+    if (!deadline) return true;
+    return deadline.getTime() <= Date.now();
+  })();
+
   const handleSaveTask = async () => {
     if (isSaving) return;
     const compId = activeCompanyId || getActiveCompanyId();
@@ -319,6 +350,11 @@ export default function TugasPage() {
 
     if (activeTab === "group" && !compId) {
       showToast("Pilih perusahaan terlebih dahulu untuk membuat tugas grup", "error");
+      return;
+    }
+
+    if (isDeadlinePast) {
+      showToast("Deadline tidak boleh menggunakan tanggal atau waktu yang sudah lewat.", "error");
       return;
     }
 
@@ -386,36 +422,141 @@ export default function TugasPage() {
   };
 
   const filteredTasks = tasks.filter(t => t.type === activeTab);
-  
-  const todayStr = new Date().toISOString().split("T")[0];
-  const isTodayTask = (dateStr: string | null | undefined) => {
-    if (!dateStr) return true;
-    return dateStr.startsWith(todayStr);
-  };
-
-  const todayTasks = filteredTasks.filter(t => isTodayTask(t.date));
-  const upcomingTasks = filteredTasks.filter(t => !isTodayTask(t.date));
-  const activeTodayCount = todayTasks.filter(t => !t.completed).length;
+  const activeTasks = filteredTasks.filter(t => !t.completed);
+  const historyTasks = filteredTasks.filter(t => t.completed);
 
   const uncompletedPersonalCount = tasks.filter(t => t.type === "personal" && !t.completed).length;
   const uncompletedGroupCount = tasks.filter(t => t.type === "group" && !t.completed).length;
+
+  const currentTime = new Date();
+  const sortedActiveTasks = [...activeTasks].sort((a, b) => {
+    const statusA = getTaskDeadlineStatus(a.date, a.time, a.completed, currentTime);
+    const statusB = getTaskDeadlineStatus(b.date, b.time, b.completed, currentTime);
+
+    const priorityOrder: Record<string, number> = {
+      overdue: 1,
+      today: 2,
+      upcoming: 3,
+    };
+    const pA = priorityOrder[statusA] ?? 4;
+    const pB = priorityOrder[statusB] ?? 4;
+
+    if (pA !== pB) {
+      return pA - pB;
+    }
+
+    const dlA = getTaskDeadline(a.date, a.time)?.getTime() ?? Infinity;
+    const dlB = getTaskDeadline(b.date, b.time)?.getTime() ?? Infinity;
+
+    if (dlA !== dlB) {
+      return dlA - dlB;
+    }
+
+    return (a.title || "").localeCompare(b.title || "");
+  });
+
+  const sortedAllTasks = [...filteredTasks].sort((a, b) => {
+    const statusA = getTaskDeadlineStatus(a.date, a.time, a.completed, currentTime);
+    const statusB = getTaskDeadlineStatus(b.date, b.time, b.completed, currentTime);
+
+    const priorityOrder: Record<string, number> = {
+      overdue: 1,
+      today: 2,
+      upcoming: 3,
+      completed: 4,
+    };
+    const pA = priorityOrder[statusA] ?? 5;
+    const pB = priorityOrder[statusB] ?? 5;
+
+    if (pA !== pB) {
+      return pA - pB;
+    }
+
+    const dlA = getTaskDeadline(a.date, a.time)?.getTime() ?? Infinity;
+    const dlB = getTaskDeadline(b.date, b.time)?.getTime() ?? Infinity;
+
+    if (dlA !== dlB) {
+      return dlA - dlB;
+    }
+
+    return (a.title || "").localeCompare(b.title || "");
+  });
+
+  const categoryOptions = useMemo(() => {
+    const options = [
+      { value: "all", label: "Semua Kategori" },
+      { value: "terlambat", label: "Terlambat" },
+      { value: "hari-ini", label: "Hari ini" },
+      { value: "mendatang", label: "Mendatang" },
+      { value: "selesai", label: "Selesai" },
+    ];
+
+    const customCats = new Set<string>();
+    tasks.forEach((t) => {
+      if (t.category && typeof t.category === "string") customCats.add(t.category);
+      if (t.category_name && typeof t.category_name === "string") customCats.add(t.category_name);
+    });
+    customCats.forEach((cat) => {
+      options.push({ value: cat, label: cat });
+    });
+
+    return options;
+  }, [tasks]);
+
+  const filteredAllTasks = useMemo(() => {
+    return sortedAllTasks.filter((task) => {
+      // 1. Filter pencarian (judul atau info relevan tugas)
+      if (allTasksSearch.trim()) {
+        const q = allTasksSearch.toLowerCase().trim();
+        const matchTitle = (task.title || "").toLowerCase().includes(q);
+        const matchNote = (task.note || task.notes || "").toLowerCase().includes(q);
+        const matchDate = (task.date || "").toLowerCase().includes(q);
+        const matchAssignee = Array.isArray(task.assignees) && task.assignees.some(
+          (a: any) => (a.name || a.full_name || "").toLowerCase().includes(q)
+        );
+        if (!matchTitle && !matchNote && !matchDate && !matchAssignee) {
+          return false;
+        }
+      }
+
+      // 2. Filter dropdown kategori
+      if (allTasksCategory && allTasksCategory !== "all") {
+        const status = getTaskDeadlineStatus(task.date, task.time, task.completed, currentTime);
+
+        if (allTasksCategory === "selesai") {
+          if (status !== "completed") return false;
+        } else if (allTasksCategory === "terlambat") {
+          if (status !== "overdue") return false;
+        } else if (allTasksCategory === "hari-ini") {
+          if (status !== "today") return false;
+        } else if (allTasksCategory === "mendatang") {
+          if (status !== "upcoming") return false;
+        } else {
+          const customCat = (task.category || task.category_name || "").toLowerCase();
+          if (customCat !== allTasksCategory.toLowerCase()) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [sortedAllTasks, allTasksSearch, allTasksCategory, currentTime]);
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#F7F9F8] relative pb-32">
       {/* Header */}
       <TopBar 
-        title={isAddingTask ? (editingTaskId ? "Ubah Tugas" : "Tambah Tugas") : isViewingUpcoming ? "Semua Tugas Mendatang" : "Daftar Tugas"}
+        title={isAddingTask ? (editingTaskId ? "Ubah Tugas" : "Tambah Tugas") : isViewingAllTasks ? "Semua Tugas" : "Daftar Tugas"}
         onBack={() => {
           if (isAddingTask) {
             setIsAddingTask(false);
-          } else if (isViewingUpcoming) {
-            setIsViewingUpcoming(false);
+          } else if (isViewingAllTasks) {
+            setIsViewingAllTasks(false);
           } else {
             router.push("/dashboard");
           }
         }}
         rightAction={
-          (!isAddingTask && !isViewingUpcoming) ? (
+          (!isAddingTask && !isViewingAllTasks) ? (
             <button 
               onClick={handleOpenAdd}
               className="w-10 h-10 flex items-center justify-center text-white hover:opacity-80 active:scale-95 transition-all z-10"
@@ -430,7 +571,7 @@ export default function TugasPage() {
       <div className="px-6 pt-6 flex flex-col gap-6">
         
         {/* Tabs */}
-        {!isAddingTask && !isViewingUpcoming && (
+        {!isAddingTask && (
           <div className="bg-white border border-[#D1D5DB] rounded-full p-1.5 flex shadow-sm">
             <div 
               onClick={() => setActiveTab("personal")}
@@ -485,6 +626,7 @@ export default function TugasPage() {
                     <CustomDatePicker 
                       value={taskDate}
                       onChange={setTaskDate}
+                      minDate={todayStr}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -493,9 +635,15 @@ export default function TugasPage() {
                       onChange={setTaskTime}
                       placeholder="Pilih Waktu"
                       className="w-full"
+                      minTime={taskDate === todayStr ? minTimeForToday : undefined}
                     />
                   </div>
                 </div>
+                {isDeadlinePast && (
+                  <p className="text-[12px] font-medium text-[#DC2626] mt-0.5 flex items-center gap-1">
+                    Deadline tidak boleh menggunakan tanggal atau waktu yang sudah lewat.
+                  </p>
+                )}
               </div>
 
               {/* Catatan Tambahan */}
@@ -635,7 +783,7 @@ export default function TugasPage() {
 
             <PrimaryButton 
               onClick={handleSaveTask}
-              disabled={!taskTitle.trim() || isSaving}
+              disabled={!taskTitle.trim() || isSaving || isDeadlinePast}
               isLoading={isSaving}
               loadingText={editingTaskId ? "Menyimpan Perubahan..." : "Menyimpan Tugas..."}
               icon={<CheckCircle2 className="w-[18px] h-[18px]" strokeWidth={2.5} />}
@@ -647,80 +795,88 @@ export default function TugasPage() {
           <div className="flex flex-col gap-3">
             <CardListSkeleton count={3} type="task" />
           </div>
-        ) : isViewingUpcoming ? (
-          /* ALL UPCOMING TASKS VIEW */
+        ) : isViewingAllTasks ? (
+          /* SEMUA TUGAS VIEW */
           <div className="flex flex-col">
-            {upcomingTasks.length === 0 && (
-              isLoadingTasks ? (
-                <CardListSkeleton count={3} type="task" />
-              ) : (
-                <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas mendatang.</p>
-              )
-            )}
-            {upcomingTasks.map(task => (
-              <SwipeableTaskItem 
-                key={`task-${task.id}`}
-                task={task}
-                onToggle={toggleTask}
-                onEdit={handleEditTask}
-                onDelete={handleDeleteTask}
-                onClick={(id) => router.push(`/tugas/${id}`)}
-              />
-            ))}
-          </div>
-        ) : (
-          /* TASK LIST */
-          <>
-            {/* TUGAS HARI INI */}
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-[#374151] text-[12px] font-bold uppercase tracking-widest">
-                  Tugas Hari Ini
-                </h2>
-                <Badge variant="success" size="sm">
-                  {activeTodayCount} Aktif
-                </Badge>
-              </div>
-              
-              <div className="flex flex-col">
-                {todayTasks.length === 0 && (
-                  isLoadingTasks ? (
-                    <CardListSkeleton count={2} type="task" />
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas untuk hari ini.</p>
-                  )
+            <h2 className="text-[#374151] text-[12px] font-bold uppercase tracking-widest mb-3">
+              Semua Tugas
+            </h2>
+
+            {/* Filter and Search Bar */}
+            <div className="flex gap-2 sm:gap-3 mb-4">
+              {/* Search Input */}
+              <div className="relative flex-1 min-w-0">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={allTasksSearch}
+                  onChange={(e) => setAllTasksSearch(e.target.value)}
+                  placeholder="Cari tugas..."
+                  className="w-full min-w-0 h-[46px] sm:h-[48px] bg-white border border-[#E5E7EB] rounded-[14px] pl-8.5 sm:pl-10 pr-8 text-[13px] sm:text-[14px] text-[#111827] focus:outline-none focus:border-[#356E3B] focus:ring-1 focus:ring-[#356E3B] transition-all placeholder:text-[#9CA3AF]"
+                />
+                {allTasksSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setAllTasksSearch("")}
+                    className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Hapus pencarian"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 )}
-                {todayTasks.map(task => (
-                  <SwipeableTaskItem 
-                    key={`task-${task.id}`}
-                    task={task}
-                    onToggle={toggleTask}
-                    onEdit={handleEditTask}
-                    onDelete={handleDeleteTask}
-                    onClick={(id) => router.push(`/tugas/${id}`)}
-                  />
-                ))}
+              </div>
+
+              {/* Dropdown Kategori */}
+              <div className="w-[130px] sm:w-[160px] shrink-0">
+                <CustomSelect
+                  options={categoryOptions}
+                  value={allTasksCategory}
+                  onChange={setAllTasksCategory}
+                  placeholder="Kategori"
+                />
               </div>
             </div>
 
-            {/* TUGAS MENDATANG */}
-            <div className="mt-2">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-[#374151] text-[12px] font-bold uppercase tracking-widest">
-                  Tugas Mendatang
-                </h2>
-                <ViewAllButton onClick={() => setIsViewingUpcoming(true)} />
-              </div>
-              
-              <div className="flex flex-col">
-                {upcomingTasks.length === 0 && (
-                  isLoadingTasks ? (
-                    <CardListSkeleton count={2} type="task" />
-                  ) : (
-                    <p className="text-sm text-gray-500 text-center py-4">Belum ada tugas mendatang.</p>
-                  )
-                )}
-                {upcomingTasks.slice(0, 3).map(task => ( // Hanya tampil 3 teratas di tampilan ringkas
+            {filteredTasks.length === 0 ? (
+              isLoadingTasks ? (
+                <CardListSkeleton count={3} type="task" />
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-8">Belum ada tugas.</p>
+              )
+            ) : filteredAllTasks.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-8">Tidak ada tugas yang sesuai dengan pencarian atau filter.</p>
+            ) : (
+              filteredAllTasks.map(task => (
+                <SwipeableTaskItem 
+                  key={`task-${task.id}`}
+                  task={task}
+                  onToggle={toggleTask}
+                  onEdit={handleEditTask}
+                  onDelete={handleDeleteTask}
+                  onClick={(id) => router.push(`/tugas/${id}`)}
+                />
+              ))
+            )}
+          </div>
+        ) : (
+          /* MAIN ACTIVE TASK LIST */
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-[#374151] text-[12px] font-bold uppercase tracking-widest">
+                Daftar Tugas
+              </h2>
+              <ViewAllButton onClick={() => setIsViewingAllTasks(true)} />
+            </div>
+            
+            <div className="flex flex-col">
+              {sortedActiveTasks.length === 0 ? (
+                isLoadingTasks ? (
+                  <CardListSkeleton count={3} type="task" />
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-8">Belum ada tugas aktif.</p>
+                )
+              ) : (
+                sortedActiveTasks.map(task => (
                   <SwipeableTaskItem 
                     key={`task-${task.id}`}
                     task={task}
@@ -729,10 +885,10 @@ export default function TugasPage() {
                     onDelete={handleDeleteTask}
                     onClick={(id) => router.push(`/tugas/${id}`)}
                   />
-                ))}
-              </div>
+                ))
+              )}
             </div>
-          </>
+          </div>
         )}
 
       </div>

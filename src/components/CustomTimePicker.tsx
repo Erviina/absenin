@@ -8,13 +8,15 @@ interface CustomTimePickerProps {
   onChange: (time: string) => void;
   placeholder?: string;
   className?: string;
+  minTime?: string; // HH:mm format
 }
 
 export function CustomTimePicker({ 
   value, 
   onChange, 
   placeholder = "Pilih Waktu", 
-  className = "" 
+  className = "",
+  minTime
 }: CustomTimePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -41,6 +43,29 @@ export function CustomTimePicker({
   const hourButtonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const minuteButtonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
 
+  const isHourDisabled = (h: string) => {
+    if (!minTime) return false;
+    const [minH] = minTime.split(":").map(Number);
+    return Number(h) < minH;
+  };
+
+  const isMinuteDisabled = (m: string) => {
+    if (!minTime) return false;
+    const [minH, minM] = minTime.split(":").map(Number);
+    const currentH = Number(tempHour);
+    if (currentH < minH) return true;
+    if (currentH === minH && Number(m) <= minM) return true;
+    return false;
+  };
+
+  const isSelectedTimeDisabled = () => {
+    if (!minTime) return false;
+    const [minH, minM] = minTime.split(":").map(Number);
+    const currentH = Number(tempHour);
+    const currentM = Number(tempMinute);
+    return currentH < minH || (currentH === minH && currentM <= minM);
+  };
+
   useEffect(() => {
     if (value) {
       const parts = value.split(":");
@@ -53,8 +78,24 @@ export function CustomTimePicker({
   useEffect(() => {
     if (isOpen) {
       const parts = value ? value.split(":") : ["08", "00"];
-      const targetHour = (parts[0] || "08").padStart(2, "0");
-      const targetMinute = (parts[1] || "00").padStart(2, "0");
+      let targetHour = (parts[0] || "08").padStart(2, "0");
+      let targetMinute = (parts[1] || "00").padStart(2, "0");
+
+      if (minTime) {
+        const [minH, minM] = minTime.split(":").map(Number);
+        const curH = Number(targetHour);
+        const curM = Number(targetMinute);
+        if (curH < minH || (curH === minH && curM <= minM)) {
+          if (minM < 59) {
+            targetHour = String(minH).padStart(2, "0");
+            targetMinute = String(minM + 1).padStart(2, "0");
+          } else if (minH < 23) {
+            targetHour = String(minH + 1).padStart(2, "0");
+            targetMinute = "00";
+          }
+        }
+      }
+
       setTempHour(targetHour);
       setTempMinute(targetMinute);
 
@@ -69,9 +110,28 @@ export function CustomTimePicker({
 
       return () => clearTimeout(timer);
     }
-  }, [isOpen, value]);
+  }, [isOpen, value, minTime]);
+
+  const handleSelectHour = (h: string) => {
+    if (isHourDisabled(h)) return;
+    setTempHour(h);
+    if (minTime) {
+      const [minH, minM] = minTime.split(":").map(Number);
+      if (Number(h) === minH && Number(tempMinute) <= minM) {
+        if (minM < 59) {
+          setTempMinute(String(minM + 1).padStart(2, "0"));
+        }
+      }
+    }
+  };
+
+  const handleSelectMinute = (m: string) => {
+    if (isMinuteDisabled(m)) return;
+    setTempMinute(m);
+  };
 
   const handleApply = () => {
+    if (isSelectedTimeDisabled()) return;
     onChange(`${tempHour}:${tempMinute}`);
     setIsOpen(false);
   };
@@ -141,21 +201,27 @@ export function CustomTimePicker({
                 <div 
                   className="h-[180px] overflow-y-auto px-1 flex flex-col gap-1 rounded-xl bg-gray-50/70 p-1.5 border border-gray-100 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full"
                 >
-                  {hours.map(h => (
-                    <button
-                      key={`h-${h}`}
-                      type="button"
-                      ref={el => { hourButtonRefs.current[h] = el; }}
-                      onClick={() => setTempHour(h)}
-                      className={`py-2 text-[14px] rounded-lg transition-all ${
-                        tempHour === h 
-                          ? 'bg-[#356E3B] text-white font-bold shadow-sm active:scale-95' 
-                          : 'hover:bg-gray-100 text-gray-600 font-medium active:scale-95'
-                      }`}
-                    >
-                      {h}
-                    </button>
-                  ))}
+                  {hours.map(h => {
+                    const disabled = isHourDisabled(h);
+                    return (
+                      <button
+                        key={`h-${h}`}
+                        type="button"
+                        disabled={disabled}
+                        ref={el => { hourButtonRefs.current[h] = el; }}
+                        onClick={() => handleSelectHour(h)}
+                        className={`py-2 text-[14px] rounded-lg transition-all ${
+                          disabled
+                            ? 'text-gray-300 opacity-40 cursor-not-allowed pointer-events-none'
+                            : tempHour === h 
+                              ? 'bg-[#356E3B] text-white font-bold shadow-sm active:scale-95' 
+                              : 'hover:bg-gray-100 text-gray-600 font-medium active:scale-95'
+                        }`}
+                      >
+                        {h}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -167,21 +233,27 @@ export function CustomTimePicker({
                 <div 
                   className="h-[180px] overflow-y-auto px-1 flex flex-col gap-1 rounded-xl bg-gray-50/70 p-1.5 border border-gray-100 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full"
                 >
-                  {minutes.map(m => (
-                    <button
-                      key={`m-${m}`}
-                      type="button"
-                      ref={el => { minuteButtonRefs.current[m] = el; }}
-                      onClick={() => setTempMinute(m)}
-                      className={`py-2 text-[14px] rounded-lg transition-all ${
-                        tempMinute === m 
-                          ? 'bg-[#356E3B] text-white font-bold shadow-sm active:scale-95' 
-                          : 'hover:bg-gray-100 text-gray-600 font-medium active:scale-95'
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  ))}
+                  {minutes.map(m => {
+                    const disabled = isMinuteDisabled(m);
+                    return (
+                      <button
+                        key={`m-${m}`}
+                        type="button"
+                        disabled={disabled}
+                        ref={el => { minuteButtonRefs.current[m] = el; }}
+                        onClick={() => handleSelectMinute(m)}
+                        className={`py-2 text-[14px] rounded-lg transition-all ${
+                          disabled
+                            ? 'text-gray-300 opacity-40 cursor-not-allowed pointer-events-none'
+                            : tempMinute === m 
+                              ? 'bg-[#356E3B] text-white font-bold shadow-sm active:scale-95' 
+                              : 'hover:bg-gray-100 text-gray-600 font-medium active:scale-95'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -198,7 +270,12 @@ export function CustomTimePicker({
               <button
                 type="button"
                 onClick={handleApply}
-                className="flex-1 py-2.5 bg-[#356E3B] hover:bg-[#2b5930] text-white rounded-full text-[13px] font-bold shadow-sm transition-all active:scale-95"
+                disabled={isSelectedTimeDisabled()}
+                className={`flex-1 py-2.5 rounded-full text-[13px] font-bold shadow-sm transition-all active:scale-95 ${
+                  isSelectedTimeDisabled()
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed shadow-none"
+                    : "bg-[#356E3B] hover:bg-[#2b5930] text-white"
+                }`}
               >
                 Terapkan
               </button>

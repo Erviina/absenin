@@ -8,13 +8,15 @@ interface CustomDatePickerProps {
   onChange: (date: string) => void;
   placeholder?: string;
   className?: string;
+  minDate?: string;
 }
 
 export function CustomDatePicker({ 
   value, 
   onChange, 
   placeholder = "Pilih Tanggal",
-  className = ""
+  className = "",
+  minDate
 }: CustomDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -67,6 +69,7 @@ export function CustomDatePicker({
           <div className="relative w-full max-w-[340px] z-10 animate-in zoom-in-95 duration-200">
             <CustomCalendar 
               selectedDate={value} 
+              minDate={minDate}
               onSelect={(date) => {
                 onChange(date);
                 setIsOpen(false);

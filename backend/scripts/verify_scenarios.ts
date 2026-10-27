@@ -37,12 +37,12 @@ async function main() {
     // Skenario 2 & 3 & 4: Aturan keterlambatan
     // Check-in hari kerja (Rabu / Wednesday, misal 2026-10-14)
     // -------------------------------------------------------------
-    console.log("--- Skenario 2, 3, 4: Aturan Keterlambatan (Hari Kerja - Rabu) ---");
+    console.log("--- Skenario 2, 3, 4: Aturan Keterlambatan dengan Toleransi 15 Menit (Hari Kerja - Rabu) ---");
     
     // Case 2: 07:55
     const res755 = await client.query(`
       SELECT 
-        (CASE WHEN ('2026-10-14 07:55:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > COALESCE($1::time, '08:00:00'::time)
+        (CASE WHEN ('2026-10-14 07:55:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE($1::time, '08:00:00'::time) + interval '15 minutes')
           AND (
             CASE EXTRACT(ISODOW FROM '2026-10-14 07:55:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
@@ -57,7 +57,7 @@ async function main() {
     // Case 3: 08:00
     const res800 = await client.query(`
       SELECT 
-        (CASE WHEN ('2026-10-14 08:00:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > COALESCE($1::time, '08:00:00'::time)
+        (CASE WHEN ('2026-10-14 08:00:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE($1::time, '08:00:00'::time) + interval '15 minutes')
           AND (
             CASE EXTRACT(ISODOW FROM '2026-10-14 08:00:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
@@ -69,25 +69,40 @@ async function main() {
     console.log("Skenario 3 (Check-in 08.00 WIB): is_terlambat =", res800.rows[0].is_terlambat, 
       res800.rows[0].is_terlambat === false ? "-> SESUAI (Tidak Terlambat)" : "-> TIDAK SESUAI");
 
-    // Case 4: 08:01 hari kerja
-    const res801 = await client.query(`
+    // Case 3b: 08:15 (Tepat di batas toleransi 15 menit)
+    const res815 = await client.query(`
       SELECT 
-        (CASE WHEN ('2026-10-14 08:01:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > COALESCE($1::time, '08:00:00'::time)
+        (CASE WHEN ('2026-10-14 08:15:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE($1::time, '08:00:00'::time) + interval '15 minutes')
           AND (
-            CASE EXTRACT(ISODOW FROM '2026-10-14 08:01:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
+            CASE EXTRACT(ISODOW FROM '2026-10-14 08:15:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
               WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
             END
           ) = ANY(COALESCE(NULLIF($2::text[], '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
         THEN true ELSE false END) as is_terlambat
     `, [newCompany.work_start_time, newCompany.work_days]);
-    console.log("Skenario 4 (Check-in 08.01 WIB - Hari Kerja): is_terlambat =", res801.rows[0].is_terlambat, 
-      res801.rows[0].is_terlambat === true ? "-> SESUAI (Terlambat)" : "-> TIDAK SESUAI");
+    console.log("Skenario 3b (Check-in 08.15 WIB - Batas Toleransi): is_terlambat =", res815.rows[0].is_terlambat, 
+      res815.rows[0].is_terlambat === false ? "-> SESUAI (Tidak Terlambat)" : "-> TIDAK SESUAI");
+
+    // Case 4: 08:16 hari kerja (Setelah toleransi 15 menit)
+    const res816 = await client.query(`
+      SELECT 
+        (CASE WHEN ('2026-10-14 08:16:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE($1::time, '08:00:00'::time) + interval '15 minutes')
+          AND (
+            CASE EXTRACT(ISODOW FROM '2026-10-14 08:16:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
+              WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
+              WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
+            END
+          ) = ANY(COALESCE(NULLIF($2::text[], '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
+        THEN true ELSE false END) as is_terlambat
+    `, [newCompany.work_start_time, newCompany.work_days]);
+    console.log("Skenario 4 (Check-in 08.16 WIB - Melewati Toleransi): is_terlambat =", res816.rows[0].is_terlambat, 
+      res816.rows[0].is_terlambat === true ? "-> SESUAI (Terlambat)" : "-> TIDAK SESUAI");
 
     // Case 4b: Check-in hari libur (Minggu, misal 2026-10-18) pukul 08.30
     const resSunday = await client.query(`
       SELECT 
-        (CASE WHEN ('2026-10-18 08:30:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > COALESCE($1::time, '08:00:00'::time)
+        (CASE WHEN ('2026-10-18 08:30:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE($1::time, '08:00:00'::time) + interval '15 minutes')
           AND (
             CASE EXTRACT(ISODOW FROM '2026-10-18 08:30:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
@@ -170,7 +185,7 @@ async function main() {
     // Check-in pukul 08:30 (sebelum 09:00) -> tidak terlambat
     const resCustom830 = await client.query(`
       SELECT 
-        (CASE WHEN ('2026-10-14 08:30:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > COALESCE($1::time, '08:00:00'::time)
+        (CASE WHEN ('2026-10-14 08:30:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE($1::time, '08:00:00'::time) + interval '15 minutes')
           AND (
             CASE EXTRACT(ISODOW FROM '2026-10-14 08:30:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
@@ -180,12 +195,12 @@ async function main() {
         THEN true ELSE false END) as is_terlambat
     `, [customCompany.work_start_time, customCompany.work_days]);
 
-    // Check-in pukul 09:05 (setelah 09:00 pada hari Rabu) -> terlambat
-    const resCustom905 = await client.query(`
+    // Check-in pukul 09:20 (setelah batas toleransi 09:15 pada hari Rabu) -> terlambat
+    const resCustom920 = await client.query(`
       SELECT 
-        (CASE WHEN ('2026-10-14 09:05:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > COALESCE($1::time, '08:00:00'::time)
+        (CASE WHEN ('2026-10-14 09:20:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE($1::time, '08:00:00'::time) + interval '15 minutes')
           AND (
-            CASE EXTRACT(ISODOW FROM '2026-10-14 09:05:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
+            CASE EXTRACT(ISODOW FROM '2026-10-14 09:20:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
               WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
             END
@@ -195,8 +210,8 @@ async function main() {
 
     console.log("Check-in 08:30 pada PT Manual (start 09:00): is_terlambat =", resCustom830.rows[0].is_terlambat,
       resCustom830.rows[0].is_terlambat === false ? "-> SESUAI (Tidak Terlambat)" : "-> TIDAK SESUAI");
-    console.log("Check-in 09:05 pada PT Manual (start 09:00): is_terlambat =", resCustom905.rows[0].is_terlambat,
-      resCustom905.rows[0].is_terlambat === true ? "-> SESUAI (Terlambat)" : "-> TIDAK SESUAI");
+    console.log("Check-in 09:20 pada PT Manual (start 09:00, toleransi s.d 09:15): is_terlambat =", resCustom920.rows[0].is_terlambat,
+      resCustom920.rows[0].is_terlambat === true ? "-> SESUAI (Terlambat)" : "-> TIDAK SESUAI");
     console.log("");
 
     // -------------------------------------------------------------
@@ -206,9 +221,9 @@ async function main() {
     console.log("--- Skenario 9: Perusahaan lama dengan konfigurasi jam NULL ---");
     const resNullComp = await client.query(`
       SELECT 
-        (CASE WHEN ('2026-10-14 08:01:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > COALESCE(NULL::time, '08:00:00'::time)
+        (CASE WHEN ('2026-10-14 08:16:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')::time > (COALESCE(NULL::time, '08:00:00'::time) + interval '15 minutes')
           AND (
-            CASE EXTRACT(ISODOW FROM '2026-10-14 08:01:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
+            CASE EXTRACT(ISODOW FROM '2026-10-14 08:16:00+07'::timestamptz AT TIME ZONE 'Asia/Jakarta')
               WHEN 1 THEN 'Senin' WHEN 2 THEN 'Selasa' WHEN 3 THEN 'Rabu' WHEN 4 THEN 'Kamis'
               WHEN 5 THEN 'Jumat' WHEN 6 THEN 'Sabtu' WHEN 7 THEN 'Minggu'
             END
@@ -224,8 +239,8 @@ async function main() {
           ) = ANY(COALESCE(NULLIF(NULL::text[], '{}'), ARRAY['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']::text[]))
         THEN true ELSE false END) as is_pulang_cepat
     `);
-    console.log("Perusahaan NULL di DB pada check-in 08.01: is_terlambat =", resNullComp.rows[0].is_terlambat,
-      resNullComp.rows[0].is_terlambat === true ? "-> SESUAI (Otomatis menggunakan default 08:00)" : "-> TIDAK SESUAI");
+    console.log("Perusahaan NULL di DB pada check-in 08.16: is_terlambat =", resNullComp.rows[0].is_terlambat,
+      resNullComp.rows[0].is_terlambat === true ? "-> SESUAI (Otomatis menggunakan default 08:00 + toleransi 15m)" : "-> TIDAK SESUAI");
     console.log("Perusahaan NULL di DB pada check-out 16.59: is_pulang_cepat =", resNullComp.rows[0].is_pulang_cepat,
       resNullComp.rows[0].is_pulang_cepat === true ? "-> SESUAI (Otomatis menggunakan default 17:00)" : "-> TIDAK SESUAI");
     console.log("");

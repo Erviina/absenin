@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ScanLine, QrCode, X, Zap, Hourglass, Building2, Check, AlertCircle, RefreshCw } from "lucide-react";
+import { ChevronLeft, ScanLine, QrCode, X, Zap, Hourglass, Building2, Check, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useRef, useCallback } from "react";
 import { TopBar } from "@/components/TopBar";
@@ -17,10 +17,7 @@ function LoadingOverlay({ text }: { text: string }) {
       role="status"
     >
       <div className="flex flex-col items-center justify-center p-6 text-center max-w-xs">
-        <div className="relative w-12 h-12 mb-4">
-          <div className="w-12 h-12 rounded-full border-[3px] border-[#356E3B]/20"></div>
-          <div className="absolute top-0 left-0 w-12 h-12 rounded-full border-[3px] border-[#356E3B] border-t-transparent animate-spin"></div>
-        </div>
+        <Loader2 className="w-10 h-10 animate-spin text-[#1E4738] mb-4" />
         <p className="text-[15px] font-semibold text-[#1E293B]">
           {text}
         </p>
@@ -36,7 +33,7 @@ function GabungPerusahaanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useDialog();
-  const { refreshMemberships, setCurrentUser, activeCompanyId, currentUser, memberships, isCompanyLoading, companyError } = useCompany();
+  const { refreshMemberships, setCurrentUser, activeCompanyId, currentUser, memberships, isCompanyLoading, companyError, switchCompany } = useCompany();
   const [kode, setKode] = useState("");
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [targetCompanyId, setTargetCompanyId] = useState<string | null>(null);
@@ -82,17 +79,27 @@ function GabungPerusahaanContent() {
 
     let finalCompanyId = targetCompanyId || null;
 
+    if (finalCompanyId) {
+      setActiveCompanyId(finalCompanyId);
+      switchCompany(finalCompanyId);
+    }
+
     if (token) {
       try {
-        const meRes = await fetch(getApiUrl("/auth/me"), {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        if (finalCompanyId) {
+          headers["x-company-id"] = finalCompanyId;
+        }
+        const meRes = await fetch(getApiUrl("/auth/me"), { headers });
         const meData = await meRes.json();
         if (meData.success && meData.data?.user) {
           localStorage.setItem("user", JSON.stringify(meData.data.user));
           setCurrentUser(meData.data.user);
-          if (!finalCompanyId && meData.data.user.company?.id) {
-            finalCompanyId = meData.data.user.company.id;
+          const userCompId = meData.data.user.company?.id;
+          if (!finalCompanyId && userCompId) {
+            finalCompanyId = userCompId;
+            setActiveCompanyId(userCompId);
+            switchCompany(userCompId);
           }
         }
       } catch (e) {
@@ -100,19 +107,18 @@ function GabungPerusahaanContent() {
       }
     }
 
-    if (finalCompanyId) {
-      setActiveCompanyId(finalCompanyId);
-    }
-
     try {
-      await refreshMemberships();
+      await refreshMemberships(true, finalCompanyId);
+      if (finalCompanyId) {
+        switchCompany(finalCompanyId);
+      }
     } catch (e) {
       console.error("Gagal refresh memberships context:", e);
     }
 
     router.replace("/dashboard");
     // Pertahankan isLoading = true agar loading overlay tetap menutupi layar sampai Next.js selesai berganti ke dashboard
-  }, [activeRequestId, targetCompanyId, setCurrentUser, refreshMemberships, router]);
+  }, [activeRequestId, targetCompanyId, setCurrentUser, refreshMemberships, switchCompany, router]);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
@@ -172,6 +178,7 @@ function GabungPerusahaanContent() {
 
               if (data.data.company_id) {
                 setActiveCompanyId(data.data.company_id);
+                switchCompany(data.data.company_id);
               }
 
               if (isFromProfile) {
@@ -185,6 +192,10 @@ function GabungPerusahaanContent() {
               return;
             } else {
               // Proses bergabung yang baru berhasil (pertama kali dibuka setelah di-ACC)
+              if (data.data.company_id) {
+                setActiveCompanyId(data.data.company_id);
+                switchCompany(data.data.company_id);
+              }
               try {
                 sessionStorage.setItem(`ack_seen_${data.data.id}`, "true");
                 if (typeof window !== "undefined" && window.history.replaceState) {
@@ -236,6 +247,10 @@ function GabungPerusahaanContent() {
           setActiveRequestId(data.data.id);
           setCompanyName(data.data.company_name || "Perusahaan");
           setTargetCompanyId(data.data.company_id);
+          if (data.data.company_id) {
+            setActiveCompanyId(data.data.company_id);
+            switchCompany(data.data.company_id);
+          }
           try {
             sessionStorage.setItem(`ack_seen_${data.data.id}`, "true");
           } catch {}
@@ -299,6 +314,10 @@ function GabungPerusahaanContent() {
 
           // Jika request langsung disetujui (misal auto-join)
           if (requestData.status === 'approved') {
+            if (requestData.company_id) {
+              setActiveCompanyId(requestData.company_id);
+              switchCompany(requestData.company_id);
+            }
             try {
               sessionStorage.setItem(`ack_seen_${requestData.id}`, "true");
             } catch {}
@@ -434,8 +453,8 @@ function GabungPerusahaanContent() {
 
   if (isCompanyLoading || status === 'checking') {
     return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1E4738]"></div>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]" role="status" aria-live="polite">
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
       </div>
     );
   }
@@ -700,10 +719,7 @@ function GabungPerusahaanContent() {
             }`}
           >
             {isLoading ? (
-              <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+              <Loader2 className="w-5 h-5 animate-spin -ml-1 mr-2 text-white" />
             ) : null}
             {isLoading ? "Memproses..." : "Gabung Sekarang"}
           </button>
@@ -721,7 +737,11 @@ function GabungPerusahaanContent() {
 
 export default function GabungPerusahaanPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+    <Suspense fallback={
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[#f7fbf8]" role="status" aria-live="polite">
+        <Loader2 className="w-8 h-8 animate-spin text-[#1E4738]" />
+      </div>
+    }>
       <GabungPerusahaanContent />
     </Suspense>
   );

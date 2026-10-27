@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useGoogleLogin } from "@react-oauth/google";
@@ -24,10 +24,18 @@ function LoginForm() {
   const [isVerifyingSession, setIsVerifyingSession] = useState(false);
   const [sessionVerifyError, setSessionVerifyError] = useState<string | null>(null);
 
+  const isMountedRef = useRef(true);
+  const isSubmittingGoogleRef = useRef(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Verifikasi ke backend jika terdapat token lokal sebelum melakukan redirect
   useEffect(() => {
-    let isMounted = true;
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
 
     // Jika tidak ada token lokal: biarkan pengguna di halaman login untuk memilih akun Google
@@ -41,19 +49,25 @@ function LoginForm() {
       return;
     }
 
-    // Token tampak valid di sisi klien -> verifikasi keabsahannya ke backend (/auth/me)
+    // Token tampak valid di sisi klien -> verifikasi keabsahannya ke backend (/auth/me) dengan timeout 8 detik
     const verifySession = async () => {
       setIsVerifyingSession(true);
       setSessionVerifyError(null);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
       try {
         const res = await fetch(getApiUrl("/auth/me"), {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
           },
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
 
         if (res.status === 401) {
           // Backend menolak token (kedaluwarsa di server / revokasi): bersihkan sesi usang dan tetap di login
@@ -64,7 +78,7 @@ function LoginForm() {
 
         if (res.ok) {
           const json = await res.json();
-          if (!isMounted) return;
+          if (!isMountedRef.current) return;
 
           if (json?.success && json?.data) {
             const verifiedUser = json.data?.user || json.data;
@@ -96,35 +110,43 @@ function LoginForm() {
           }
         }
 
-        // Gangguan server (misal 500, 404, atau respons rusak):
-        // Jangan menganggap token valid dan jangan menghapus token secara prematur
+        // Gangguan server (misal 500, 404, atau respons rusak)
         setIsVerifyingSession(false);
         setSessionVerifyError(`Gagal memverifikasi sesi (HTTP ${res.status}). Silakan coba lagi.`);
-      } catch (err) {
-        // Gangguan jaringan
-        if (!isMounted) return;
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (!isMountedRef.current) return;
         setIsVerifyingSession(false);
-        setSessionVerifyError("Tidak dapat terhubung ke server untuk memverifikasi sesi. Silakan periksa koneksi Anda.");
+        if (err?.name === "AbortError") {
+          setSessionVerifyError("Verifikasi sesi melebihi batas waktu (timeout). Silakan masuk kembali dengan Google.");
+        } else {
+          setSessionVerifyError("Tidak dapat terhubung ke server untuk memverifikasi sesi. Silakan periksa koneksi Anda.");
+        }
       }
     };
 
     verifySession();
-
-    return () => {
-      isMounted = false;
-    };
   }, [redirectParam, router]);
 
   const handleGoogleSuccess = async (authPayload: { idToken?: string; accessToken?: string }) => {
-    if (isLoading || isVerifyingSession || (!authPayload.idToken && !authPayload.accessToken)) return;
+    // Cegah request ganda atau payload kosong tanpa memblokir request pertama
+    if (isSubmittingGoogleRef.current || (!authPayload.idToken && !authPayload.accessToken)) return;
 
+    isSubmittingGoogleRef.current = true;
     setIsLoading(true);
+    let isSuccessRedirecting = false;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     try {
       const res = await fetch(getApiUrl("/auth/google"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(authPayload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const contentType = res.headers.get("content-type");
       let data: any = null;
@@ -139,6 +161,7 @@ function LoginForm() {
       }
 
       if (data?.success) {
+        isSuccessRedirecting = true;
         const user = data.data.user;
         const token = data.data.accessToken;
 
@@ -153,8 +176,17 @@ function LoginForm() {
           return;
         }
 
-        // 3. Pengguna lama yang sudah pernah menyetujui: langsung ke alur aplikasi tanpa verifikasi ulang
-        await refreshMemberships();
+        // 3. Pengguna lama yang sudah pernah menyetujui:
+        // Jalankan sinkronisasi membership non-blocking dengan timeout 2.5s agar tidak menahan proses redirect
+        try {
+          await Promise.race([
+            refreshMemberships(true),
+            new Promise((resolve) => setTimeout(resolve, 2500)),
+          ]);
+        } catch (mErr) {
+          console.warn("Background membership refresh deferred:", mErr);
+        }
+
         showToast("Login berhasil! Selamat datang kembali.", "success");
 
         // Cek jika terdapat target redirect yang aman dari tautan yang dibagikan
@@ -180,15 +212,31 @@ function LoginForm() {
         } else {
           router.replace("/dashboard");
         }
+
+        // Safety fallback jika router navigation tertunda di background
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            setIsLoading(false);
+            isSubmittingGoogleRef.current = false;
+          }
+        }, 8000);
       } else {
         console.error("Login failed:", data?.message);
         showToast(data?.message || "Login failed", "error");
       }
-    } catch (err) {
+    } catch (err: any) {
+      clearTimeout(timeoutId);
       console.error("Login error:", err);
-      showToast("Terjadi kesalahan jaringan saat login", "error");
+      if (err?.name === "AbortError") {
+        showToast("Proses login melebihi batas waktu (timeout). Silakan periksa koneksi Anda dan coba lagi.", "error");
+      } else {
+        showToast("Terjadi kesalahan jaringan saat login. Silakan coba lagi.", "error");
+      }
     } finally {
-      setIsLoading(false);
+      if (!isSuccessRedirecting) {
+        setIsLoading(false);
+        isSubmittingGoogleRef.current = false;
+      }
     }
   };
 
@@ -196,18 +244,30 @@ function LoginForm() {
     onSuccess: (tokenResponse) => {
       handleGoogleSuccess({ accessToken: tokenResponse.access_token });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Google Login Error:", error);
+      isSubmittingGoogleRef.current = false;
       setIsLoading(false);
-      showToast("Gagal login dengan Google", "error");
+      if (error?.error !== "popup_closed_by_user") {
+        showToast("Gagal login dengan Google", "error");
+      }
+    },
+    onNonOAuthError: (error) => {
+      console.error("Google Non-OAuth Error:", error);
+      isSubmittingGoogleRef.current = false;
+      setIsLoading(false);
     },
     prompt: "select_account",
   });
 
   const handleInitiateGoogleLogin = () => {
+    if (isLoading || isVerifyingSession || isSubmittingGoogleRef.current) return;
+    setIsLoading(true);
+    setSessionVerifyError(null);
     loginWithGoogle();
   };
 
+  const isBusy = isLoading || isVerifyingSession;
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#edf3ef] relative overflow-hidden">
@@ -243,14 +303,6 @@ function LoginForm() {
             </p>
           </div>
 
-          {/* Status Verifikasi Sesi */}
-          {isVerifyingSession && (
-            <div className="flex items-center justify-center gap-2 text-sm text-[#5C786C] py-1">
-              <Loader2 className="w-4 h-4 animate-spin text-[#356E3B]" />
-              <span>Memverifikasi sesi Anda...</span>
-            </div>
-          )}
-
           {/* Pesan Gagal Verifikasi Sesi */}
           {sessionVerifyError && (
             <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-2xl p-3 flex flex-col gap-2">
@@ -281,23 +333,29 @@ function LoginForm() {
           )}
 
           <div className="flex flex-col items-center w-full mt-1">
-            <button
-              type="button"
-              onClick={handleInitiateGoogleLogin}
-              disabled={isLoading || isVerifyingSession}
-              className="relative w-full max-w-[300px] h-11 bg-white border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#c6c8cc] active:bg-[#f1f3f4] text-[#3c4043] font-medium text-[14px] rounded-full shadow-[0_1px_2px_rgba(60,64,67,0.08)] flex items-center justify-center transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-            >
-              <div className="absolute left-4 w-5 h-5 flex items-center justify-center">
-                {isLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-[#356E3B]" />
-                ) : (
-                  <GoogleIcon className="w-[18px] h-[18px]" />
-                )}
+            {isBusy ? (
+              <div 
+                className="w-full max-w-[300px] h-11 bg-[#f4f8f5] border border-[#d2e4d8] rounded-full flex items-center justify-center gap-2.5 text-[#2D5A3F] text-[13.5px] font-medium shadow-xs animate-in fade-in duration-200"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="w-4 h-4 animate-spin text-[#356E3B]" />
+                <span>{isVerifyingSession ? "Memverifikasi sesi Anda..." : "Sedang memproses login..."}</span>
               </div>
-              <span className="font-medium text-[14px] text-[#3c4043]">
-                {isLoading ? "Menghubungkan..." : "Sign in with Google"}
-              </span>
-            </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleInitiateGoogleLogin}
+                className="relative w-full max-w-[300px] h-11 bg-white border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#c6c8cc] active:bg-[#f1f3f4] text-[#3c4043] font-medium text-[14px] rounded-full shadow-[0_1px_2px_rgba(60,64,67,0.08)] flex items-center justify-center transition-all duration-150 cursor-pointer"
+              >
+                <div className="absolute left-4 w-5 h-5 flex items-center justify-center">
+                  <GoogleIcon className="w-[18px] h-[18px]" />
+                </div>
+                <span className="font-medium text-[14px] text-[#3c4043]">
+                  Sign in with Google
+                </span>
+              </button>
+            )}
 
             {/* Disclaimer Syarat dan Ketentuan serta Kebijakan Privasi di Bawah Tombol Login */}
             <p className="text-[12px] text-[#6B7280] text-center mt-3.5 leading-relaxed max-w-[300px]">

@@ -229,8 +229,8 @@ export default function ProfilPage() {
 
             {/* Loading Overlay for Avatar */}
             {isUploadingAvatar && (
-              <div className="absolute inset-0 bg-white/70 rounded-full flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-[#356E3B]/20 border-t-[#356E3B] rounded-full animate-spin" />
+              <div className="absolute inset-0 bg-white/70 rounded-full flex items-center justify-center" role="status" aria-live="polite">
+                <Loader2 className="w-6 h-6 text-[#1E4738] animate-spin" />
               </div>
             )}
           </div>
