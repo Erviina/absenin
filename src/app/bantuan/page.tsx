@@ -28,7 +28,8 @@ import {
   SlidersHorizontal,
   PlayCircle,
   Video,
-  RotateCcw
+  RotateCcw,
+  Loader2
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 import { 
