@@ -6,10 +6,25 @@ import { authenticate } from "../middleware/auth";
 import { resolveTenant } from "../utils/tenant";
 import { isPlatformOwnerEmail } from "../middleware/platformAuth";
 import jwt from "jsonwebtoken";
-import sanitizeHtml from "sanitize-html";
+import sanitizeHtmlModule from "sanitize-html";
 import { z } from "zod";
 
 const router = Router();
+
+/**
+ * Resolusi aman CJS / ESM interop untuk sanitize-html agar kompatibel di semua loader/bundler
+ */
+function getSanitizer(): any {
+  if (typeof sanitizeHtmlModule === "function") return sanitizeHtmlModule;
+  if (typeof (sanitizeHtmlModule as any)?.default === "function") return (sanitizeHtmlModule as any).default;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const req = require("sanitize-html");
+    if (typeof req === "function") return req;
+    if (typeof req?.default === "function") return req.default;
+  } catch {}
+  return (str: string) => str;
+}
 
 /**
  * Sanitasi HTML aman untuk jawaban FAQ pada sisi server.
@@ -23,7 +38,8 @@ export function sanitizeFaqAnswer(raw: string): string {
     return raw.trim();
   }
 
-  return sanitizeHtml(raw, {
+  const clean = getSanitizer();
+  return clean(raw, {
     allowedTags: [
       "p",
       "br",
