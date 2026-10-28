@@ -887,7 +887,7 @@ function BantuanContent() {
                 </button>
                 <div>
                   <h2 id="filter-panel-title" className="text-[17px] font-extrabold text-gray-900 tracking-tight">
-                    Global Filters
+                    Pilih Preferensi
                   </h2>
                   <p className="text-[11.5px] text-gray-500">
                     {totalActiveFiltersCount > 0 
@@ -907,7 +907,7 @@ function BantuanContent() {
                     : "text-gray-300 cursor-not-allowed"
                 }`}
               >
-                Reset All
+                Atur Ulang
               </button>
             </div>
 
@@ -1105,11 +1105,6 @@ function BantuanContent() {
                       </div>
                     )}
 
-                    {/* Counter "X of Y Selected" */}
-                    <div className="flex items-center justify-between text-[11px] text-gray-400 px-1 font-semibold uppercase tracking-wider">
-                      <span>DAFTAR TOPIK</span>
-                      <span>{selectedCategories.length} of {availableCategories.length} Dipilih</span>
-                    </div>
 
                     {/* List Checkbox Kategori */}
                     <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
@@ -1228,7 +1223,7 @@ function BantuanContent() {
                 onClick={() => setIsFilterDrawerOpen(false)}
                 className="w-full py-3.5 px-4 rounded-2xl bg-[#1E4738] hover:bg-[#2A582F] text-white font-extrabold text-[14px] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-[0.99]"
               >
-                <span>Tampilkan {filteredFAQs.length} Panduan</span>
+                <span>Terapkan</span>
               </button>
             </div>
 
