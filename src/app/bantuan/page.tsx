@@ -27,7 +27,9 @@ import {
   PlayCircle,
   Video,
   RotateCcw,
-  Loader2
+  Loader2,
+  Check,
+  Tag
 } from "lucide-react";
 import { useCompany } from "@/context/CompanyContext";
 import { 
@@ -143,13 +145,74 @@ function BantuanContent() {
   const [isLoadingFaqs, setIsLoadingFaqs] = useState(true);
   const [hasFetchError, setHasFetchError] = useState(false);
 
-  // State Pencarian & Filter
+  // State Pencarian & Faceted Filter
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [contentTypeFilter, setContentTypeFilter] = useState<"all" | ContentType>("all");
-  const [scopeFilter, setScopeFilter] = useState<"all" | ContentScope>("all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [mediaFilter, setMediaFilter] = useState<"all" | "video" | "doc">("all");
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState("");
+
+  const [selectedScopes, setSelectedScopes] = useState<ContentScope[]>([]);
+  const [selectedContentTypes, setSelectedContentTypes] = useState<ContentType[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedMedia, setSelectedMedia] = useState<("video" | "doc")[]>([]);
+
+  // State Accordion untuk bagian facet di panel filter
+  const [expandedFacets, setExpandedFacets] = useState<Record<string, boolean>>({
+    scope: true,
+    contentType: true,
+    category: true,
+    media: true,
+  });
+
+  const toggleFacetSection = (facetKey: string) => {
+    setExpandedFacets((prev) => ({
+      ...prev,
+      [facetKey]: !prev[facetKey],
+    }));
+  };
+
+  const toggleScope = (scope: ContentScope) => {
+    setSelectedScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]
+    );
+  };
+
+  const toggleContentType = (ct: ContentType) => {
+    setSelectedContentTypes((prev) =>
+      prev.includes(ct) ? prev.filter((t) => t !== ct) : [...prev, ct]
+    );
+  };
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+  };
+
+  const toggleMedia = (m: "video" | "doc") => {
+    setSelectedMedia((prev) =>
+      prev.includes(m) ? prev.filter((item) => item !== m) : [...prev, m]
+    );
+  };
+
+  // Tutup panel filter saat tombol Escape ditekan & kunci scroll latar belakang
+  useEffect(() => {
+    if (isFilterDrawerOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFilterDrawerOpen) {
+        setIsFilterDrawerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFilterDrawerOpen]);
 
   // Fungsi Fetch Data dari Backend
   const loadFaqsData = useCallback(async () => {
@@ -245,54 +308,87 @@ function BantuanContent() {
     });
   }, [allFAQs, isLoginContext, userMappedRole, isPlatformOwner]);
 
-  // Daftar Kategori Unik Dinamis: HANYA menampilkan kategori yang memiliki konten relevan
-  const relevantCategories = useMemo(() => {
-    const presentCategories = new Set<string>();
-    roleAccessibleFAQs.forEach((f) => {
-      if (scopeFilter !== "all") {
-        const itemScope = f.content_scope || (f.scope === "platform_admin" ? "platform" : f.scope === "company" ? "company" : "user");
-        if (itemScope !== scopeFilter) return;
-      }
-      if (f.category?.trim()) presentCategories.add(f.category.trim());
+  // Perhitungan Facet Counts secara Dinamis dari Data Aktual yang Cocok
+  const facetCounts = useMemo(() => {
+    // Saring dasar berdasarkan teks pencarian (tanpa memutus pilihan facet saat mengetik)
+    const baseItems = roleAccessibleFAQs.filter((item) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      const matchQuestion = item.question.toLowerCase().includes(q);
+      const matchAnswer = item.answer.toLowerCase().includes(q);
+      const matchCategory = item.category.toLowerCase().includes(q);
+      const matchSopTitle = item.sop_title ? item.sop_title.toLowerCase().includes(q) : false;
+      const matchVideoTitle = item.video_title ? item.video_title.toLowerCase().includes(q) : false;
+      const matchCompanyName = item.company_name ? item.company_name.toLowerCase().includes(q) : false;
+      const matchTags = item.tags.some((tag) => tag.toLowerCase().includes(q));
+      return matchQuestion || matchAnswer || matchCategory || matchSopTitle || matchVideoTitle || matchCompanyName || matchTags;
     });
 
-    // Gabungkan dengan backendCategories yang memang ada di presentCategories
-    const validCategories = backendCategories.filter((cat) => presentCategories.has(cat));
-    // Tambahkan kategori dari presentCategories yang mungkin belum ada di backendCategories
-    presentCategories.forEach((cat) => {
-      if (!validCategories.includes(cat)) validCategories.push(cat);
+    const scopes: Record<string, number> = { company: 0, user: 0, platform: 0 };
+    const contentTypes: Record<string, number> = { sop_guide: 0, faq: 0, troubleshooting: 0, tips_best_practice: 0 };
+    const categories: Record<string, number> = {};
+    let videoCount = 0;
+    let docCount = 0;
+
+    baseItems.forEach((item) => {
+      const scope = item.content_scope || (item.scope === "platform_admin" ? "platform" : item.scope === "company" ? "company" : "user");
+      if (scopes[scope] !== undefined) scopes[scope]++;
+
+      const cType = item.content_type || "faq";
+      if (contentTypes[cType] !== undefined) contentTypes[cType]++;
+
+      const cat = item.category?.trim() || "Umum";
+      categories[cat] = (categories[cat] || 0) + 1;
+
+      const hasVideo = !!item.video_url || isMediaVideo(item.sop_url, item.sop_title);
+      const hasDoc = !!item.sop_url && item.sop_url !== (item.video_url || (isMediaVideo(item.sop_url, item.sop_title) ? item.sop_url : null));
+      if (hasVideo) videoCount++;
+      if (hasDoc) docCount++;
     });
 
-    return validCategories.sort((a, b) => a.localeCompare(b, "id"));
-  }, [roleAccessibleFAQs, backendCategories, scopeFilter]);
+    return { scopes, contentTypes, categories, videoCount, docCount, totalMatching: baseItems.length };
+  }, [roleAccessibleFAQs, searchQuery]);
 
-  // Filter FAQ Berdasarkan Search, Jenis Konten, Scope, Topik, dan Materi
+  // Daftar Kategori Aktual yang Tersedia di Data
+  const availableCategories = useMemo(() => {
+    return Object.keys(facetCounts.categories).sort((a, b) => a.localeCompare(b, "id"));
+  }, [facetCounts.categories]);
+
+  // Filter Kategori di Dalam Facet Panel
+  const filteredCategoryList = useMemo(() => {
+    if (!categorySearchQuery.trim()) return availableCategories;
+    const q = categorySearchQuery.toLowerCase();
+    return availableCategories.filter((c) => c.toLowerCase().includes(q));
+  }, [availableCategories, categorySearchQuery]);
+
+  // Filter FAQ Berdasarkan Kombinasi Pencarian dan Multi-Facet Filter
   const filteredFAQs = useMemo(() => {
     return roleAccessibleFAQs.filter((item) => {
       // 1. Filter Scope (Pasca-login)
-      if (!isLoginContext && scopeFilter !== "all") {
+      if (!isLoginContext && selectedScopes.length > 0) {
         const itemScope = item.content_scope || (item.scope === "platform_admin" ? "platform" : item.scope === "company" ? "company" : "user");
-        if (itemScope !== scopeFilter) return false;
+        if (!selectedScopes.includes(itemScope)) return false;
       }
 
       // 2. Filter Jenis Konten (Pasca-login)
-      if (!isLoginContext && contentTypeFilter !== "all") {
+      if (!isLoginContext && selectedContentTypes.length > 0) {
         const itemType = item.content_type || "faq";
-        if (itemType !== contentTypeFilter) return false;
+        if (!selectedContentTypes.includes(itemType)) return false;
       }
 
       // 3. Filter Kategori/Topik (Dinamis)
-      if (!isLoginContext && categoryFilter !== "all") {
-        if (item.category?.toLowerCase() !== categoryFilter.toLowerCase()) return false;
+      if (!isLoginContext && selectedCategories.length > 0) {
+        if (!selectedCategories.includes(item.category)) return false;
       }
 
       // 4. Filter Materi Pendukung (Video / Dokumen SOP)
-      if (!isLoginContext && mediaFilter !== "all") {
+      if (!isLoginContext && selectedMedia.length > 0) {
         const effectiveVideoUrl = item.video_url || (isMediaVideo(item.sop_url, item.sop_title) ? item.sop_url : null);
         const hasVideo = !!effectiveVideoUrl;
         const hasDoc = !!item.sop_url && item.sop_url !== effectiveVideoUrl;
-        if (mediaFilter === "video" && !hasVideo) return false;
-        if (mediaFilter === "doc" && !hasDoc) return false;
+        const matchVideo = selectedMedia.includes("video") && hasVideo;
+        const matchDoc = selectedMedia.includes("doc") && hasDoc;
+        if (!matchVideo && !matchDoc) return false;
       }
 
       // 5. Filter Query Pencarian (Judul, Jawaban, Kategori, SOP, Video, Perusahaan, Tags)
@@ -312,10 +408,10 @@ function BantuanContent() {
   }, [
     roleAccessibleFAQs, 
     isLoginContext, 
-    scopeFilter, 
-    contentTypeFilter, 
-    categoryFilter, 
-    mediaFilter,
+    selectedScopes, 
+    selectedContentTypes, 
+    selectedCategories, 
+    selectedMedia,
     searchQuery
   ]);
 
@@ -323,21 +419,31 @@ function BantuanContent() {
     setExpandedId((prev) => (prev === id ? null : id));
   };
 
+  const totalActiveFiltersCount = useMemo(() => {
+    return (
+      selectedScopes.length +
+      selectedContentTypes.length +
+      selectedCategories.length +
+      selectedMedia.length
+    );
+  }, [selectedScopes, selectedContentTypes, selectedCategories, selectedMedia]);
+
+  const hasActiveFilters = Boolean(searchQuery || totalActiveFiltersCount > 0);
+
   const handleResetFilters = () => {
     setSearchQuery("");
-    setScopeFilter("all");
-    setContentTypeFilter("all");
-    setCategoryFilter("all");
-    setMediaFilter("all");
+    setSelectedScopes([]);
+    setSelectedContentTypes([]);
+    setSelectedCategories([]);
+    setSelectedMedia([]);
   };
 
-  const hasActiveFilters = Boolean(
-    searchQuery || 
-    scopeFilter !== "all" || 
-    contentTypeFilter !== "all" || 
-    categoryFilter !== "all" ||
-    mediaFilter !== "all"
-  );
+  const handleResetFacets = () => {
+    setSelectedScopes([]);
+    setSelectedContentTypes([]);
+    setSelectedCategories([]);
+    setSelectedMedia([]);
+  };
 
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-20">
@@ -367,257 +473,121 @@ function BantuanContent() {
           <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full pointer-events-none blur-sm" />
         </div>
 
-        {/* Search Bar */}
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-            <Search className="w-4 h-4 text-[#7d998c]" />
-          </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={
-              isLoginContext
-                ? "Cari panduan login, akun, atau sesi..."
-                : "Cari pertanyaan, prosedur SOP, atau solusi..."
-            }
-            className="w-full bg-white rounded-2xl pl-10 pr-10 py-3.5 text-[13px] border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#356E3B]/30 focus:border-[#356E3B] transition-all text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.02)] placeholder:text-[#9CA3AF]"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600"
-              title="Hapus pencarian"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Filter Section: Efektif, Efisien, dan Kompak (Hanya Pasca-Login) */}
-        {!isLoginContext && (
-          <div className="flex flex-col gap-2.5">
-            {/* Segmented Control Scope: Semua | Perusahaan | Pengguna | (Platform) */}
-            <div className="w-full bg-[#EEF4F0] p-1 rounded-2xl border border-[#D5E2D8]/80 flex items-center gap-1 shadow-2xs">
-              <button
-                type="button"
-                onClick={() => setScopeFilter("all")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
-                  scopeFilter === "all"
-                    ? "bg-[#1E4738] text-white shadow-xs"
-                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/60"
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5 shrink-0" />
-                <span>Semua</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setScopeFilter("company")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
-                  scopeFilter === "company"
-                    ? "bg-[#1E4738] text-white shadow-xs"
-                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/60"
-                }`}
-              >
-                <Building2 className="w-3.5 h-3.5 shrink-0" />
-                <span>Perusahaan</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setScopeFilter("user")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
-                  scopeFilter === "user"
-                    ? "bg-[#1E4738] text-white shadow-xs"
-                    : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/60"
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5 shrink-0" />
-                <span>Pengguna</span>
-              </button>
-
-              {isPlatformOwner && (
-                <button
-                  type="button"
-                  onClick={() => setScopeFilter("platform")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-[12px] font-bold transition-all cursor-pointer ${
-                    scopeFilter === "platform"
-                      ? "bg-[#1E4738] text-white shadow-xs"
-                      : "text-[#5C786C] hover:text-[#1E4738] hover:bg-white/60"
-                  }`}
-                >
-                  <Shield className="w-3.5 h-3.5 shrink-0" />
-                  <span>Platform</span>
-                </button>
-              )}
+        {/* Search Bar & Tombol Filter di Sampingnya */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-[#7d998c]" />
             </div>
-
-            {/* Dual Compact Dropdowns: Jenis Konten & Topik Kategori */}
-            <div className="grid grid-cols-2 gap-2">
-              {/* Dropdown 1: Jenis Konten */}
-              <div className="relative">
-                <div className={`flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all ${
-                  contentTypeFilter !== "all"
-                    ? "bg-[#1E4738] text-white border-[#1E4738] shadow-xs"
-                    : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 shadow-2xs"
-                }`}>
-                  <div className="flex items-center gap-1.5 truncate">
-                    <FileText className={`w-3.5 h-3.5 shrink-0 ${contentTypeFilter !== "all" ? "text-white" : "text-[#5C786C]"}`} />
-                    <span className="truncate">
-                      {contentTypeFilter === "all" ? "Semua Jenis" : getContentTypeLabel(contentTypeFilter)}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 ${contentTypeFilter !== "all" ? "text-white/80" : "text-gray-400"}`} />
-                </div>
-                <select
-                  value={contentTypeFilter}
-                  onChange={(e) => setContentTypeFilter(e.target.value as any)}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base"
-                  aria-label="Filter Jenis Konten"
-                >
-                  <option value="all">Semua Jenis Konten</option>
-                  <option value="sop_guide">📋 SOP & Panduan</option>
-                  <option value="faq">❓ FAQ (Tanya Jawab)</option>
-                  <option value="troubleshooting">⚠️ Kendala Teknis</option>
-                  <option value="tips_best_practice">💡 Tips & Praktik</option>
-                </select>
-              </div>
-
-              {/* Dropdown 2: Topik / Kategori Dinamis */}
-              <div className="relative">
-                <div className={`flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all ${
-                  categoryFilter !== "all"
-                    ? "bg-[#1E4738] text-white border-[#1E4738] shadow-xs"
-                    : "bg-white text-gray-700 border-gray-200 hover:border-gray-300 shadow-2xs"
-                }`}>
-                  <div className="flex items-center gap-1.5 truncate">
-                    <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${categoryFilter !== "all" ? "text-white" : "text-[#5C786C]"}`} />
-                    <span className="truncate">
-                      {categoryFilter === "all" ? "Semua Topik" : categoryFilter}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-3.5 h-3.5 shrink-0 ${categoryFilter !== "all" ? "text-white/80" : "text-gray-400"}`} />
-                </div>
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base"
-                  aria-label="Filter Topik / Kategori"
-                >
-                  <option value="all">Semua Topik / Kategori</option>
-                  {relevantCategories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Quick Filter Materi: Video / Dokumen SOP */}
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-0.5">
-              <span className="text-[11px] font-semibold text-gray-400 shrink-0">Materi:</span>
-              <button
-                type="button"
-                onClick={() => setMediaFilter("all")}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
-                  mediaFilter === "all"
-                    ? "bg-gray-800 text-white"
-                    : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-                }`}
-              >
-                Semua
-              </button>
-              <button
-                type="button"
-                onClick={() => setMediaFilter(mediaFilter === "video" ? "all" : "video")}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
-                  mediaFilter === "video"
-                    ? "bg-rose-600 text-white shadow-2xs"
-                    : "bg-white text-rose-700 border border-rose-200 hover:bg-rose-50"
-                }`}
-              >
-                <PlayCircle className="w-3 h-3" />
-                <span>Ada Video</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMediaFilter(mediaFilter === "doc" ? "all" : "doc")}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 cursor-pointer ${
-                  mediaFilter === "doc"
-                    ? "bg-[#1E4738] text-white shadow-2xs"
-                    : "bg-white text-[#1E4738] border border-[#1E4738]/30 hover:bg-[#EEF4F0]"
-                }`}
-              >
-                <FileCheck className="w-3 h-3" />
-                <span>Ada Dokumen SOP</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Counter Info & Reset Filter */}
-        <div className="flex items-center justify-between text-[12px] text-[#5C786C] px-1 font-medium mt-1">
-          <span>Menampilkan <strong className="text-gray-900 font-bold">{filteredFAQs.length}</strong> panduan</span>
-          {hasActiveFilters && (
-            <button 
-              type="button"
-              onClick={handleResetFilters}
-              className="inline-flex items-center gap-1 text-[#356E3B] font-bold hover:underline cursor-pointer"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>Reset filter</span>
-            </button>
-          )}
-        </div>
-
-        {/* Active Filter Chips (bisa ditutup secara individual) */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-1.5 px-0.5">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                isLoginContext
+                  ? "Cari panduan login, akun, atau sesi..."
+                  : "Cari pertanyaan, prosedur SOP, atau solusi..."
+              }
+              className="w-full bg-white rounded-2xl pl-10 pr-10 py-3 text-[13px] border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#356E3B]/30 focus:border-[#356E3B] transition-all text-[#111827] shadow-[0_2px_8px_rgba(0,0,0,0.02)] placeholder:text-[#9CA3AF]"
+            />
             {searchQuery && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-gray-100 text-gray-700 border border-gray-200">
-                <span>Cari: &ldquo;{searchQuery}&rdquo;</span>
-                <button type="button" onClick={() => setSearchQuery("")} className="hover:text-black cursor-pointer">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {scopeFilter !== "all" && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200">
-                <span>Scope: {scopeFilter === "company" ? "Perusahaan" : scopeFilter === "user" ? "Pengguna" : "Platform"}</span>
-                <button type="button" onClick={() => setScopeFilter("all")} className="hover:text-emerald-950 cursor-pointer">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {contentTypeFilter !== "all" && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-blue-50 text-blue-800 border border-blue-200">
-                <span>Jenis: {getContentTypeLabel(contentTypeFilter)}</span>
-                <button type="button" onClick={() => setContentTypeFilter("all")} className="hover:text-blue-950 cursor-pointer">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {categoryFilter !== "all" && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-purple-50 text-purple-800 border border-purple-200">
-                <span>Topik: {categoryFilter}</span>
-                <button type="button" onClick={() => setCategoryFilter("all")} className="hover:text-purple-950 cursor-pointer">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-            {mediaFilter !== "all" && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-amber-50 text-amber-800 border border-amber-200">
-                <span>Materi: {mediaFilter === "video" ? "Video" : "Dokumen SOP"}</span>
-                <button type="button" onClick={() => setMediaFilter("all")} className="hover:text-amber-950 cursor-pointer">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                title="Hapus pencarian"
+              >
+                <X className="w-4 h-4" />
+              </button>
             )}
           </div>
-        )}
+
+          {/* Tombol Filter Tepat di Samping Kolom Search */}
+          {!isLoginContext && (
+            <button
+              type="button"
+              onClick={() => setIsFilterDrawerOpen(true)}
+              className={`relative inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-3 rounded-2xl border text-[13px] font-bold transition-all shrink-0 cursor-pointer shadow-xs select-none ${
+                totalActiveFiltersCount > 0
+                  ? "bg-[#1E4738] text-white border-[#1E4738] hover:bg-[#2A582F]"
+                  : "bg-white text-gray-700 border-[#D1D5DB] hover:bg-gray-50/80"
+              }`}
+              aria-label="Buka Filter Panduan"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span className="hidden sm:inline">Filter</span>
+              {totalActiveFiltersCount > 0 && (
+                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-white text-[#1E4738] text-[11px] font-extrabold flex items-center justify-center leading-none shadow-2xs">
+                  {totalActiveFiltersCount}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Counter Info & Active Filter Chips */}
+        <div className="flex flex-col gap-2 pt-0.5">
+          <div className="flex items-center justify-between text-[12px] text-[#5C786C] px-1 font-medium">
+            <span>
+              Menampilkan <strong className="text-gray-900 font-bold">{filteredFAQs.length}</strong> panduan
+            </span>
+            {hasActiveFilters && (
+              <button 
+                type="button"
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1 text-[#356E3B] font-bold hover:underline cursor-pointer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset filter</span>
+              </button>
+            )}
+          </div>
+
+          {/* Active Filter Chips (Dapat Ditutup Satu per Satu) */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-1.5 px-0.5">
+              {searchQuery && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                  <span>&ldquo;{searchQuery}&rdquo;</span>
+                  <button type="button" onClick={() => setSearchQuery("")} className="hover:text-black cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {selectedScopes.map((scope) => (
+                <span key={scope} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <span>{scope === "company" ? "Perusahaan" : scope === "user" ? "Pengguna" : "Platform"}</span>
+                  <button type="button" onClick={() => toggleScope(scope)} className="hover:text-emerald-950 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              {selectedContentTypes.map((ct) => (
+                <span key={ct} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200">
+                  <span>{getContentTypeLabel(ct)}</span>
+                  <button type="button" onClick={() => toggleContentType(ct)} className="hover:text-blue-950 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              {selectedCategories.map((cat) => (
+                <span key={cat} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-purple-50 text-purple-800 border border-purple-200">
+                  <span>{cat}</span>
+                  <button type="button" onClick={() => toggleCategory(cat)} className="hover:text-purple-950 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              {selectedMedia.map((m) => (
+                <span key={m} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                  <span>{m === "video" ? "Ada Video" : "Ada Dokumen"}</span>
+                  <button type="button" onClick={() => toggleMedia(m)} className="hover:text-amber-950 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* FAQ / SOP Cards List */}
         <div className="flex flex-col gap-2.5">
@@ -879,6 +849,393 @@ function BantuanContent() {
         </div>
 
       </div>
+
+      {/* Faceted Filter Drawer / Popover Panel */}
+      {isFilterDrawerOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs transition-opacity duration-200 p-0 sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="filter-panel-title"
+        >
+          {/* Backdrop dismiss */}
+          <div 
+            className="absolute inset-0"
+            onClick={() => setIsFilterDrawerOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Drawer Content Card */}
+          <div 
+            className="relative w-full max-w-lg bg-white rounded-t-[28px] sm:rounded-3xl max-h-[90vh] sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden z-10 animate-in fade-in slide-in-from-bottom-6 duration-200"
+          >
+            {/* Mobile Top Drag Indicator */}
+            <div className="pt-3 pb-1 flex justify-center sm:hidden">
+              <div className="w-12 h-1 bg-gray-200 rounded-full" />
+            </div>
+
+            {/* Header (X Close, Title, Reset All) */}
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsFilterDrawerOpen(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors cursor-pointer"
+                  aria-label="Tutup Filter"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <div>
+                  <h2 id="filter-panel-title" className="text-[17px] font-extrabold text-gray-900 tracking-tight">
+                    Global Filters
+                  </h2>
+                  <p className="text-[11.5px] text-gray-500">
+                    {totalActiveFiltersCount > 0 
+                      ? `${totalActiveFiltersCount} filter aktif` 
+                      : "Pilih kriteria untuk menyaring panduan"}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetFacets}
+                disabled={totalActiveFiltersCount === 0}
+                className={`text-[13px] font-bold transition-colors cursor-pointer ${
+                  totalActiveFiltersCount > 0
+                    ? "text-rose-600 hover:text-rose-700"
+                    : "text-gray-300 cursor-not-allowed"
+                }`}
+              >
+                Reset All
+              </button>
+            </div>
+
+            {/* Scrollable Facet Accordion Sections */}
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-3 divide-y divide-gray-100">
+              
+              {/* FACET 1: Cakupan Panduan (Scope) */}
+              <div className="pt-2 first:pt-0">
+                <button
+                  type="button"
+                  onClick={() => toggleFacetSection("scope")}
+                  className="w-full flex items-center justify-between py-2 text-left group cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-[#E8F3EB] text-[#1E4738] flex items-center justify-center">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <span className="text-[14px] font-bold text-gray-900">
+                      Cakupan Panduan
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedScopes.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#1E4738] text-white text-[11px] font-bold">
+                        {selectedScopes.length}
+                      </span>
+                    )}
+                    <ChevronDown 
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+                        expandedFacets.scope ? "rotate-180" : ""
+                      }`} 
+                    />
+                  </div>
+                </button>
+
+                {expandedFacets.scope && (
+                  <div className="mt-2 space-y-1 pl-2">
+                    {[
+                      { id: "user" as ContentScope, label: "Pengguna & Karyawan", count: facetCounts.scopes.user || 0 },
+                      { id: "company" as ContentScope, label: "Perusahaan & Kantor", count: facetCounts.scopes.company || 0 },
+                      ...(isPlatformOwner
+                        ? [{ id: "platform" as ContentScope, label: "Platform Super Admin", count: facetCounts.scopes.platform || 0 }]
+                        : []),
+                    ].map((opt) => {
+                      const isSelected = selectedScopes.includes(opt.id);
+                      return (
+                        <div
+                          key={opt.id}
+                          onClick={() => toggleScope(opt.id)}
+                          className="flex items-center justify-between py-2 px-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                                isSelected
+                                  ? "bg-[#1E4738] border-[#1E4738] text-white"
+                                  : "border-gray-300 bg-white"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </div>
+                            <span className={`text-[13px] ${isSelected ? "font-bold text-gray-900" : "text-gray-700"}`}>
+                              {opt.label}
+                            </span>
+                          </div>
+                          <span className="text-[12px] font-medium text-gray-400">
+                            ({opt.count})
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* FACET 2: Jenis Konten (Content Type) */}
+              <div className="pt-3">
+                <button
+                  type="button"
+                  onClick={() => toggleFacetSection("contentType")}
+                  className="w-full flex items-center justify-between py-2 text-left group cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <span className="text-[14px] font-bold text-gray-900">
+                      Jenis Konten
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedContentTypes.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-[11px] font-bold">
+                        {selectedContentTypes.length}
+                      </span>
+                    )}
+                    <ChevronDown 
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+                        expandedFacets.contentType ? "rotate-180" : ""
+                      }`} 
+                    />
+                  </div>
+                </button>
+
+                {expandedFacets.contentType && (
+                  <div className="mt-2 space-y-1 pl-2">
+                    {[
+                      { id: "sop_guide" as ContentType, label: "SOP & Panduan Teknis", count: facetCounts.contentTypes.sop_guide || 0 },
+                      { id: "faq" as ContentType, label: "Pertanyaan Umum (FAQ)", count: facetCounts.contentTypes.faq || 0 },
+                      { id: "troubleshooting" as ContentType, label: "Solusi & Kendala", count: facetCounts.contentTypes.troubleshooting || 0 },
+                      { id: "tips_best_practice" as ContentType, label: "Tips & Best Practice", count: facetCounts.contentTypes.tips_best_practice || 0 },
+                    ].map((opt) => {
+                      const isSelected = selectedContentTypes.includes(opt.id);
+                      return (
+                        <div
+                          key={opt.id}
+                          onClick={() => toggleContentType(opt.id)}
+                          className="flex items-center justify-between py-2 px-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                                isSelected
+                                  ? "bg-[#1E4738] border-[#1E4738] text-white"
+                                  : "border-gray-300 bg-white"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </div>
+                            <span className={`text-[13px] ${isSelected ? "font-bold text-gray-900" : "text-gray-700"}`}>
+                              {opt.label}
+                            </span>
+                          </div>
+                          <span className="text-[12px] font-medium text-gray-400">
+                            ({opt.count})
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* FACET 3: Topik / Kategori Dinamis */}
+              <div className="pt-3">
+                <button
+                  type="button"
+                  onClick={() => toggleFacetSection("category")}
+                  className="w-full flex items-center justify-between py-2 text-left group cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <span className="text-[14px] font-bold text-gray-900">
+                      Topik & Kategori
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedCategories.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[11px] font-bold">
+                        {selectedCategories.length}
+                      </span>
+                    )}
+                    <ChevronDown 
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+                        expandedFacets.category ? "rotate-180" : ""
+                      }`} 
+                    />
+                  </div>
+                </button>
+
+                {expandedFacets.category && (
+                  <div className="mt-2 pl-2 space-y-2">
+                    {/* Search Input Kategori */}
+                    {availableCategories.length > 4 && (
+                      <div className="relative mb-2">
+                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={categorySearchQuery}
+                          onChange={(e) => setCategorySearchQuery(e.target.value)}
+                          placeholder="Cari topik atau kategori..."
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-8 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-[#1E4738]/30 focus:border-[#1E4738] text-gray-800"
+                        />
+                        {categorySearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setCategorySearchQuery("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Counter "X of Y Selected" */}
+                    <div className="flex items-center justify-between text-[11px] text-gray-400 px-1 font-semibold uppercase tracking-wider">
+                      <span>DAFTAR TOPIK</span>
+                      <span>{selectedCategories.length} of {availableCategories.length} Dipilih</span>
+                    </div>
+
+                    {/* List Checkbox Kategori */}
+                    <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                      {filteredCategoryList.length > 0 ? (
+                        filteredCategoryList.map((cat) => {
+                          const isSelected = selectedCategories.includes(cat);
+                          const count = facetCounts.categories[cat] || 0;
+                          return (
+                            <div
+                              key={cat}
+                              onClick={() => toggleCategory(cat)}
+                              className="flex items-center justify-between py-2 px-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors"
+                            >
+                              <div className="flex items-center gap-3 min-w-0 pr-2">
+                                <div
+                                  className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                                    isSelected
+                                      ? "bg-[#1E4738] border-[#1E4738] text-white"
+                                      : "border-gray-300 bg-white"
+                                  }`}
+                                >
+                                  {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                </div>
+                                <span className={`text-[13px] truncate ${isSelected ? "font-bold text-gray-900" : "text-gray-700"}`}>
+                                  {cat}
+                                </span>
+                              </div>
+                              <span className="text-[12px] font-medium text-gray-400 shrink-0">
+                                ({count})
+                              </span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="py-4 text-center text-[12px] text-gray-400">
+                          Tidak ada kategori yang cocok
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* FACET 4: Materi Pendukung (Video / Dokumen SOP) */}
+              <div className="pt-3">
+                <button
+                  type="button"
+                  onClick={() => toggleFacetSection("media")}
+                  className="w-full flex items-center justify-between py-2 text-left group cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                      <Video className="w-4 h-4" />
+                    </div>
+                    <span className="text-[14px] font-bold text-gray-900">
+                      Materi Pendukung
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedMedia.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-600 text-white text-[11px] font-bold">
+                        {selectedMedia.length}
+                      </span>
+                    )}
+                    <ChevronDown 
+                      className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+                        expandedFacets.media ? "rotate-180" : ""
+                      }`} 
+                    />
+                  </div>
+                </button>
+
+                {expandedFacets.media && (
+                  <div className="mt-2 space-y-1 pl-2">
+                    {[
+                      { id: "video" as const, label: "Memiliki Video Tutorial", count: facetCounts.videoCount },
+                      { id: "doc" as const, label: "Memiliki Dokumen SOP", count: facetCounts.docCount },
+                    ].map((opt) => {
+                      const isSelected = selectedMedia.includes(opt.id);
+                      return (
+                        <div
+                          key={opt.id}
+                          onClick={() => toggleMedia(opt.id)}
+                          className="flex items-center justify-between py-2 px-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                                isSelected
+                                  ? "bg-[#1E4738] border-[#1E4738] text-white"
+                                  : "border-gray-300 bg-white"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </div>
+                            <span className={`text-[13px] ${isSelected ? "font-bold text-gray-900" : "text-gray-700"}`}>
+                              {opt.label}
+                            </span>
+                          </div>
+                          <span className="text-[12px] font-medium text-gray-400">
+                            ({opt.count})
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Sticky Bottom Apply Action Bar */}
+            <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsFilterDrawerOpen(false)}
+                className="w-full py-3.5 px-4 rounded-2xl bg-[#1E4738] hover:bg-[#2A582F] text-white font-extrabold text-[14px] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer active:scale-[0.99]"
+              >
+                <span>Tampilkan {filteredFAQs.length} Panduan</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
