@@ -52,10 +52,11 @@ import {
 import { FaqRichEditor } from "@/components/FaqRichEditor";
 import { FaqAnswerContent } from "@/components/FaqAnswerContent";
 import { FaqCategoryCombobox } from "@/components/FaqCategoryCombobox";
+import { CustomSelect } from "@/components/CustomSelect";
 
 export default function AdminCompanyFaqPage() {
   const router = useRouter();
-  const { activeCompany } = useCompany();
+  const { activeCompany, activeRole, isManagement, isCompanyLoading } = useCompany();
   const { showConfirm, showAlert } = useDialog();
 
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
@@ -65,7 +66,6 @@ export default function AdminCompanyFaqPage() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("Semua");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
-  const [contentScopeFilter, setContentScopeFilter] = useState<ContentScope | "all">("all");
   const [targetRoleFilter, setTargetRoleFilter] = useState<TargetRole | "all">("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<ContentType | "all">("all");
   const [displayContextFilter, setDisplayContextFilter] = useState<DisplayContext | "all">("all");
@@ -143,7 +143,6 @@ export default function AdminCompanyFaqPage() {
         status: statusFilter,
         search: search.trim() || undefined,
         category: selectedCategory !== "Semua" ? selectedCategory : undefined,
-        content_scope: contentScopeFilter !== "all" ? contentScopeFilter : undefined,
         target_role: targetRoleFilter !== "all" ? targetRoleFilter : undefined,
         content_type: contentTypeFilter !== "all" ? contentTypeFilter : undefined,
         display_context: displayContextFilter !== "all" ? displayContextFilter : undefined,
@@ -165,7 +164,6 @@ export default function AdminCompanyFaqPage() {
     statusFilter,
     search,
     selectedCategory,
-    contentScopeFilter,
     targetRoleFilter,
     contentTypeFilter,
     displayContextFilter,
@@ -441,7 +439,6 @@ export default function AdminCompanyFaqPage() {
     search !== "" ||
     selectedCategory !== "Semua" ||
     statusFilter !== "all" ||
-    contentScopeFilter !== "all" ||
     targetRoleFilter !== "all" ||
     contentTypeFilter !== "all" ||
     displayContextFilter !== "all" ||
@@ -451,19 +448,41 @@ export default function AdminCompanyFaqPage() {
     setSearch("");
     setSelectedCategory("Semua");
     setStatusFilter("all");
-    setContentScopeFilter("all");
     setTargetRoleFilter("all");
     setContentTypeFilter("all");
     setDisplayContextFilter("all");
     setNeedsReviewFilter("all");
   };
 
+  if (!isCompanyLoading && !isManagement && activeRole !== "owner" && activeRole !== "admin" && activeRole !== "manager") {
+    return (
+      <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative">
+        <TopBar title="Kelola SOP Perusahaan" onBack={() => router.push("/admin/perusahaan")} />
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-1">
+            <X className="w-6 h-6 stroke-[2.5]" />
+          </div>
+          <h2 className="text-[#111827] text-[16px] font-bold">Akses Ditolak</h2>
+          <p className="text-gray-500 text-[13px] max-w-xs leading-relaxed">
+            Hanya Pemilik, Admin, atau Manager perusahaan yang berwenang mengelola SOP dan Pusat Bantuan internal.
+          </p>
+          <button
+            onClick={() => router.push("/admin/perusahaan")}
+            className="mt-2 px-5 py-2.5 bg-[#356E3B] text-white rounded-full text-[13px] font-bold active:scale-95 transition-all shadow-sm cursor-pointer"
+          >
+            Kembali ke Kelola Perusahaan
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-[100dvh] bg-[#fbfdfc] relative pb-20">
       {/* TopBar Header */}
       <TopBar
-        title="Pusat Bantuan Perusahaan"
-        onBack={() => router.push("/admin/dashboard")}
+        title="Kelola SOP Perusahaan"
+        onBack={() => router.push("/admin/perusahaan")}
       />
 
       <div className="px-5 py-5 flex flex-col gap-4 max-w-md mx-auto w-full">
@@ -544,7 +563,7 @@ export default function AdminCompanyFaqPage() {
         </div>
 
         {/* Filter Controls Bar */}
-        <div className="flex flex-col gap-2 bg-white p-3 rounded-2xl border border-[#E5E7EB] shadow-2xs">
+        <div className="flex flex-col gap-2 bg-white p-3.5 rounded-2xl border border-[#E5E7EB] shadow-2xs">
           <div className="flex items-center justify-between text-[11px] font-bold text-gray-700">
             <span className="flex items-center gap-1.5">
               <Filter className="w-3.5 h-3.5 text-[#356E3B]" />
@@ -561,96 +580,83 @@ export default function AdminCompanyFaqPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
             {/* Filter Kategori */}
             <div>
               <label className="block text-[10px] text-gray-500 font-medium mb-1">Kategori / Topik</label>
-              <select
+              <CustomSelect
+                size="sm"
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-              >
-                <option value="Semua">Semua Kategori</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setSelectedCategory(val)}
+                options={[
+                  { value: "Semua", label: "Semua Kategori" },
+                  ...categories.map((c) => ({ value: c, label: c })),
+                ]}
+              />
             </div>
 
             {/* Filter Status */}
             <div>
               <label className="block text-[10px] text-gray-500 font-medium mb-1">Status Publikasi</label>
-              <select
+              <CustomSelect
+                size="sm"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-              >
-                <option value="all">Semua Status</option>
-                <option value="published">Terbit (Publik)</option>
-                <option value="draft">Draft (Tersimpan)</option>
-              </select>
+                onChange={(val) => setStatusFilter(val as any)}
+                options={[
+                  { value: "all", label: "Semua Status" },
+                  { value: "published", label: "Terbit (Publik)" },
+                  { value: "draft", label: "Draft (Tersimpan)" },
+                ]}
+              />
             </div>
 
             {/* Filter Jenis Konten */}
             <div>
               <label className="block text-[10px] text-gray-500 font-medium mb-1">Jenis Konten</label>
-              <select
+              <CustomSelect
+                size="sm"
                 value={contentTypeFilter}
-                onChange={(e) => setContentTypeFilter(e.target.value as any)}
-                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-              >
-                <option value="all">Semua Jenis</option>
-                <option value="faq">FAQ</option>
-                <option value="sop_guide">SOP & Panduan</option>
-                <option value="troubleshooting">Troubleshooting</option>
-                <option value="tips_best_practice">Tips & Praktik</option>
-              </select>
+                onChange={(val) => setContentTypeFilter(val as any)}
+                options={[
+                  { value: "all", label: "Semua Jenis" },
+                  { value: "faq", label: "FAQ" },
+                  { value: "sop_guide", label: "SOP & Panduan" },
+                  { value: "troubleshooting", label: "Troubleshooting" },
+                  { value: "tips_best_practice", label: "Tips & Praktik" },
+                ]}
+              />
             </div>
 
             {/* Filter Role Target */}
             <div>
               <label className="block text-[10px] text-gray-500 font-medium mb-1">Role Target</label>
-              <select
+              <CustomSelect
+                size="sm"
                 value={targetRoleFilter}
-                onChange={(e) => setTargetRoleFilter(e.target.value as any)}
-                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-              >
-                <option value="all">Semua Role</option>
-                <option value="employee">Karyawan</option>
-                <option value="manager">Manager</option>
-                <option value="company_owner_admin">Owner / Admin</option>
-              </select>
+                onChange={(val) => setTargetRoleFilter(val as any)}
+                options={[
+                  { value: "all", label: "Semua Role" },
+                  { value: "employee", label: "Karyawan" },
+                  { value: "manager", label: "Manager" },
+                  { value: "company_owner_admin", label: "Owner / Admin" },
+                ]}
+              />
             </div>
 
             {/* Filter Display Context */}
-            <div>
+            <div className="col-span-2 sm:col-span-2">
               <label className="block text-[10px] text-gray-500 font-medium mb-1">Display Context</label>
-              <select
+              <CustomSelect
+                size="sm"
                 value={displayContextFilter}
-                onChange={(e) => setDisplayContextFilter(e.target.value as any)}
-                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-              >
-                <option value="all">Semua Tampilan</option>
-                <option value="help_center">Help Center</option>
-                <option value="login">Halaman Login</option>
-                <option value="both">Keduanya (Login & Help)</option>
-              </select>
-            </div>
-
-            {/* Filter Scope */}
-            <div>
-              <label className="block text-[10px] text-gray-500 font-medium mb-1">Scope Konten</label>
-              <select
-                value={contentScopeFilter}
-                onChange={(e) => setContentScopeFilter(e.target.value as any)}
-                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11.5px] font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-              >
-                <option value="all">Semua Scope</option>
-                <option value="company">Perusahaan</option>
-                <option value="user">Pengguna</option>
-              </select>
+                onChange={(val) => setDisplayContextFilter(val as any)}
+                options={[
+                  { value: "all", label: "Semua Tampilan" },
+                  { value: "help_center", label: "Help Center" },
+                  { value: "login", label: "Halaman Login" },
+                  { value: "both", label: "Keduanya (Login & Help)" },
+                ]}
+              />
             </div>
           </div>
         </div>
@@ -1001,63 +1007,62 @@ export default function AdminCompanyFaqPage() {
                 )}
               </div>
 
-              {/* Grid Metadata: Scope, Jenis Konten, Display Context */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-gray-50/70 border border-gray-200/80 rounded-2xl">
-                {/* Scope */}
-                <div>
-                  <label className="block text-[10.5px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Scope Konten
-                  </label>
-                  <select
-                    value={formData.content_scope}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, content_scope: e.target.value as ContentScope }))
-                    }
-                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-                  >
-                    <option value="company">Perusahaan (Internal)</option>
-                    <option value="user">Pengguna (Aplikasi)</option>
-                  </select>
+              {/* Scope Konten: Terkunci Otomatis untuk Perusahaan */}
+              <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-[#1E4738] shrink-0">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[12px] font-bold text-gray-900 truncate">
+                      Scope: Internal Perusahaan
+                    </span>
+                    <span className="text-[10.5px] text-gray-500 truncate">
+                      Khusus anggota {activeCompany?.name || "kantor Anda"}
+                    </span>
+                  </div>
                 </div>
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#1E4738] text-white shrink-0">
+                  Terkunci
+                </span>
+              </div>
 
+              {/* Grid Metadata: Jenis Konten & Display Context */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-gray-50/70 border border-gray-200/80 rounded-2xl">
                 {/* Jenis Konten */}
                 <div>
                   <label className="block text-[10.5px] font-bold text-gray-700 uppercase tracking-wider mb-1">
                     Jenis Konten
                   </label>
-                  <select
+                  <CustomSelect
+                    size="sm"
                     value={formData.content_type}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, content_type: e.target.value as ContentType }))
+                    onChange={(val) =>
+                      setFormData((prev) => ({ ...prev, content_type: val as ContentType }))
                     }
-                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-                  >
-                    {CONTENT_TYPE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    options={CONTENT_TYPE_OPTIONS.map((opt) => ({
+                      value: opt.value,
+                      label: opt.label,
+                    }))}
+                  />
                 </div>
 
                 {/* Display Context */}
-                <div className="sm:col-span-2">
+                <div>
                   <label className="block text-[10.5px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Konteks Tampilan (Display Context)
+                    Display Context
                   </label>
-                  <select
+                  <CustomSelect
+                    size="sm"
                     value={formData.display_context}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, display_context: e.target.value as DisplayContext }))
+                    onChange={(val) =>
+                      setFormData((prev) => ({ ...prev, display_context: val as DisplayContext }))
                     }
-                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#356E3B]"
-                  >
-                    {DISPLAY_CONTEXT_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    options={DISPLAY_CONTEXT_OPTIONS.map((opt) => ({
+                      value: opt.value,
+                      label: opt.label,
+                    }))}
+                  />
                 </div>
               </div>
 

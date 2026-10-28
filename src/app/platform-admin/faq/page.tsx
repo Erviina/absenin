@@ -51,6 +51,7 @@ import { useDialog } from "@/context/DialogContext";
 import { FaqRichEditor } from "@/components/FaqRichEditor";
 import { FaqAnswerContent } from "@/components/FaqAnswerContent";
 import { FaqCategoryCombobox } from "@/components/FaqCategoryCombobox";
+import { CustomSelect } from "@/components/CustomSelect";
 
 export default function PlatformAdminFaqPage() {
   const { showConfirm, showAlert } = useDialog();
@@ -629,94 +630,96 @@ export default function PlatformAdminFaqPage() {
           {/* Category Filter */}
           <div>
             <label className="block text-[10px] text-gray-500 font-medium mb-1">Kategori</label>
-            <select
+            <CustomSelect
+              size="sm"
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
-            >
-              <option value="Semua">Semua Kategori</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedCategory(val)}
+              options={[
+                { value: "Semua", label: "Semua Kategori" },
+                ...categories.map((c) => ({ value: c, label: c })),
+              ]}
+            />
           </div>
 
           {/* Status Filter */}
           <div>
             <label className="block text-[10px] text-gray-500 font-medium mb-1">Status</label>
-            <select
+            <CustomSelect
+              size="sm"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
-            >
-              <option value="all">Semua Status</option>
-              <option value="published">Terbit (Publik)</option>
-              <option value="draft">Draft (Tersimpan)</option>
-            </select>
+              onChange={(val) => setStatusFilter(val as any)}
+              options={[
+                { value: "all", label: "Semua Status" },
+                { value: "published", label: "Terbit (Publik)" },
+                { value: "draft", label: "Draft (Tersimpan)" },
+              ]}
+            />
           </div>
 
           {/* Scope Filter */}
           <div>
             <label className="block text-[10px] text-gray-500 font-medium mb-1">Scope Konten</label>
-            <select
+            <CustomSelect
+              size="sm"
               value={contentScopeFilter}
-              onChange={(e) => setContentScopeFilter(e.target.value as any)}
-              className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
-            >
-              <option value="all">Semua Scope</option>
-              <option value="platform">Platform</option>
-              <option value="company">Perusahaan</option>
-              <option value="user">Pengguna</option>
-            </select>
+              onChange={(val) => setContentScopeFilter(val as any)}
+              options={[
+                { value: "all", label: "Semua Scope" },
+                { value: "platform", label: "Platform" },
+                { value: "company", label: "Perusahaan" },
+                { value: "user", label: "Pengguna" },
+              ]}
+            />
           </div>
 
           {/* Role Filter */}
           <div>
             <label className="block text-[10px] text-gray-500 font-medium mb-1">Role Target</label>
-            <select
+            <CustomSelect
+              size="sm"
               value={targetRoleFilter}
-              onChange={(e) => setTargetRoleFilter(e.target.value as any)}
-              className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
-            >
-              <option value="all">Semua Role</option>
-              <option value="platform_admin">Platform Admin</option>
-              <option value="company_owner_admin">Owner/Admin</option>
-              <option value="manager">Manager</option>
-              <option value="employee">Karyawan</option>
-            </select>
+              onChange={(val) => setTargetRoleFilter(val as any)}
+              options={[
+                { value: "all", label: "Semua Role" },
+                { value: "platform_admin", label: "Platform Admin" },
+                { value: "company_owner_admin", label: "Owner/Admin" },
+                { value: "manager", label: "Manager" },
+                { value: "employee", label: "Karyawan" },
+              ]}
+            />
           </div>
 
           {/* Content Type Filter */}
           <div>
             <label className="block text-[10px] text-gray-500 font-medium mb-1">Jenis Konten</label>
-            <select
+            <CustomSelect
+              size="sm"
               value={contentTypeFilter}
-              onChange={(e) => setContentTypeFilter(e.target.value as any)}
-              className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
-            >
-              <option value="all">Semua Jenis</option>
-              <option value="faq">FAQ</option>
-              <option value="sop_guide">SOP & Panduan</option>
-              <option value="troubleshooting">Troubleshooting</option>
-              <option value="tips_best_practice">Tips & Praktik</option>
-            </select>
+              onChange={(val) => setContentTypeFilter(val as any)}
+              options={[
+                { value: "all", label: "Semua Jenis" },
+                { value: "faq", label: "FAQ" },
+                { value: "sop_guide", label: "SOP & Panduan" },
+                { value: "troubleshooting", label: "Troubleshooting" },
+                { value: "tips_best_practice", label: "Tips & Praktik" },
+              ]}
+            />
           </div>
 
           {/* Display Context Filter */}
           <div>
             <label className="block text-[10px] text-gray-500 font-medium mb-1">Display Context</label>
-            <select
+            <CustomSelect
+              size="sm"
               value={displayContextFilter}
-              onChange={(e) => setDisplayContextFilter(e.target.value as any)}
-              className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 font-medium focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
-            >
-              <option value="all">Semua Tampilan</option>
-              <option value="help_center">Help Center</option>
-              <option value="login">Halaman Login</option>
-              <option value="both">Keduanya</option>
-            </select>
+              onChange={(val) => setDisplayContextFilter(val as any)}
+              options={[
+                { value: "all", label: "Semua Tampilan" },
+                { value: "help_center", label: "Help Center" },
+                { value: "login", label: "Halaman Login" },
+                { value: "both", label: "Keduanya" },
+              ]}
+            />
           </div>
         </div>
       </div>
@@ -1081,22 +1084,23 @@ export default function PlatformAdminFaqPage() {
                   <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
                     Scope Konten
                   </label>
-                  <select
+                  <CustomSelect
+                    size="sm"
                     value={formData.content_scope}
-                    onChange={(e) => {
-                      const newScope = e.target.value as ContentScope;
+                    onChange={(val) => {
+                      const newScope = val as ContentScope;
                       setFormData((prev) => ({
                         ...prev,
                         content_scope: newScope,
                         scope: newScope === "platform" ? "platform_admin" : "global",
                       }));
                     }}
-                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
-                  >
-                    <option value="platform">Platform (Admin)</option>
-                    <option value="company">Perusahaan</option>
-                    <option value="user">Pengguna (Aplikasi)</option>
-                  </select>
+                    options={[
+                      { value: "platform", label: "Platform (Admin)" },
+                      { value: "company", label: "Perusahaan" },
+                      { value: "user", label: "Pengguna (Aplikasi)" },
+                    ]}
+                  />
                 </div>
 
                 {/* Jenis Konten */}
@@ -1104,19 +1108,17 @@ export default function PlatformAdminFaqPage() {
                   <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
                     Jenis Konten
                   </label>
-                  <select
+                  <CustomSelect
+                    size="sm"
                     value={formData.content_type}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, content_type: e.target.value as ContentType }))
+                    onChange={(val) =>
+                      setFormData((prev) => ({ ...prev, content_type: val as ContentType }))
                     }
-                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
-                  >
-                    {CONTENT_TYPE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    options={CONTENT_TYPE_OPTIONS.map((opt) => ({
+                      value: opt.value,
+                      label: opt.label,
+                    }))}
+                  />
                 </div>
 
                 {/* Display Context */}
@@ -1124,19 +1126,17 @@ export default function PlatformAdminFaqPage() {
                   <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
                     Display Context
                   </label>
-                  <select
+                  <CustomSelect
+                    size="sm"
                     value={formData.display_context}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, display_context: e.target.value as DisplayContext }))
+                    onChange={(val) =>
+                      setFormData((prev) => ({ ...prev, display_context: val as DisplayContext }))
                     }
-                    className="w-full px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#1E3F2B]"
-                  >
-                    {DISPLAY_CONTEXT_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    options={DISPLAY_CONTEXT_OPTIONS.map((opt) => ({
+                      value: opt.value,
+                      label: opt.label,
+                    }))}
+                  />
                 </div>
               </div>
 

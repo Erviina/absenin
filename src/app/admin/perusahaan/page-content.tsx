@@ -1224,21 +1224,30 @@ export default function KelolaPerusahaanPage() {
           </div>
         </div>
 
-        {/* Banner Pusat Bantuan Admin */}
+        {/* Banner Kelola SOP & Pusat Bantuan Perusahaan */}
         <div 
-          onClick={() => router.push("/bantuan?from=admin")}
-          className="bg-white rounded-[24px] border border-[#356E3B]/20 p-4.5 flex items-center justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:bg-gray-50/70 transition-colors active:scale-[0.99]"
+          onClick={() => router.push("/admin/faq")}
+          className="bg-white rounded-[24px] border border-[#356E3B]/25 p-4.5 flex items-center justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] cursor-pointer hover:bg-gray-50/80 transition-all active:scale-[0.99] group"
         >
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0">
-              <HelpCircle className="w-5 h-5" strokeWidth={2.2} />
+          <div className="flex items-center gap-3.5 min-w-0 pr-2">
+            <div className="w-10 h-10 rounded-2xl bg-[#E8F3EB] flex items-center justify-center text-[#2D5A3F] shrink-0 group-hover:scale-105 transition-transform">
+              <HelpCircle className="w-5 h-5 text-[#1E4738]" strokeWidth={2.2} />
             </div>
-            <div className="flex flex-col">
-              <span className="text-[#111827] text-[13.5px] font-bold">Pusat Bantuan & Panduan</span>
-              <span className="text-[#6B7280] text-[11.5px]">Pelajari panduan geofencing radius, jam kerja & QR Code</span>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[#111827] text-[13.5px] font-bold truncate">Kelola SOP & Pusat Bantuan</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-[#1E4738] shrink-0">Perusahaan</span>
+              </div>
+              <span className="text-[#6B7280] text-[11.5px] truncate">Atur SOP internal kantor, video panduan kerja, dan FAQ karyawan</span>
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E8F3EB] text-[#2D5A3F] text-[12px] font-bold">
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Kelola</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-0.5 transition-transform" />
+          </div>
         </div>
 
       </div>
