@@ -9,7 +9,7 @@ async function main() {
   `);
   console.log("Total FAQs in DB:", res.rows.length);
   res.rows.forEach((r: any, idx: number) => {
-    console.log(`[${idx + 1}] (${r.display_context} | ${r.content_scope} | ${r.scope}) [${(r.target_roles || []).join(", ")}] Q: ${r.question.slice(0, 45)}... pub:${r.is_published} del:${Boolean(r.deleted_at)}`);
+    console.log(`[${idx + 1}] (${r.display_context} | ${r.content_scope} | ${r.scope}) [${(r.target_roles || []).join(", ")}] Q: ${r.question.slice(0, 45)}... pub:${r.is_published} del:${r.deleted_at}`);
   });
   process.exit(0);
 }

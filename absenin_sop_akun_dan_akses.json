@@ -1,0 +1,207 @@
+{
+  "schemaVersion": "1.0",
+  "contentType": "sop",
+  "metadata": {
+    "id": "sop-akun-dan-akses-perusahaan",
+    "title": "Memulai dan Mengelola Akun Perusahaan",
+    "slug": "memulai-mengelola-akun-perusahaan",
+    "description": "Panduan autentikasi menggunakan Google, pembuatan perusahaan, logout, dan penanganan halaman kesalahan serta hak akses.",
+    "scope": "global",
+    "category": "Akun dan Akses",
+    "subcategory": [
+      "Pendaftaran",
+      "Login",
+      "Perusahaan",
+      "Logout",
+      "Hak Akses",
+      "Pemecahan Masalah"
+    ],
+    "roles": [
+      "pengguna",
+      "owner_perusahaan",
+      "admin_perusahaan",
+      "manager",
+      "karyawan"
+    ],
+    "audience": "Pengguna aplikasi AbsenIN yang perlu masuk atau mengelola akses perusahaan",
+    "tags": [
+      "akun",
+      "akses",
+      "autentikasi-google",
+      "login",
+      "logout",
+      "buat-perusahaan",
+      "mode-manajemen",
+      "halaman-403",
+      "troubleshooting"
+    ],
+    "language": "id",
+    "status": "draft",
+    "version": "1.0",
+    "sopUrl": "",
+    "documentFormat": "pdf",
+    "owner": "",
+    "createdBy": "",
+    "createdAt": "",
+    "updatedAt": "",
+    "reviewedBy": "",
+    "effectiveDate": "",
+    "sourceDocument": "SOP mengelola_akses_dan_pemantauan_karyawan.docx",
+    "sourceNotes": "Struktur dan isi disusun dari dokumen sumber. Metadata administratif yang tidak tersedia dibiarkan kosong."
+  },
+  "content": [
+    {
+      "sectionId": "registrasi-dan-login",
+      "title": "Memulai dan Mengelola Akun Perusahaan",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Memulai Proses Pendaftaran",
+          "instruction": "Tap tombol Lanjutkan pada layar awal untuk memulai prosedur."
+        },
+        {
+          "step": 2,
+          "title": "Melanjutkan ke Halaman Login",
+          "instruction": "Klik Lanjutkan lagi untuk menuju ke halaman login."
+        },
+        {
+          "step": 3,
+          "title": "Memilih Opsi Masuk",
+          "instruction": "Tap Mulai Sekarang untuk melanjutkan ke halaman login dan memulai autentikasi akun."
+        },
+        {
+          "step": 4,
+          "title": "Autentikasi dengan Google",
+          "instruction": "Tap Sign in with Google, lalu pilih akun Google yang terdaftar."
+        },
+        {
+          "step": 5,
+          "title": "Verifikasi Kebijakan Privasi",
+          "instruction": "Setelah memilih akun Google, centang kotak Kebijakan Privasi, kemudian klik Lanjutkan untuk mengonfirmasi persetujuan."
+        },
+        {
+          "step": 6,
+          "title": "Memilih Buat atau Gabung Perusahaan",
+          "instruction": "Pilih Buat atau gabung Perusahaan pada menu utama."
+        },
+        {
+          "step": 7,
+          "title": "Membuat Perusahaan",
+          "instruction": "Jika membuat perusahaan, buka dropdown Jenis dan pilih Perusahaan. Masukkan nama serta alamat perusahaan, lalu klik Lanjutkan untuk menyimpan informasi."
+        },
+        {
+          "step": 8,
+          "title": "Mengakses Dasbor Utama",
+          "instruction": "Tap Mulai ke Beranda untuk mengakses dasbor utama perusahaan."
+        }
+      ]
+    },
+    {
+      "sectionId": "logout",
+      "title": "Keluar dari Akun",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Membuka Profil",
+          "instruction": "Tap avatar profil di sudut kanan atas layar untuk membuka halaman Profile."
+        },
+        {
+          "step": 2,
+          "title": "Memilih Keluar dari Akun",
+          "instruction": "Scroll ke bagian bawah halaman, pilih Keluar dari Akun, lalu pilih Ya, Keluar untuk mengonfirmasi."
+        },
+        {
+          "step": 3,
+          "title": "Mengonfirmasi Logout",
+          "instruction": "Pada dialog konfirmasi, klik Ya, Keluar jika sudah yakin."
+        }
+      ]
+    },
+    {
+      "sectionId": "halaman-kesalahan-dan-hak-akses",
+      "title": "Menangani Halaman Kesalahan dan Hak Akses",
+      "steps": [
+        {
+          "step": 1,
+          "title": "Jika Mengakses Halaman yang Salah",
+          "instruction": "Jika halaman yang dibuka salah atau pengguna tidak memiliki hak akses, ikuti opsi pemulihan yang ditampilkan pada halaman."
+        },
+        {
+          "step": 2,
+          "title": "Kembali ke Dashboard",
+          "instruction": "Jika halaman kesalahan menyediakan tombol Kembali ke dashboard, klik tombol tersebut untuk kembali ke dashboard."
+        },
+        {
+          "step": 3,
+          "title": "Jika Hak Akses Dicabut",
+          "instruction": "Halaman 403 dapat muncul jika akses Manajemen/Administrator dicabut saat pengguna sedang berada di halaman manajemen."
+        }
+      ]
+    },
+    {
+      "sectionId": "tips",
+      "title": "Tips dan Praktik Terbaik",
+      "items": [
+        "Pastikan masuk menggunakan akun Google yang benar.",
+        "Verifikasi informasi perusahaan sebelum menyimpannya.",
+        "Gunakan Mode Manajemen untuk mengakses fitur manajemen perusahaan."
+      ]
+    },
+    {
+      "sectionId": "troubleshooting",
+      "title": "Pemecahan Masalah",
+      "items": [
+        {
+          "question": "Mengapa saya tidak bisa masuk dengan akun Google saya?",
+          "answer": "Pastikan Anda memilih akun Google yang benar dan terdaftar. Jika masalah berlanjut, periksa koneksi internet."
+        },
+        {
+          "question": "Apa yang harus dilakukan jika halaman kesalahan muncul?",
+          "answer": "Cobalah merefresh halaman atau kembali ke dashboard utama dan coba lagi."
+        },
+        {
+          "question": "Mengapa saya tidak bisa melihat Mode Manajemen?",
+          "answer": "Pastikan Anda telah memilih perusahaan yang tepat dan memiliki izin yang diperlukan untuk mengakses Mode Manajemen."
+        }
+      ]
+    },
+    {
+      "sectionId": "faq",
+      "title": "Pertanyaan yang Sering Diajukan",
+      "items": [
+        {
+          "question": "Apakah saya bisa mengubah nama perusahaan setelah menyimpannya?",
+          "answer": "Ya, nama perusahaan dapat diubah melalui pengaturan perusahaan di dasbor manajemen."
+        },
+        {
+          "question": "Bagaimana cara menambahkan pengguna baru ke perusahaan?",
+          "answer": "Pengguna baru dapat ditambahkan melalui opsi pengguna di Mode Manajemen."
+        },
+        {
+          "question": "Apakah saya harus menggunakan akun Google untuk masuk?",
+          "answer": "Ya, menurut dokumen sumber, sistem memerlukan akun Google untuk proses autentikasi."
+        }
+      ]
+    }
+  ],
+  "importInstructions": {
+    "target": "Sistem Manajemen SOP/Pusat Bantuan AbsenIN",
+    "recommendedMapping": {
+      "metadata.title": "Judul SOP",
+      "metadata.description": "Deskripsi",
+      "metadata.scope": "Cakupan",
+      "metadata.category": "Kategori",
+      "metadata.subcategory": "Subkategori",
+      "metadata.roles": "Role/Audiens",
+      "metadata.tags": "Tag",
+      "metadata.status": "Status publikasi",
+      "metadata.sopUrl": "URL dokumen PDF",
+      "content": "Isi SOP terstruktur"
+    },
+    "notes": [
+      "Status awal adalah draft agar dokumen tidak otomatis dipublikasikan sebelum diperiksa.",
+      "sopUrl dikosongkan karena PDF final belum tersedia.",
+      "Periksa kembali nama tombol dan alur UI terhadap aplikasi yang sedang berjalan sebelum menerbitkan."
+    ]
+  }
+}
